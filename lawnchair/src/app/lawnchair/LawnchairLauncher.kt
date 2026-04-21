@@ -33,6 +33,12 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import app.lawnchair.LawnchairApp.Companion.showQuickstepWarningIfNecessary
 import app.lawnchair.compat.LawnchairQuickstepCompat
+import app.anchor.applist.AnchorDrawerSheet
+import app.anchor.navigation.DrawerSwipeTouchController
+import app.anchor.navigation.SwipeDownStatusBarController
+import app.anchor.navigation.TwoRowNavigationManager
+import app.anchor.navigation.TwoRowSwipeTouchController
+import app.anchor.rotation.RotationAnimator
 import app.lawnchair.data.AppDatabase
 import app.lawnchair.data.wallpaper.service.WallpaperService
 import app.lawnchair.gestures.GestureController
@@ -92,6 +98,10 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 
 class LawnchairLauncher : QuickstepLauncher() {
+    val twoRowNavigationManager by unsafeLazy { TwoRowNavigationManager(this) }
+    val anchorDrawerSheet by unsafeLazy { AnchorDrawerSheet(this) }
+    val rotationAnimator by unsafeLazy { RotationAnimator(this) }
+
     private val defaultOverlay by unsafeLazy { OverlayCallbackImpl(this) }
     private val prefs by unsafeLazy { PreferenceManager.getInstance(this) }
     private val preferenceManager2 by unsafeLazy { PreferenceManager2.getInstance(this) }
@@ -281,9 +291,35 @@ class LawnchairLauncher : QuickstepLauncher() {
         }
     }
 
+    override fun setupViews() {
+        super.setupViews()
+        twoRowNavigationManager.setup()
+        anchorDrawerSheet.setup()
+        rotationAnimator.setup()
+    }
+
+    override fun finishBindingItems(pagesBoundFirst: com.android.launcher3.util.IntSet) {
+        super.finishBindingItems(pagesBoundFirst)
+        rotationAnimator.onWorkspaceRebound()
+    }
+
+    override fun onPageEndTransition() {
+        super.onPageEndTransition()
+        twoRowNavigationManager.onWorkspacePageSettled(workspace.currentPage)
+    }
+
     override fun createTouchControllers(): Array<TouchController> {
+        val statusBarController = SwipeDownStatusBarController(this) { anchorDrawerSheet.isOpen }
+        val twoRowController = TwoRowSwipeTouchController(this, twoRowNavigationManager) { anchorDrawerSheet.isOpen }
+        val drawerController = DrawerSwipeTouchController(this, anchorDrawerSheet)
         val verticalSwipeController = VerticalSwipeTouchController(this, gestureController)
-        return arrayOf<TouchController>(verticalSwipeController) + super.createTouchControllers()
+        // super.createTouchControllers() returns [DragController, AllAppsSwipeController].
+        // We keep DragController but exclude AllAppsSwipeController — the app drawer is
+        // a side-sheet accessed via edge swipe, not a bottom-sheet swipe-up gesture.
+        return arrayOf<TouchController>(
+            statusBarController, drawerController, twoRowController, verticalSwipeController,
+            getDragController(),
+        )
     }
 
     override fun handleHomeTap() {

@@ -31,6 +31,7 @@ import static com.android.launcher3.util.DisplayController.CHANGE_DENSITY;
 import static com.android.launcher3.util.DisplayController.CHANGE_DESKTOP_MODE;
 import static com.android.launcher3.util.DisplayController.CHANGE_NAVIGATION_MODE;
 import static com.android.launcher3.util.DisplayController.CHANGE_SUPPORTED_BOUNDS;
+import static com.android.launcher3.util.DisplayController.CHANGE_ROTATION;
 import static com.android.launcher3.util.DisplayController.CHANGE_TASKBAR_PINNING;
 import static com.android.launcher3.util.Executors.MAIN_EXECUTOR;
 
@@ -308,7 +309,7 @@ public class InvariantDeviceProfile {
                 (displayContext, info, flags) -> {
                     if ((flags & (CHANGE_DENSITY | CHANGE_SUPPORTED_BOUNDS
                             | CHANGE_NAVIGATION_MODE | CHANGE_TASKBAR_PINNING
-                            | CHANGE_DESKTOP_MODE)) != 0) {
+                            | CHANGE_DESKTOP_MODE | CHANGE_ROTATION)) != 0) {
                         onConfigChanged(displayContext);
                     }
                 });
@@ -441,6 +442,8 @@ public class InvariantDeviceProfile {
         GridOption closestProfile = displayOption.grid;
         numRows = dbGridInfo.getNumRows();
         numColumns = dbGridInfo.getNumColumns();
+        // Anchor: swap grid dimensions so the workspace is N×M in landscape (spatial transpose).
+        app.anchor.rotation.AnchorTransposeHook.afterInitGrid(this, displayInfo.rotation);
         numSearchContainerColumns = deviceType == TYPE_MULTI_DISPLAY
                 ? closestProfile.numSearchContainerColumns
                 : dbGridInfo.getNumHotseatColumns();
@@ -579,7 +582,54 @@ public class InvariantDeviceProfile {
     }
 
     DeviceProfile.Builder newDPBuilder(Context context, Info info) {
-        return new DeviceProfile.Builder(context, this, info, mWMProxy, mThemeManager);
+        // Anchor: always use non-vertical-bar layout so the grid fills the screen in landscape.
+        // Standard Launcher3 uses transposeLayoutWithOrientation=true on phones, which renders
+        // the grid sideways (for launchers that lock to portrait). Anchor Launcher rotates the
+        // Activity, so we want the tablet-style landscape layout instead.
+        return new DeviceProfile.Builder(context, this, info, mWMProxy, mThemeManager)
+                .setTransposeLayoutWithOrientation(false)
+                .withDimensionsOverride(dp -> {
+                    // Anchor: square-cell layout.
+                    //
+                    // Compute the largest square cell size S that fits both dimensions, then
+                    // centre the grid and pad the remainder. This guarantees:
+                    //   1. Every cell is a square — icon alignment within the cell is
+                    //      orientation-independent, so the icon sits at the same physical pixel
+                    //      in portrait and landscape.
+                    //   2. After the grid transposes (cols↔rows) for landscape the screen
+                    //      dimensions also swap, so S is identical in both orientations and the
+                    //      padding halves swap — icons land at exactly the same physical pixel.
+                    //
+                    // availableWidthPx / availableHeightPx already subtract all system-bar
+                    // insets (status bar top, nav bar bottom), so no extra adjustment needed.
+                    int numCols = dp.inv.numColumns;
+                    int numRows = dp.inv.numRows;
+                    float density = context.getResources().getDisplayMetrics().density;
+                    int g = Math.round(16 * density);  // gutter between cells (px)
+
+                    int availW = dp.getDeviceProperties().getAvailableWidthPx();
+                    int availH = dp.getDeviceProperties().getAvailableHeightPx();
+
+                    // Largest S that fits width and height simultaneously.
+                    int sFromW = (availW - (numCols - 1) * g) / numCols;
+                    int sFromH = (availH - (numRows - 1) * g) / numRows;
+                    int s = Math.min(sFromW, sFromH);
+
+                    // Distribute leftover space as equal padding on both sides of each axis.
+                    int padH = (availW - (numCols * s + (numCols - 1) * g)) / 2;
+                    int padV = (availH - (numRows * s + (numRows - 1) * g)) / 2;
+
+                    dp.workspacePadding.set(padH, padV, padH, padV);
+                    dp.workspaceTopPadding = 0;
+                    dp.workspaceBottomPadding = 0;
+                    dp.cellLayoutPaddingPx.set(0, 0, 0, 0);
+                    dp.cellLayoutBorderSpacePx.set(g, g);
+                    // Center the icon+text block vertically within the square cell so the icon
+                    // sits at the physical centre of the cell in all orientations.
+                    // iconDrawablePaddingPx (icon-to-label gap) is left at whatever Lawnchair
+                    // computed — it does not affect icon spatial consistency, only label position.
+                    dp.iconCenterVertically = true;
+                });
     }
 
     public void addOnChangeListener(OnIDPChangeListener listener) {
@@ -619,6 +669,9 @@ public class InvariantDeviceProfile {
     @VisibleForTesting
     public void onConfigChanged(Context context) {
         Object[] oldState = toModelState();
+
+        // Anchor: transpose workspace DB coords before initGrid resets numColumns/numRows.
+        app.anchor.rotation.AnchorTransposeHook.beforeConfigChanged(context, this);
 
         // Re-init grid
         initGrid(context, getCurrentGridName(context));

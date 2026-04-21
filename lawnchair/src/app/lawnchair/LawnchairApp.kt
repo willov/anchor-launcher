@@ -40,7 +40,10 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import app.lawnchair.backup.LawnchairBackup
 import app.lawnchair.flowerpot.Flowerpot
+import app.lawnchair.hotseat.DisabledHotseat
 import app.lawnchair.preferences.PreferenceManager
+import app.lawnchair.preferences2.PreferenceManager2
+import com.patrykmichalik.opto.core.setBlocking
 import app.lawnchair.ui.ModalBottomSheetContent
 import app.lawnchair.ui.preferences.destinations.openAppInfo
 import app.lawnchair.util.restartLauncher
@@ -50,6 +53,7 @@ import com.android.launcher3.BuildConfig
 import com.android.launcher3.InvariantDeviceProfile
 import com.android.launcher3.Launcher
 import com.android.launcher3.LauncherApplication
+import com.android.launcher3.LauncherPrefs
 import com.android.launcher3.R
 import com.android.launcher3.Utilities
 import com.android.quickstep.RecentsActivity
@@ -70,6 +74,7 @@ class LawnchairApp : LauncherApplication() {
         QuickStepContract.sRecentsDisabled = !recentsEnabled
         Flowerpot.Manager.getInstance(this)
         registerActivityLifecycleCallbacks(activityHandler)
+        applyAnchorDefaults()
     }
 
     fun hideClockInStatusBar() {
@@ -153,6 +158,29 @@ class LawnchairApp : LauncherApplication() {
             return fallback
         }
         return res.getBoolean(resId)
+    }
+
+    private fun applyAnchorDefaults() {
+        val migrations = getSharedPreferences("anchor_migrations", Context.MODE_PRIVATE)
+        if (!migrations.getBoolean("v1_hotseat_disabled", false)) {
+            val pm2 = PreferenceManager2.getInstance(this)
+            pm2.hotseatMode.setBlocking(DisabledHotseat)
+            pm2.isHotseatEnabled.setBlocking(false)
+            migrations.edit().putBoolean("v1_hotseat_disabled", true).apply()
+        }
+        // Rotation is a core Anchor Launcher feature — enable it by default.
+        // Uses a migration flag so the user can still override via settings after first launch.
+        if (!migrations.getBoolean("v1_rotation_enabled", false)) {
+            LauncherPrefs.get(this).putSync(LauncherPrefs.ALLOW_ROTATION.to(true))
+            migrations.edit().putBoolean("v1_rotation_enabled", true).apply()
+        }
+        // Smartspace breaks grid transposition (it occupies row 0 and causes icon collisions
+        // in landscape). Disable by default; users can re-enable in settings if they want it.
+        if (!migrations.getBoolean("v1_smartspace_disabled", false)) {
+            val pm2 = PreferenceManager2.getInstance(this)
+            pm2.enableSmartspace.setBlocking(false)
+            migrations.edit().putBoolean("v1_smartspace_disabled", true).apply()
+        }
     }
 
     private val activityHandler = object : ActivityLifecycleCallbacks {

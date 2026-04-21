@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Anchor scaled to 70% around the centre -->
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.70"
+        android:scaleY="0.70">
+
+        <!-- Ring at top -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#E8EAF6"
+            android:strokeWidth="5"
+            android:pathData="M44,26 A10,10 0 0,1 64,26 A10,10 0 0,1 44,26 Z" />
+
+        <!-- Shank -->
+        <path
+            android:strokeColor="#E8EAF6"
+            android:strokeWidth="5"
+            android:strokeLineCap="round"
+            android:pathData="M54,36 L54,84" />
+
+        <!-- Stock / crossbar -->
+        <path
+            android:strokeColor="#E8EAF6"
+            android:strokeWidth="5"
+            android:strokeLineCap="round"
+            android:pathData="M20,50 L88,50" />
+
+        <!-- Ball at left end of crossbar -->
+        <path
+            android:fillColor="#E8EAF6"
+            android:pathData="M16,50 a4,4 0 0,0 8,0 a4,4 0 0,0 -8,0" />
+
+        <!-- Ball at right end of crossbar -->
+        <path
+            android:fillColor="#E8EAF6"
+            android:pathData="M84,50 a4,4 0 0,0 8,0 a4,4 0 0,0 -8,0" />
+
+        <!-- Left fluke arm -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#E8EAF6"
+            android:strokeWidth="5"
+            android:strokeLineCap="round"
+            android:pathData="M54,84 C40,88 22,80 20,66" />
+
+        <!-- Right fluke arm -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#E8EAF6"
+            android:strokeWidth="5"
+            android:strokeLineCap="round"
+            android:pathData="M54,84 C68,88 86,80 88,66" />
+
+    </group>
+
+</vector>

@@ -21,7 +21,28 @@
     <skip />
 
     <!-- Application name -->
-    <string name="app_name">Launcher3</string>
+    <string name="app_name">Anchor Launcher</string>
+
+    <!-- Override Lawnchair branding strings -->
+    <string name="managed_by_lawnchair">Managed by Anchor Launcher</string>
+    <string name="debug_restart_launcher">Restart Anchor Launcher</string>
+    <string name="set_default_launcher_tip">To access shortcuts and additional features, set Anchor Launcher as your default launcher</string>
+    <string name="onboarding_open_settings_title">Configure Anchor Launcher</string>
+    <string name="onboarding_welcome">Welcome to Anchor Launcher!</string>
+    <string name="lawnchair_bug_report">Anchor Launcher bug report</string>
+    <string name="generic_a11y_hint">To %1$s, turn on the Anchor Launcher accessibility service. Tap \"Open settings\", select \"Anchor Launcher\" and turn on \"Use Anchor Launcher.\"</string>
+    <string name="dt2s_admin_hint">To put the device to sleep, set Anchor Launcher as a device admin app. Tap \"Open settings\", then tap \"Activate this device admin app.\"</string>
+
+    <!-- Anchor Launcher settings -->
+    <string name="anchor_section_label">Anchor Launcher</string>
+    <string name="anchor_drawer_right_label">App drawer on right</string>
+    <string name="anchor_drawer_right_description">Place the app drawer as the rightmost page. Toggle off to move it to the left.</string>
+    <string name="anchor_drawer_cols_label">App drawer columns (0 = auto)</string>
+    <string name="anchor_rotation_transition_label">Rotation animation</string>
+    <string name="anchor_rotation_transition_traditional">Traditional</string>
+    <string name="anchor_rotation_transition_instant">Instant</string>
+    <string name="anchor_rotation_transition_crossfade">Crossfade</string>
+
     <!-- Work folder name -->
     <string name="work_folder_name">Work</string>
     <!-- Displayed when user selects a shortcut for an app that was uninstalled [CHAR_LIMIT=none]-->

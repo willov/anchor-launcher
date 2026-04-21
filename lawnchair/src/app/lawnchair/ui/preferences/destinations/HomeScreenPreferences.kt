@@ -20,14 +20,17 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import app.lawnchair.LawnchairApp
 import app.lawnchair.data.iconoverride.IconOverrideRepository
 import app.lawnchair.nexuslauncher.OverlayCallbackImpl
+import app.lawnchair.preferences.customPreferenceAdapter
 import app.lawnchair.preferences.getAdapter
 import app.lawnchair.preferences.preferenceManager
 import app.lawnchair.preferences2.preferenceManager2
@@ -40,6 +43,7 @@ import app.lawnchair.ui.preferences.components.NavigationActionPreference
 import app.lawnchair.ui.preferences.components.OverlayHandlerPreference
 import app.lawnchair.ui.preferences.components.controls.ClickablePreference
 import app.lawnchair.ui.preferences.components.controls.ListPreference
+import app.lawnchair.ui.preferences.components.controls.ListPreferenceEntry
 import app.lawnchair.ui.preferences.components.controls.SliderPreference
 import app.lawnchair.ui.preferences.components.controls.SwitchPreference
 import app.lawnchair.ui.preferences.components.layout.PreferenceGroup
@@ -288,6 +292,65 @@ fun HomeScreenPreferences(
                     adapter = prefs2.forceWidgetResize.getAdapter(),
                     label = stringResource(id = R.string.force_widget_resize_label),
                     description = stringResource(id = R.string.force_widget_resize_description),
+                )
+            }
+        }
+        PreferenceGroup(heading = stringResource(id = R.string.anchor_section_label)) {
+            Item {
+                val anchorPrefs = remember { app.anchor.AnchorPreferences(context) }
+                var drawerOnRight by remember { mutableStateOf(anchorPrefs.drawerOnRight) }
+                SwitchPreference(
+                    checked = drawerOnRight,
+                    onCheckedChange = { newValue ->
+                        drawerOnRight = newValue
+                        anchorPrefs.drawerOnRight = newValue
+                        LawnchairApp.instance.restart()
+                    },
+                    label = stringResource(id = R.string.anchor_drawer_right_label),
+                    description = stringResource(id = R.string.anchor_drawer_right_description),
+                )
+            }
+            Item {
+                val anchorPrefs = remember { app.anchor.AnchorPreferences(context) }
+                var transition by remember { mutableStateOf(anchorPrefs.rotationTransition) }
+                val transitionAdapter = customPreferenceAdapter(transition) { newValue ->
+                    transition = newValue
+                    anchorPrefs.rotationTransition = newValue
+                }
+                ListPreference(
+                    adapter = transitionAdapter,
+                    entries = listOf(
+                        ListPreferenceEntry(app.anchor.AnchorPreferences.TRANSITION_TRADITIONAL) {
+                            stringResource(id = R.string.anchor_rotation_transition_traditional)
+                        },
+                        ListPreferenceEntry(app.anchor.AnchorPreferences.TRANSITION_INSTANT) {
+                            stringResource(id = R.string.anchor_rotation_transition_instant)
+                        },
+                        ListPreferenceEntry(app.anchor.AnchorPreferences.TRANSITION_CROSSFADE) {
+                            stringResource(id = R.string.anchor_rotation_transition_crossfade)
+                        },
+                    ),
+                    label = stringResource(id = R.string.anchor_rotation_transition_label),
+                )
+            }
+            Item {
+                val anchorPrefs = remember { app.anchor.AnchorPreferences(context) }
+                val colsState   = remember { mutableStateOf(anchorPrefs.drawerColumns) }
+                val colsAdapter = remember {
+                    object : app.lawnchair.preferences.PreferenceAdapter<Int> {
+                        override val state = colsState
+                        override fun onChange(newValue: Int) {
+                            colsState.value = newValue
+                            anchorPrefs.drawerColumns = newValue
+                        }
+                    }
+                }
+                SliderPreference(
+                    label = stringResource(id = R.string.anchor_drawer_cols_label),
+                    adapter = colsAdapter,
+                    valueRange = 0..10,
+                    step = 1,
+                    showAsPercentage = false,
                 )
             }
         }

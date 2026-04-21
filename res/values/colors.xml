@@ -450,4 +450,7 @@
     <color name="materialColorSecondaryFixedDim">@color/system_secondary_fixed_dim</color>
     <color name="materialColorTertiaryFixed">@color/system_tertiary_fixed</color>
     <color name="materialColorTertiaryFixedDim">@color/system_tertiary_fixed_dim</color>
+
+    <!-- Anchor Launcher icon background — navy -->
+    <color name="ic_launcher_background">#1A2744</color>
 </resources>

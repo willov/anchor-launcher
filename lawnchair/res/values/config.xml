@@ -94,7 +94,7 @@
     <string name="config_default_smartspace_time_format" translatable="false">system</string>
 
     <!-- which hotseat mode to use by default -->
-    <string name="config_default_hotseat_mode" translatable="false">lawnchair</string>
+    <string name="config_default_hotseat_mode" translatable="false">disabled</string>
 
     <!-- which web search provider to use by default -->
     <string name="config_default_web_suggestion_provider" translatable="false">google</string>
@@ -109,7 +109,7 @@
     <string name="pref_key_swipe_right" translatable="false">pref_swipe_right</string>
     <string name="pref_key_swipe_left" translatable="false">pref_swipe_left</string>
 
-    <bool name="config_default_show_hotseat">true</bool>
+    <bool name="config_default_show_hotseat">false</bool>
     <bool name="config_default_always_reload_icons">true</bool>
     <bool name="config_default_dark_status_bar">false</bool>
     <bool name="config_default_show_notification_count">false</bool>
