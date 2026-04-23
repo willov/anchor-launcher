@@ -207,6 +207,27 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     @Thunk
     boolean mDeferRemoveExtraEmptyScreen = false;
 
+    // Anchor: restrict horizontal scrolling to pages within the active row.
+    // Set by TwoRowNavigationManager whenever the active row changes.
+    private int mAllowedPageStart = 0;
+    private int mAllowedPageEnd   = Integer.MAX_VALUE;
+
+    // Anchor: screen IDs that must never be stripped by stripEmptyScreens().
+    // FIRST_SCREEN_ID (0) is protected unconditionally — WorkspaceLayoutManager documents it as
+    // "always present, even if empty" and it anchors the icon row in the 2D navigation matrix.
+    // Widget row screens are added at runtime via protectScreenFromStripping().
+    private final java.util.Set<Integer> mProtectedScreenIds = new java.util.HashSet<>(
+            java.util.Collections.singleton(WorkspaceLayoutManager.FIRST_SCREEN_ID));
+
+    // Anchor: forwards drag-move coordinates to TwoRowNavigationManager for row-switch shelf.
+    @Nullable
+    private app.anchor.navigation.TwoRowNavigationManager mAnchorTwoRowManager;
+
+    public void setAnchorTwoRowManager(
+            app.anchor.navigation.TwoRowNavigationManager manager) {
+        mAnchorTwoRowManager = manager;
+    }
+
     /**
      * CellInfo for the cell that is currently being dragged
      */
@@ -1092,9 +1113,10 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         for (int i = 0; i < total; i++) {
             int id = mWorkspaceScreens.keyAt(i);
             CellLayout cl = mWorkspaceScreens.valueAt(i);
-            // FIRST_SCREEN_ID can never be removed.
+            // FIRST_SCREEN_ID can never be removed. Protected screens (e.g. widget row) are kept.
             if ((!PreferenceExtensionsKt.firstBlocking(PreferenceManager2.INSTANCE.get(getContext()).getEnableSmartspace()) || id > FIRST_SCREEN_ID)
-                    && cl.getShortcutsAndWidgets().getChildCount() == 0) {
+                    && cl.getShortcutsAndWidgets().getChildCount() == 0
+                    && !mProtectedScreenIds.contains(id)) {
                 removeScreens.add(id);
             }
         }
@@ -2606,6 +2628,7 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     }
 
     public void onDragOver(DragObject d) {
+        if (mAnchorTwoRowManager != null) mAnchorTwoRowManager.onDragMoved((float) d.y);
         // Skip drag over events while we are dragging over side pages
         if (!transitionStateShouldAllowDrop()) return;
 
@@ -3365,11 +3388,114 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         mSavedStates = null;
     }
 
+    /** Called by TwoRowNavigationManager to restrict horizontal scroll to the active row. */
+    public void setAllowedPageRange(int start, int end) {
+        mAllowedPageStart = start;
+        mAllowedPageEnd   = end;
+        // Update PagedView's mMinScroll/mMaxScroll so the built-in edge-glow effect fires at
+        // row boundaries rather than only at the absolute workspace edges.
+        updateMinAndMaxScrollX();
+    }
+
+    @Override
+    protected int computeMinScroll() {
+        int childCount = getChildCount();
+        if (childCount > 0 && mAllowedPageStart > 0) {
+            return getScrollForPage(Math.min(mAllowedPageStart, childCount - 1));
+        }
+        return super.computeMinScroll();
+    }
+
+    @Override
+    protected int computeMaxScroll() {
+        int childCount = getChildCount();
+        if (childCount > 0 && mAllowedPageEnd < childCount - 1) {
+            return getScrollForPage(Math.max(0, mAllowedPageEnd));
+        }
+        return super.computeMaxScroll();
+    }
+
+    /** Called by TwoRowNavigationManager to prevent widget row screens from being stripped. */
+    public void protectScreenFromStripping(int screenId) {
+        mProtectedScreenIds.add(screenId);
+    }
+
+    /**
+     * Reorders workspace pages so they match the given screenId order.
+     * Called by TwoRowNavigationManager after a drag to enforce the row-contiguity invariant:
+     * all pages of each row must be adjacent so that the [first..last] range for any row never
+     * spans a page belonging to a different row.
+     *
+     * The currently visible CellLayout is preserved across the reorder (mCurrentPage is updated).
+     * Any screens not listed in screenIdOrder (e.g. EXTRA_EMPTY_SCREEN remnants) stay at the tail.
+     */
+    public void reorderPages(java.util.List<Integer> screenIdOrder) {
+        if (screenIdOrder.isEmpty()) return;
+
+        // Remember which layout is showing so we can restore mCurrentPage after the shuffle.
+        CellLayout currentLayout =
+                (mCurrentPage >= 0 && mCurrentPage < getChildCount())
+                        ? (CellLayout) getChildAt(mCurrentPage) : null;
+
+        // Move each known layout into its target position without touching un-listed screens.
+        int insertAt = 0;
+        for (int screenId : screenIdOrder) {
+            CellLayout cl = mWorkspaceScreens.get(screenId);
+            if (cl == null) continue;
+            int from = indexOfChild(cl);
+            if (from == insertAt) { insertAt++; continue; }
+            if (from >= 0) removeViewAt(from);
+            addView(cl, insertAt);
+            insertAt++;
+        }
+
+        // Rebuild mScreenOrder from the new child order (un-listed extras land at the tail).
+        mScreenOrder.clear();
+        for (int i = 0; i < getChildCount(); i++) {
+            mScreenOrder.add(getCellLayoutId((CellLayout) getChildAt(i)));
+        }
+
+        // Restore the current page to the layout that was visible before the shuffle.
+        // Use direct field assignment instead of setCurrentPage() to avoid triggering
+        // notifyPageSwitchListener → onWorkspacePageSettled, which would clobber rowPageIndex.
+        if (currentLayout != null) {
+            int newIdx = indexOfChild(currentLayout);
+            if (newIdx >= 0) {
+                mCurrentPage = newIdx;
+                updateCurrentPageScroll();
+            }
+        }
+    }
+
+    @Override
+    public boolean snapToPage(int whichPage) {
+        whichPage = Math.max(mAllowedPageStart, Math.min(mAllowedPageEnd, whichPage));
+        return super.snapToPage(whichPage);
+    }
+
+    /**
+     * Clamps every scroll update (including touch-drag) to the active row's page range so that
+     * pages belonging to the other row are never visible during a drag gesture.
+     * snapToPage() above handles the final resting position; this handles in-flight scroll.
+     */
+    @Override
+    public void scrollTo(int x, int y) {
+        int childCount = getChildCount();
+        if (childCount > 0 && (mAllowedPageStart > 0 || mAllowedPageEnd < childCount - 1)) {
+            int minX = getScrollForPage(Math.max(0, mAllowedPageStart));
+            int maxX = getScrollForPage(Math.min(childCount - 1, mAllowedPageEnd));
+            x = Math.max(minX, Math.min(maxX, x));
+        }
+        super.scrollTo(x, y);
+    }
+
     @Override
     public boolean scrollLeft() {
         boolean result = false;
         if (!mIsSwitchingState && workspaceInScrollableState()) {
-            result = super.scrollLeft();
+            if (getNextPage() > mAllowedPageStart) {
+                result = super.scrollLeft();
+            }
         }
         Folder openFolder = Folder.getOpen(mLauncher);
         if (openFolder != null) {
@@ -3382,7 +3508,9 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     public boolean scrollRight() {
         boolean result = false;
         if (!mIsSwitchingState && workspaceInScrollableState()) {
-            result = super.scrollRight();
+            if (getNextPage() < mAllowedPageEnd) {
+                result = super.scrollRight();
+            }
         }
         Folder openFolder = Folder.getOpen(mLauncher);
         if (openFolder != null) {

@@ -3,6 +3,7 @@ package app.anchor.navigation
 import android.annotation.SuppressLint
 import android.view.MotionEvent
 import android.view.ViewConfiguration
+import app.anchor.AnchorPreferences
 import app.lawnchair.LawnchairLauncher
 import com.android.launcher3.AbstractFloatingView
 import com.android.launcher3.LauncherState
@@ -11,17 +12,24 @@ import com.android.launcher3.util.TouchController
 import kotlin.math.abs
 
 /**
- * Intercepts a downward swipe from the top [TRIGGER_ZONE_FRACTION] of the screen and expands
- * the status bar.
+ * Intercepts a downward swipe from the top [TRIGGER_ZONE_FRACTION] of the screen.
  *
- * On phones (screenWidthDp < 600): any downward swipe in the zone → notifications.
- * On tablets (screenWidthDp ≥ 600): left half → notifications, right half → quick settings.
+ * Behaviour depends on [AnchorPreferences.statusBarSwipeAction]:
+ *
+ *   [AnchorPreferences.SWIPE_NOTIFICATIONS] (default) — expands the notification shade.
+ *     On phones: any swipe → notifications.
+ *     On tablets (screenWidthDp ≥ 600): left half → notifications, right half → quick settings.
+ *
+ *   [AnchorPreferences.SWIPE_NEXT_ROW] — navigates to the next row of screens instead, cycling
+ *     upward through rows. Notification expansion is suppressed while this mode is active.
+ *     This is the recommended setting when using multiple screen rows so that the top-edge swipe
+ *     gesture feels consistent with the spatial layout (swipe down = go to the row above).
  *
  * Registered before [TwoRowSwipeTouchController] so it has first claim on top-edge swipes.
  */
 class SwipeDownStatusBarController(
     private val launcher: LawnchairLauncher,
-    private val isDrawerOpen: () -> Boolean = { false },
+    private val navigationManager: TwoRowNavigationManager? = null,
 ) : TouchController {
 
     private val slop = ViewConfiguration.get(launcher).scaledTouchSlop.toFloat()
@@ -43,7 +51,7 @@ class SwipeDownStatusBarController(
                 val dx = ev.x - startX
                 if (!intercepting && dy > slop && dy > abs(dx)) {
                     intercepting = true
-                    expandStatusBar(startX)
+                    handleSwipeDown(startX)
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
@@ -57,12 +65,27 @@ class SwipeDownStatusBarController(
     override fun onControllerTouchEvent(ev: MotionEvent): Boolean = true
 
     private fun canIntercept(ev: MotionEvent): Boolean {
-        if (isDrawerOpen()) return false
         if ((ev.edgeFlags and Utilities.EDGE_NAV_BAR) != 0) return false
         if (AbstractFloatingView.getTopOpenView(launcher) != null) return false
         if (!launcher.isInState(LauncherState.NORMAL)) return false
         val triggerHeight = launcher.dragLayer.height * TRIGGER_ZONE_FRACTION
         return ev.y < triggerHeight
+    }
+
+    private fun handleSwipeDown(touchX: Float) {
+        val nav = navigationManager
+        // When multiple rows are active, swipe-down is the row-navigation gesture on the main
+        // workspace — mirror that here so the status-bar zone feels consistent.
+        // When single-row, respect the statusBarSwipeAction preference.
+        val navigateRows = nav != null && (
+            nav.rowCount > 1 ||
+            AnchorPreferences(launcher).statusBarSwipeAction == AnchorPreferences.SWIPE_NEXT_ROW
+        )
+        if (navigateRows && nav != null) {
+            if (nav.activeRowIndex < nav.rowCount - 1) nav.navigateUp() else nav.navigateDown()
+            return
+        }
+        expandStatusBar(touchX)
     }
 
     @SuppressLint("WrongConstant")

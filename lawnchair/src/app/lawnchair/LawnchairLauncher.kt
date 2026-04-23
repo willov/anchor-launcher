@@ -33,8 +33,6 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import app.lawnchair.LawnchairApp.Companion.showQuickstepWarningIfNecessary
 import app.lawnchair.compat.LawnchairQuickstepCompat
-import app.anchor.applist.AnchorDrawerSheet
-import app.anchor.navigation.DrawerSwipeTouchController
 import app.anchor.navigation.SwipeDownStatusBarController
 import app.anchor.navigation.TwoRowNavigationManager
 import app.anchor.navigation.TwoRowSwipeTouchController
@@ -57,6 +55,9 @@ import app.lawnchair.util.getThemedIconPacksInstalled
 import app.lawnchair.util.unsafeLazy
 import app.lawnchair.views.LawnchairFloatingSurfaceView
 import com.android.launcher3.AbstractFloatingView
+import com.android.launcher3.DropTarget
+import com.android.launcher3.dragndrop.DragController
+import com.android.launcher3.dragndrop.DragOptions
 import com.android.launcher3.BaseActivity
 import com.android.launcher3.BubbleTextView
 import com.android.launcher3.GestureNavContract
@@ -99,7 +100,6 @@ import kotlinx.coroutines.launch
 
 class LawnchairLauncher : QuickstepLauncher() {
     val twoRowNavigationManager by unsafeLazy { TwoRowNavigationManager(this) }
-    val anchorDrawerSheet by unsafeLazy { AnchorDrawerSheet(this) }
     val rotationAnimator by unsafeLazy { RotationAnimator(this) }
 
     private val defaultOverlay by unsafeLazy { OverlayCallbackImpl(this) }
@@ -294,12 +294,23 @@ class LawnchairLauncher : QuickstepLauncher() {
     override fun setupViews() {
         super.setupViews()
         twoRowNavigationManager.setup()
-        anchorDrawerSheet.setup()
         rotationAnimator.setup()
+        workspace.setAnchorTwoRowManager(twoRowNavigationManager)
+        getDragController().addDragListener(object : DragController.DragListener {
+            override fun onDragStart(dragObject: DropTarget.DragObject, options: DragOptions) {
+                twoRowNavigationManager.onDragStarted()
+            }
+            override fun onDragEnd() {
+                twoRowNavigationManager.onDragEnded()
+            }
+        })
     }
 
     override fun finishBindingItems(pagesBoundFirst: com.android.launcher3.util.IntSet) {
         super.finishBindingItems(pagesBoundFirst)
+        // Ensure row-matrix initialization happens even if the user never scrolls horizontally.
+        // onPageEndTransition only fires after a scroll animation; this call covers the startup case.
+        twoRowNavigationManager.onWorkspacePageSettled(workspace.currentPage)
         rotationAnimator.onWorkspaceRebound()
     }
 
@@ -309,15 +320,11 @@ class LawnchairLauncher : QuickstepLauncher() {
     }
 
     override fun createTouchControllers(): Array<TouchController> {
-        val statusBarController = SwipeDownStatusBarController(this) { anchorDrawerSheet.isOpen }
-        val twoRowController = TwoRowSwipeTouchController(this, twoRowNavigationManager) { anchorDrawerSheet.isOpen }
-        val drawerController = DrawerSwipeTouchController(this, anchorDrawerSheet)
+        val statusBarController = SwipeDownStatusBarController(this, twoRowNavigationManager)
+        val twoRowController = TwoRowSwipeTouchController(this, twoRowNavigationManager)
         val verticalSwipeController = VerticalSwipeTouchController(this, gestureController)
-        // super.createTouchControllers() returns [DragController, AllAppsSwipeController].
-        // We keep DragController but exclude AllAppsSwipeController — the app drawer is
-        // a side-sheet accessed via edge swipe, not a bottom-sheet swipe-up gesture.
         return arrayOf<TouchController>(
-            statusBarController, drawerController, twoRowController, verticalSwipeController,
+            statusBarController, twoRowController, verticalSwipeController,
             getDragController(),
         )
     }
