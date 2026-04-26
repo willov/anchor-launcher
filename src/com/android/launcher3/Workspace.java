@@ -1449,7 +1449,10 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     @Override
     protected void snapToDestination() {
         if (mOverlayEdgeEffect != null && !mOverlayEdgeEffect.isFinished()) {
-            snapToPageImmediately(0);
+            // Snap to the first page of the current allowed range, not absolute page 0.
+            // In a multi-row workspace, absolute page 0 may belong to a different row, which
+            // would jump the workspace to the wrong row when the overlay is being dismissed.
+            snapToPageImmediately(mAllowedPageStart);
         } else {
             super.snapToDestination();
         }
@@ -3554,9 +3557,16 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         }
         if (!extraInserted) return;
 
-        // reorderPages restores mCurrentPage and calls updateCurrentPageScroll(), so the
-        // workspace scroll position is preserved after the page-order change.
+        // Disable the LayoutTransition before reordering. The reorder calls removeViewAt() which
+        // triggers the Workspace's DISAPPEARING LayoutTransition animation. In the next layout
+        // pass, PagedView.computeScrollHelper defers updateMinAndMaxScrollX() while any transition
+        // is running, leaving mMinScroll/mMaxScroll stale (= 0 from the setAllowedPageRange call
+        // made while mPageScrolls were invalid). validateNewPage() then incorrectly clamps
+        // mCurrentPage from 1 → 0, snapping the workspace to page 1 on every drag start from
+        // page 2. Disabling the transition during the reorder prevents this deferral.
+        disableLayoutTransitions();
         reorderPages(newOrder);
+        enableLayoutTransitions();
         // Extend mAllowedPageEnd by 1 to include EXTRA's new position.
         setAllowedPageRange(mAllowedPageStart, mAllowedPageEnd + 1);
     }
