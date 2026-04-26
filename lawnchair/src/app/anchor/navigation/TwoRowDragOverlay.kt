@@ -40,6 +40,8 @@ class TwoRowDragOverlay(
     private val hasRowBelow = activeRowIndex > 0
 
     private var switched = false
+    private var bandEnterTime = 0L
+    private var pendingBand = 0  // 0 = none, 1 = upper, -1 = lower
 
     init {
         isClickable = false
@@ -104,20 +106,31 @@ class TwoRowDragOverlay(
 
     /**
      * Called on every drag-move with the drag icon's Y in DragLayer coordinates.
-     * The detection zone is the full-width band at each edge. Fires [onRowSwitch] once per drag.
+     * The detection zone is the full-width band at each edge. A row switch fires only after the
+     * icon has dwelled in the band for [DWELL_MS] — passing through quickly does not trigger,
+     * which prevents accidental switches when dragging sideways near the top of the screen.
      */
     fun onDragMoved(dragY: Float) {
         if (switched) return
         val inUpperBand = hasRowAbove && dragY < buttonHeightPx
         val inLowerBand = hasRowBelow && height > 0 && dragY > height - buttonHeightPx
+        val now = System.currentTimeMillis()
         when {
-            inUpperBand -> { switched = true; onRowSwitch(activeRowIndex + 1) }
-            inLowerBand -> { switched = true; onRowSwitch(activeRowIndex - 1) }
+            inUpperBand -> {
+                if (pendingBand != 1) { pendingBand = 1; bandEnterTime = now }
+                else if (now - bandEnterTime >= DWELL_MS) { switched = true; onRowSwitch(activeRowIndex + 1) }
+            }
+            inLowerBand -> {
+                if (pendingBand != -1) { pendingBand = -1; bandEnterTime = now }
+                else if (now - bandEnterTime >= DWELL_MS) { switched = true; onRowSwitch(activeRowIndex - 1) }
+            }
+            else -> pendingBand = 0
         }
     }
 
     companion object {
         private const val BUTTON_WIDTH_DP = 120f
+        private const val DWELL_MS = 400L
         private val BUTTON_COLOR = Color.argb(0xCC, 0x10, 0x10, 0x20)
         private val DOT_COLOR    = Color.argb(0xBB, 0xFF, 0xFF, 0xFF)
     }

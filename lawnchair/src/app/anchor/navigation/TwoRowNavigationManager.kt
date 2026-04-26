@@ -44,6 +44,7 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
 
     private val prefs by lazy { AnchorPreferences(launcher) }
     private var initialized = false
+    private var isDragging = false
     private var currentDragOverlay: TwoRowDragOverlay? = null
 
     private val handler = Handler(Looper.getMainLooper())
@@ -55,7 +56,9 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
 
     /** Navigate one row up (toward higher index). No-op if already at the top or transitioning. */
     fun navigateUp() {
-        if (activeRowIndex >= rowCount - 1 || isTransitioning || !initialized) return
+        if (isTransitioning || !initialized) return
+        cleanupStaleScreenIds()
+        if (activeRowIndex >= rowCount - 1) return
         val from = activeRowIndex
         activeRowIndex++
         animateRowTransition(from, activeRowIndex)
@@ -63,7 +66,9 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
 
     /** Navigate one row down (toward lower index). No-op if already at row 0 or transitioning. */
     fun navigateDown() {
-        if (activeRowIndex <= 0 || isTransitioning || !initialized) return
+        if (isTransitioning || !initialized) return
+        cleanupStaleScreenIds()
+        if (activeRowIndex <= 0) return
         val from = activeRowIndex
         activeRowIndex--
         animateRowTransition(from, activeRowIndex)
@@ -74,9 +79,15 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
     /** Called when a drag begins. Adds the row-switch overlay and releases scroll clamping. */
     fun onDragStarted() {
         if (!initialized) return
-        // Release the page-range clamp so Launcher3 can create new screens at either edge of the
-        // current row during drag. We re-adopt any new screens when the drag ends.
-        launcher.workspace.setAllowedPageRange(0, Int.MAX_VALUE)
+        isDragging = true
+        // Reposition EXTRA_EMPTY_SCREEN (if Launcher3 inserted one) to sit immediately after
+        // the active row's last page so the user can drag right to create a new page.
+        // Do NOT call updateScrollRange here: Launcher3 just inserted EXTRA via addView which
+        // makes isPageScrollsInitialized() false, so getScrollForPage() returns 0, and calling
+        // setAllowedPageRange → updateMinAndMaxScrollX() would set mMaxScroll = 0, causing our
+        // scrollTo override to snap the workspace to position 0. mAllowedPageEnd is already
+        // correct from the last onWorkspacePageSettled call.
+        launcher.workspace.repositionExtraEmptyScreenForDrag()
 
         val dtb = launcher.getDropTargetBar()
         val buttonHeight = dtb.measuredHeight.takeIf { it > 0 }
@@ -100,6 +111,7 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
 
     /** Called when the drag ends (drop or cancel). Adopts any new screens then re-clamps. */
     fun onDragEnded() {
+        isDragging = false
         currentDragOverlay?.let { if (it.parent != null) launcher.dragLayer.removeView(it) }
         currentDragOverlay = null
         // Pick up screens Launcher3 created during the drag and assign them to the current row.
@@ -118,6 +130,12 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
             initialize()
             return
         }
+        // Refresh scroll bounds on every page settle — handles cases where page indices shifted
+        // (e.g. EXTRA removed after drag, page deleted) without a full navigation cycle.
+        // Skip during drag: Launcher3 inserts EXTRA_EMPTY_SCREEN via addView, making
+        // isPageScrollsInitialized() false. Calling setAllowedPageRange then sets mMaxScroll = 0
+        // and excludes EXTRA from mAllowedPageEnd, blocking new-page creation on the right edge.
+        if (!isDragging) updateScrollRange(activeRowIndex)
         val screenId = launcher.workspace.getScreenIdForPageIndex(workspacePage)
         if (screenId < 0) return  // EXTRA_EMPTY_SCREEN or invalid
 
@@ -154,6 +172,10 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
             val idx = fromIds.indexOf(fromScreenId)
             if (idx >= 0) rowPageIndex[fromRow] = idx
         }
+
+        // During a drag, move to the target row's exact bounds immediately so the user cannot
+        // scroll back into the previous row's pages while the animation is playing.
+        if (isDragging) updateScrollRange(toRow)
 
         // Going UP (higher index): current exits DOWN, new enters from ABOVE
         // Going DOWN (lower index): current exits UP,   new enters from BELOW
@@ -201,9 +223,13 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
             if (rowIndex == 0) workspace.setAllowedPageRange(0, 0)
             return
         }
-        val first = workspace.getPageIndexForScreenId(ids.first())
-        val last  = workspace.getPageIndexForScreenId(ids.last())
-        if (first >= 0 && last >= 0) workspace.setAllowedPageRange(first, last)
+        // Skip stale IDs (screens removed by stripEmptyScreens before rowScreenIds is updated).
+        // Using first/last that are still live avoids an early return that would leave
+        // mAllowedPageEnd pointing at a deleted page, which silently disables the clamp.
+        val liveIndices = ids.mapNotNull { id ->
+            workspace.getPageIndexForScreenId(id).takeIf { it >= 0 }
+        }
+        if (liveIndices.isNotEmpty()) workspace.setAllowedPageRange(liveIndices.first(), liveIndices.last())
     }
 
     // ── Screen adoption ─────────────────────────────────────────────────────────────────────────
@@ -240,11 +266,59 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
         // the [first..last] range for one row to span pages of another row.
         workspace.reorderPages(rowScreenIds.flatten())
 
+        // Protect any upper-row screens from being stripped (adoption may have added unprotected ones).
+        for (r in 1 until rowCount) {
+            for (id in rowScreenIds[r]) workspace.protectScreenFromStripping(id)
+        }
+
         // Persist upper rows (row 0 is implicit, no explicit storage needed).
         if (activeRowIndex > 0) {
             prefs.setRowScreenIds(activeRowIndex, rowScreenIds[activeRowIndex].map { it.toString() }.toSet())
         }
         updateScrollRange(activeRowIndex)
+    }
+
+    // ── Stale screen cleanup ────────────────────────────────────────────────────────────────────
+
+    /**
+     * Removes screen IDs from [rowScreenIds] that no longer exist in the workspace (deleted by
+     * stripEmptyScreens or explicitly removed). If an upper row becomes empty after cleanup,
+     * allocates a fresh screen so the row remains navigable. Called before every row navigation.
+     */
+    private fun cleanupStaleScreenIds() {
+        val workspace = launcher.workspace
+        var changed = false
+
+        for (r in rowScreenIds.indices) {
+            val before = rowScreenIds[r].size
+            rowScreenIds[r].removeAll { workspace.getPageIndexForScreenId(it) < 0 }
+            if (rowScreenIds[r].size != before) {
+                changed = true
+                rowPageIndex[r] = rowPageIndex[r].coerceAtMost((rowScreenIds[r].size - 1).coerceAtLeast(0))
+                Log.d(TAG, "cleanupStaleScreenIds: removed stale IDs from row $r, remaining=${rowScreenIds[r]}")
+            }
+            // Upper rows must always have at least one screen.
+            if (r > 0 && rowScreenIds[r].isEmpty()) {
+                val newId = allocateScreenId()
+                workspace.insertNewWorkspaceScreen(newId)
+                workspace.protectScreenFromStripping(newId)
+                rowScreenIds[r].add(newId)
+                prefs.setRowScreenIds(r, rowScreenIds[r].map { it.toString() }.toSet())
+                changed = true
+                Log.d(TAG, "cleanupStaleScreenIds: row $r empty, allocated replacement $newId")
+            }
+        }
+
+        if (changed) {
+            for (r in rowScreenIds.indices) {
+                rowScreenIds[r].sortBy { workspace.getPageIndexForScreenId(it) }
+            }
+            workspace.reorderPages(rowScreenIds.flatten())
+            for (r in 1 until rowCount) {
+                prefs.setRowScreenIds(r, rowScreenIds[r].map { it.toString() }.toSet())
+            }
+            updateScrollRange(activeRowIndex)
+        }
     }
 
     // ── Initialization ──────────────────────────────────────────────────────────────────────────
@@ -321,6 +395,12 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
         workspace.reorderPages(rowScreenIds.flatten())
 
         Log.d(TAG, "initialize done: rows=${rowScreenIds.mapIndexed { i, ids -> "[$i]$ids" }}")
+
+        // Register callback so TwoRowNavigationManager is notified (deferred, after layout) when
+        // stripEmptyScreens removes pages and physical indices shift.
+        launcher.workspace.setOnWorkspaceScreensChanged(Runnable {
+            if (initialized) updateScrollRange(activeRowIndex)
+        })
 
         updateScrollRange(0)
         // Mark initialized before calling setCurrentPage so onWorkspacePageSettled can process

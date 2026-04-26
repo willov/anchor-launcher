@@ -219,6 +219,14 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     private final java.util.Set<Integer> mProtectedScreenIds = new java.util.HashSet<>(
             java.util.Collections.singleton(WorkspaceLayoutManager.FIRST_SCREEN_ID));
 
+    // Anchor: called (deferred via runOnPageScrollsInitialized) after stripEmptyScreens removes
+    // pages, so TwoRowNavigationManager can refresh its mAllowedPageEnd before the user scrolls.
+    private Runnable mOnWorkspaceScreensChanged;
+
+    public void setOnWorkspaceScreensChanged(Runnable callback) {
+        mOnWorkspaceScreensChanged = callback;
+    }
+
     // Anchor: forwards drag-move coordinates to TwoRowNavigationManager for row-switch shelf.
     @Nullable
     private app.anchor.navigation.TwoRowNavigationManager mAnchorTwoRowManager;
@@ -994,6 +1002,9 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     private int commitExtraEmptyScreen(int emptyScreenId) {
         CellLayout cl = mWorkspaceScreens.get(emptyScreenId);
         mWorkspaceScreens.remove(emptyScreenId);
+        // Anchor: capture position before removing so the new ID lands in the same slot,
+        // keeping mScreenOrder consistent with the physical CellLayout child order.
+        int insertPos = mScreenOrder.indexOf(emptyScreenId);
         mScreenOrder.removeValue(emptyScreenId);
 
         int newScreenId = LauncherAppState.getInstance(getContext())
@@ -1005,7 +1016,11 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         }
 
         mWorkspaceScreens.put(newScreenId, cl);
-        mScreenOrder.add(newScreenId);
+        if (insertPos >= 0 && insertPos <= mScreenOrder.size()) {
+            mScreenOrder.add(insertPos, newScreenId);
+        } else {
+            mScreenOrder.add(newScreenId);
+        }
 
         return newScreenId;
     }
@@ -1170,6 +1185,12 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
 
         if (pageShift >= 0) {
             setCurrentPage(currentPage - pageShift);
+        }
+
+        // Anchor: after removing pages, page indices shift. Notify TwoRowNavigationManager once
+        // the layout pass has refreshed mPageScrolls so it can update mAllowedPageEnd correctly.
+        if (mOnWorkspaceScreensChanged != null && !removeScreens.isEmpty()) {
+            runOnPageScrollsInitialized(mOnWorkspaceScreensChanged);
         }
 
         // Now that we have removed some pages, ensure state description is up to date.
@@ -2806,6 +2827,10 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                 nextPage + (isTwoPanelEnabled() ? 2 : 1));
 
         for (int pageIndex : pageIndexesToVerify) {
+            // Anchor: skip pages outside the active row — prevents an icon dragged past the
+            // right edge of row 0's last page from being matched to row 1's first CellLayout.
+            if (pageIndex < mAllowedPageStart || pageIndex > mAllowedPageEnd) continue;
+
             // When deciding whether to perform a page switch, we need to consider the most
             // extreme X coordinate between the finger location and the center of the object
             // being dragged. This is either the max or the min of the two depending on whether
@@ -3388,10 +3413,37 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         mSavedStates = null;
     }
 
+    /**
+     * Called after the mPageScrolls array is rebuilt and all runOnPageScrollsInitialized
+     * callbacks have run (including snapToDestination from ACTION_CANCEL during drag-start).
+     *
+     * During a drag, snapToDestination may compute the wrong destination page because the scroll
+     * position was temporarily corrupted by stale-mPageScrolls scroll calls before the layout
+     * pass. The fix: after all callbacks run, if a drag is in progress, override the snap with a
+     * correct snap to mCurrentPage so the workspace stays on the page the user started from.
+     */
+    @Override
+    protected void onPageScrollsInitialized() {
+        super.onPageScrollsInitialized();
+        if (mDragController.isDragging()) {
+            android.util.Log.d("AnchorNav", "onPageScrollsInitialized: drag in progress, re-snapping to mCurrentPage=" + mCurrentPage + " scrollX=" + getScrollX());
+            snapToPage(mCurrentPage);
+        }
+    }
+
     /** Called by TwoRowNavigationManager to restrict horizontal scroll to the active row. */
     public void setAllowedPageRange(int start, int end) {
         mAllowedPageStart = start;
         mAllowedPageEnd   = end;
+        // Hide pages outside the active row so they can never bleed into view via overscroll,
+        // stale-mPageScrolls frames, or any other mechanism. INVISIBLE keeps them in the layout
+        // (scroll positions stay correct) but prevents them from being drawn.
+        final int childCount = getChildCount();
+        final boolean restricted = start > 0 || end < childCount - 1;
+        for (int i = 0; i < childCount; i++) {
+            getChildAt(i).setVisibility(
+                    !restricted || (i >= start && i <= end) ? VISIBLE : INVISIBLE);
+        }
         // Update PagedView's mMinScroll/mMaxScroll so the built-in edge-glow effect fires at
         // row boundaries rather than only at the absolute workspace edges.
         updateMinAndMaxScrollX();
@@ -3458,33 +3510,126 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         // Restore the current page to the layout that was visible before the shuffle.
         // Use direct field assignment instead of setCurrentPage() to avoid triggering
         // notifyPageSwitchListener → onWorkspacePageSettled, which would clobber rowPageIndex.
+        // Only call updateCurrentPageScroll() when mPageScrolls is valid; if it is stale
+        // (e.g. a page was just added/removed by insertNewWorkspaceScreen), getScrollForPage()
+        // returns 0 and the workspace would snap to page 0. The layout pass will call
+        // setCurrentPage(getNextPage()) → updateCurrentPageScroll() once scrolls are fresh.
         if (currentLayout != null) {
             int newIdx = indexOfChild(currentLayout);
             if (newIdx >= 0) {
                 mCurrentPage = newIdx;
-                updateCurrentPageScroll();
+                if (isPageScrollsInitialized()) {
+                    updateCurrentPageScroll();
+                }
             }
         }
     }
 
+    /**
+     * Called by TwoRowNavigationManager at drag-start. Moves EXTRA_EMPTY_SCREEN from the absolute
+     * end of the workspace to the slot immediately after the active row's last page, then extends
+     * mAllowedPageEnd by 1 so the active row can scroll into it. Without this, EXTRA sits after
+     * every other row's pages and can never be reached within the row clamp.
+     *
+     * Uses reorderPages() so that mCurrentPage and the scroll position are correctly preserved
+     * (raw removeViewAt/addView leave mCurrentPage unrestored which causes the workspace to jump).
+     * No-op if EXTRA_EMPTY_SCREEN has not been inserted yet.
+     */
+    public void repositionExtraEmptyScreenForDrag() {
+        if (!mWorkspaceScreens.containsKey(EXTRA_EMPTY_SCREEN_ID)) return;
+        if (mAllowedPageEnd < 0 || mAllowedPageEnd >= Integer.MAX_VALUE) return;
+
+        // Build new page order: known pages in current order with EXTRA inserted right after
+        // the page at mAllowedPageEnd (the last page of the active row).
+        java.util.List<Integer> newOrder = new java.util.ArrayList<>();
+        boolean extraInserted = false;
+        for (int i = 0; i < mScreenOrder.size(); i++) {
+            int id = mScreenOrder.get(i);
+            if (EXTRA_EMPTY_SCREEN_IDS.contains(id)) continue; // inserted manually below
+            newOrder.add(id);
+            if (i == mAllowedPageEnd && !extraInserted) {
+                newOrder.add(EXTRA_EMPTY_SCREEN_ID);
+                extraInserted = true;
+            }
+        }
+        if (!extraInserted) return;
+
+        // reorderPages restores mCurrentPage and calls updateCurrentPageScroll(), so the
+        // workspace scroll position is preserved after the page-order change.
+        reorderPages(newOrder);
+        // Extend mAllowedPageEnd by 1 to include EXTRA's new position.
+        setAllowedPageRange(mAllowedPageStart, mAllowedPageEnd + 1);
+    }
+
     @Override
     public boolean snapToPage(int whichPage) {
+        if (!isPageScrollsInitialized()) {
+            android.util.Log.w("AnchorNav", "snapToPage(" + whichPage + ") STALE BLOCK scrollX=" + getScrollX() + " mCurrentPage=" + mCurrentPage, new Exception("snapToPage stale"));
+            return false;
+        }
         whichPage = Math.max(mAllowedPageStart, Math.min(mAllowedPageEnd, whichPage));
         return super.snapToPage(whichPage);
+    }
+
+    /**
+     * Deepest snapToPage variant — this is where mScroller.startScroll is actually called.
+     * Guard against stale mPageScrolls here so we never start a scroller animation targeting
+     * scroll position 0 (the value getScrollForPage returns for every page when stale).
+     * Without this guard, the animation starts with target=0, and after the layout pass refreshes
+     * mPageScrolls the scroller finishes at position 0, snapping the workspace to page 0
+     * regardless of which page the user was on.
+     */
+    @Override
+    protected boolean snapToPage(int whichPage, int delta, int duration, boolean immediate) {
+        if (!isPageScrollsInitialized()) {
+            android.util.Log.w("AnchorNav", "snapToPage4(" + whichPage + "," + delta + ") STALE BLOCK scrollX=" + getScrollX(), new Exception("snapToPage4 stale"));
+            return false;
+        }
+        android.util.Log.d("AnchorNav", "snapToPage4(" + whichPage + ") scrollX=" + getScrollX() + " mCurrentPage=" + mCurrentPage + " mAllowedPageStart=" + mAllowedPageStart + " mAllowedPageEnd=" + mAllowedPageEnd);
+        return super.snapToPage(whichPage, delta, duration, immediate);
+    }
+
+    /**
+     * updateCurrentPageScroll uses VIEW_SCROLL_TO (View::scrollTo) to set position. Guard stale
+     * mPageScrolls the same way scrollTo does, or getScrollForPage() returns 0 and the workspace
+     * immediately snaps to position 0 even when the scrollTo guard is in place.
+     */
+    @Override
+    protected void updateCurrentPageScroll() {
+        if (!isPageScrollsInitialized()) {
+            android.util.Log.w("AnchorNav", "updateCurrentPageScroll STALE BLOCK scrollX=" + getScrollX() + " mCurrentPage=" + mCurrentPage, new Exception("updateCurrentPageScroll stale"));
+            return;
+        }
+        android.util.Log.d("AnchorNav", "updateCurrentPageScroll OK scrollX=" + getScrollX() + " mCurrentPage=" + mCurrentPage + " mAllowedPageStart=" + mAllowedPageStart + " mAllowedPageEnd=" + mAllowedPageEnd);
+        super.updateCurrentPageScroll();
     }
 
     /**
      * Clamps every scroll update (including touch-drag) to the active row's page range so that
      * pages belonging to the other row are never visible during a drag gesture.
      * snapToPage() above handles the final resting position; this handles in-flight scroll.
+     *
+     * When mPageScrolls is stale (e.g. EXTRA_EMPTY_SCREEN was just added/moved via addView before
+     * the layout pass), getScrollForPage() returns 0 for all pages, which would incorrectly clamp
+     * the workspace to scroll position 0 (page 0). PagedView.scrollTo has the same problem — its
+     * mMinScroll/mMaxScroll are also 0 when stale. We bail out completely in that window; the
+     * layout pass will call setCurrentPage(getNextPage()) → updateCurrentPageScroll() with fresh
+     * mPageScrolls to restore the correct scroll position.
      */
     @Override
     public void scrollTo(int x, int y) {
+        if (!isPageScrollsInitialized()) {
+            android.util.Log.w("AnchorNav", "scrollTo(" + x + ") STALE BLOCK scrollX=" + getScrollX(), new Exception("scrollTo stale"));
+            return;
+        }
         int childCount = getChildCount();
         if (childCount > 0 && (mAllowedPageStart > 0 || mAllowedPageEnd < childCount - 1)) {
             int minX = getScrollForPage(Math.max(0, mAllowedPageStart));
             int maxX = getScrollForPage(Math.min(childCount - 1, mAllowedPageEnd));
             x = Math.max(minX, Math.min(maxX, x));
+        }
+        if (x != getScrollX()) {
+            android.util.Log.d("AnchorNav", "scrollTo(" + x + ") from " + getScrollX() + " mCurrentPage=" + mCurrentPage + " allowed=[" + mAllowedPageStart + ".." + mAllowedPageEnd + "]", new Exception("scrollTo trace"));
         }
         super.scrollTo(x, y);
     }
