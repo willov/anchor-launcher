@@ -70,6 +70,7 @@ import com.android.launcher3.popup.SystemShortcut
 import com.android.launcher3.shortcuts.DeepShortcutView
 import com.android.launcher3.statemanager.StateManager
 import com.android.launcher3.statemanager.StateManager.StateHandler
+import com.android.launcher3.touch.AllAppsSwipeController
 import com.android.launcher3.uioverrides.QuickstepLauncher
 import com.android.launcher3.uioverrides.states.AllAppsState
 import com.android.launcher3.uioverrides.states.BackgroundAppState
@@ -324,8 +325,8 @@ class LawnchairLauncher : QuickstepLauncher() {
         val twoRowController = TwoRowSwipeTouchController(this, twoRowNavigationManager)
         val verticalSwipeController = VerticalSwipeTouchController(this, gestureController)
         return arrayOf<TouchController>(
-            statusBarController, twoRowController, verticalSwipeController,
-            getDragController(),
+            statusBarController, twoRowController, AllAppsSwipeController(this),
+            verticalSwipeController, getDragController(),
         )
     }
 
