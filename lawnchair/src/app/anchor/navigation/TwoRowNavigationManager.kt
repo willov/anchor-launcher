@@ -88,18 +88,26 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
         // scrollTo override to snap the workspace to position 0. mAllowedPageEnd is already
         // correct from the last onWorkspacePageSettled call.
         launcher.workspace.repositionExtraEmptyScreenForDrag()
+        installDragOverlay()
+    }
 
-        val dtb = launcher.getDropTargetBar()
-        val buttonHeight = dtb.measuredHeight.takeIf { it > 0 }
-            ?: (80 * launcher.resources.displayMetrics.density).toInt()
-        val pageCounts = rowScreenIds.map { it.size.coerceAtLeast(1) }
+    /**
+     * Creates (or re-creates) the row-switch edge-strip overlay for the current [activeRowIndex].
+     * Called at drag-start and again after every row switch so the user can bounce back.
+     */
+    private fun installDragOverlay() {
         val overlay = TwoRowDragOverlay(
-            launcher, activeRowIndex, rowCount, pageCounts, buttonHeight,
-        ) { targetRowIndex ->
-            currentDragOverlay?.let { if (it.parent != null) launcher.dragLayer.removeView(it) }
-            currentDragOverlay = null
-            if (targetRowIndex > activeRowIndex) navigateUp() else navigateDown()
-        }
+            context = launcher,
+            activeRowIndex = activeRowIndex,
+            rowCount = rowCount,
+            onRowSwitch = { targetRowIndex ->
+                currentDragOverlay?.let { if (it.parent != null) launcher.dragLayer.removeView(it) }
+                currentDragOverlay = null
+                if (targetRowIndex > activeRowIndex) navigateUp() else navigateDown()
+                // Install a fresh overlay for the new active row so the user can switch back.
+                if (isDragging) installDragOverlay()
+            },
+        )
         launcher.dragLayer.addView(overlay, FrameLayout.LayoutParams(-1, -1))
         currentDragOverlay = overlay
     }
