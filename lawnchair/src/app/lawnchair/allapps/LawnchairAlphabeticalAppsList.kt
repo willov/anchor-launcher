@@ -25,7 +25,7 @@ import com.patrykmichalik.opto.core.onEach
 import java.util.function.Predicate
 
 @Suppress("SYNTHETIC_PROPERTY_WITHOUT_JAVA_ORIGIN")
-class LawnchairAlphabeticalAppsList<T>(
+open class LawnchairAlphabeticalAppsList<T>(
     private val context: T,
     private val appsStore: AllAppsStore<T>,
     workProfileManager: WorkProfileManager?,
@@ -77,7 +77,7 @@ class LawnchairAlphabeticalAppsList<T>(
         onAppsUpdated()
     }
 
-    override fun addAppsWithSections(appList: List<AppInfo?>?, startPosition: Int): Int {
+    override open fun addAppsWithSections(appList: List<AppInfo?>?, startPosition: Int): Int {
         if (appList.isNullOrEmpty()) return startPosition
         val drawerListDefault = prefs.drawerList.get()
         filteredList.clear()

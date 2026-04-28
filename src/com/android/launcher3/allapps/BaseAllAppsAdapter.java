@@ -75,8 +75,12 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
     // LC-Feature: Folder support in All Apps, can be any ID
     public static final int VIEW_TYPE_FOLDER = 1 << 10;
 
+    // Anchor: Alphabetical section letter header
+    public static final int VIEW_TYPE_SECTION_HEADER = 1 << 11;
+
     // Common view type masks
-    public static final int VIEW_TYPE_MASK_DIVIDER = VIEW_TYPE_ALL_APPS_DIVIDER;
+    // VIEW_TYPE_SECTION_HEADER is included so the row counter resets at each section boundary
+    public static final int VIEW_TYPE_MASK_DIVIDER = VIEW_TYPE_ALL_APPS_DIVIDER | VIEW_TYPE_SECTION_HEADER;
     public static final int VIEW_TYPE_MASK_ICON = VIEW_TYPE_FOLDER | VIEW_TYPE_ICON;
 
     public static final int VIEW_TYPE_MASK_PRIVATE_SPACE_HEADER =
@@ -121,6 +125,8 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
 
         // LC-Feature: Folder support in All Apps
         public FolderInfo folderInfo = new FolderInfo();
+        // Anchor: section header letter (non-null only for VIEW_TYPE_SECTION_HEADER items)
+        public String sectionName = null;
 
         /**
          * Factory method for AppIcon AdapterItem
@@ -261,6 +267,20 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                         R.layout.private_space_header, parent, false));
             case VIEW_TYPE_BOTTOM_VIEW_TO_SCROLL_TO:
                 return new ViewHolder(new View(mActivityContext));
+            case VIEW_TYPE_SECTION_HEADER: {
+                // Anchor: alphabetical section letter header
+                android.widget.TextView header = new android.widget.TextView(mActivityContext);
+                header.setLayoutParams(new RecyclerView.LayoutParams(
+                        RecyclerView.LayoutParams.MATCH_PARENT,
+                        RecyclerView.LayoutParams.WRAP_CONTENT));
+                float dp = mActivityContext.getResources().getDisplayMetrics().density;
+                header.setPadding((int)(16 * dp), (int)(10 * dp), (int)(16 * dp), (int)(4 * dp));
+                header.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12f);
+                header.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                header.setTextColor(com.android.launcher3.util.Themes.getAttrColor(
+                        mActivityContext, android.R.attr.textColorSecondary));
+                return new ViewHolder(header);
+            }
             case VIEW_TYPE_FOLDER:
                 // LC-Feature: Folder support in All Apps
                 FrameLayout fl = new FrameLayout(mActivityContext);
@@ -343,6 +363,11 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                 adapterItem.decorationInfo =
                         mApps.getPrivateProfileManager().getCurrentState() == STATE_DISABLED ? null
                                 : new SectionDecorationInfo(mActivityContext, ROUND_NOTHING);
+                break;
+            case VIEW_TYPE_SECTION_HEADER:
+                // Anchor: bind the section letter text
+                adapterItem = mApps.getAdapterItems().get(position);
+                ((android.widget.TextView) holder.itemView).setText(adapterItem.sectionName);
                 break;
             case VIEW_TYPE_BOTTOM_VIEW_TO_SCROLL_TO:
             case VIEW_TYPE_ALL_APPS_DIVIDER:

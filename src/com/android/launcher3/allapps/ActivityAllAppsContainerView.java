@@ -110,6 +110,7 @@ import java.util.stream.Stream;
 import com.patrykmichalik.opto.core.PreferenceExtensionsKt;
 import static com.topjohnwu.superuser.internal.Utils.context;
 import app.lawnchair.allapps.LawnchairAlphabeticalAppsList;
+import app.anchor.allapps.AnchorAlphabeticalAppsList;
 import app.lawnchair.font.FontManager;
 import app.lawnchair.preferences.PreferenceManager;
 import app.lawnchair.preferences2.PreferenceManager2;
@@ -278,14 +279,14 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
         mMainAdapterProvider = mSearchUiDelegate.createMainAdapterProvider();
 
         mAH.set(AdapterHolder.MAIN, new AdapterHolder(AdapterHolder.MAIN,
-                new LawnchairAlphabeticalAppsList<>(mActivityContext,
+                new AnchorAlphabeticalAppsList<>(mActivityContext,
                         mAllAppsStore,
                         null,
                         mPrivateProfileManager)));
         mAH.set(AdapterHolder.WORK, new AdapterHolder(AdapterHolder.WORK,
-                new LawnchairAlphabeticalAppsList<>(mActivityContext, mAllAppsStore, mWorkManager, null)));
+                new AnchorAlphabeticalAppsList<>(mActivityContext, mAllAppsStore, mWorkManager, null)));
         mAH.set(SEARCH, new AdapterHolder(SEARCH,
-                new LawnchairAlphabeticalAppsList<>(mActivityContext, mAllAppsStore, null, null)));
+                new AnchorAlphabeticalAppsList<>(mActivityContext, mAllAppsStore, null, null)));
 
         getLayoutInflater().inflate(R.layout.all_apps_content, this);
         mHeader = findViewById(R.id.all_apps_header);
