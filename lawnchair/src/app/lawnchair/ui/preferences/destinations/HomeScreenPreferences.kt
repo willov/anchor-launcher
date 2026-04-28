@@ -319,26 +319,6 @@ fun HomeScreenPreferences(
                     label = stringResource(id = R.string.anchor_rotation_transition_label),
                 )
             }
-            Item {
-                val anchorPrefs = remember { app.anchor.AnchorPreferences(context) }
-                val colsState   = remember { mutableStateOf(anchorPrefs.drawerColumns) }
-                val colsAdapter = remember {
-                    object : app.lawnchair.preferences.PreferenceAdapter<Int> {
-                        override val state = colsState
-                        override fun onChange(newValue: Int) {
-                            colsState.value = newValue
-                            anchorPrefs.drawerColumns = newValue
-                        }
-                    }
-                }
-                SliderPreference(
-                    label = stringResource(id = R.string.anchor_drawer_cols_label),
-                    adapter = colsAdapter,
-                    valueRange = 0..10,
-                    step = 1,
-                    showAsPercentage = false,
-                )
-            }
         }
     }
 }

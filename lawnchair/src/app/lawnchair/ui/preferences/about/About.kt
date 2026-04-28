@@ -234,6 +234,44 @@ fun About(
         }
         item {
             PreferenceGroupHeading(
+                stringResource(R.string.anchor_built_on_heading),
+            )
+        }
+        item {
+            PreferenceGroupItem(
+                cutTop = false,
+                cutBottom = true,
+            ) {
+                ClickablePreference(
+                    label = "Lawnchair",
+                    description = stringResource(id = R.string.anchor_built_on_lawnchair_desc),
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, "https://github.com/LawnchairLauncher/lawnchair".toUri())
+                        if (intent.resolveActivity(context.packageManager) != null) context.startActivity(intent)
+                    },
+                )
+            }
+        }
+        item {
+            Spacer(Modifier.height(3.dp))
+        }
+        item {
+            PreferenceGroupItem(
+                cutTop = true,
+                cutBottom = false,
+            ) {
+                ClickablePreference(
+                    label = "AOSP Launcher3",
+                    description = stringResource(id = R.string.anchor_built_on_aosp_desc),
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, "https://android.googlesource.com/platform/packages/apps/Launcher3".toUri())
+                        if (intent.resolveActivity(context.packageManager) != null) context.startActivity(intent)
+                    },
+                )
+            }
+        }
+        item {
+            PreferenceGroupHeading(
                 stringResource(R.string.legal),
             )
         }
@@ -271,4 +309,4 @@ fun About(
     }
 }
 
-private const val PRIVACY_POLICY = "https://lawnchair.app/privacy_policy"
+private const val PRIVACY_POLICY = "https://willov-apps.se/anchor/privacy"
