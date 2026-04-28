@@ -11,11 +11,6 @@ class AnchorPreferences(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    /** True (default) = app drawer is the rightmost page. False = leftmost page. */
-    var drawerOnRight: Boolean
-        get() = prefs.getBoolean(KEY_DRAWER_RIGHT, true)
-        set(value) { prefs.edit().putBoolean(KEY_DRAWER_RIGHT, value).apply() }
-
     /** Number of columns in the app drawer grid. 0 = auto (4 on phone, 5 on tablet). */
     var drawerColumns: Int
         get() = prefs.getInt(KEY_DRAWER_COLS, 0)
@@ -67,7 +62,6 @@ class AnchorPreferences(context: Context) {
 
     companion object {
         private const val PREFS_NAME             = "anchor_prefs"
-        private const val KEY_DRAWER_RIGHT        = "drawer_on_right"
         private const val KEY_DRAWER_COLS         = "drawer_columns"
         private const val KEY_DRAWER_LETTER_SCROLLER = "drawer_letter_scroller"
         private const val KEY_ROTATION_TRANSITION = "rotation_transition"

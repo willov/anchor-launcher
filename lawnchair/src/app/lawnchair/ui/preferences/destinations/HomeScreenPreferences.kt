@@ -298,20 +298,6 @@ fun HomeScreenPreferences(
         PreferenceGroup(heading = stringResource(id = R.string.anchor_section_label)) {
             Item {
                 val anchorPrefs = remember { app.anchor.AnchorPreferences(context) }
-                var drawerOnRight by remember { mutableStateOf(anchorPrefs.drawerOnRight) }
-                SwitchPreference(
-                    checked = drawerOnRight,
-                    onCheckedChange = { newValue ->
-                        drawerOnRight = newValue
-                        anchorPrefs.drawerOnRight = newValue
-                        LawnchairApp.instance.restart()
-                    },
-                    label = stringResource(id = R.string.anchor_drawer_right_label),
-                    description = stringResource(id = R.string.anchor_drawer_right_description),
-                )
-            }
-            Item {
-                val anchorPrefs = remember { app.anchor.AnchorPreferences(context) }
                 var transition by remember { mutableStateOf(anchorPrefs.rotationTransition) }
                 val transitionAdapter = customPreferenceAdapter(transition) { newValue ->
                     transition = newValue

@@ -36,7 +36,7 @@ class AnchorDrawerSheet(private val launcher: LawnchairLauncher) {
     private lateinit var drawerContent: AnchorAppDrawerView
 
     fun setup() {
-        position = if (AnchorPreferences(launcher).drawerOnRight) DrawerPosition.RIGHT else DrawerPosition.LEFT
+        position = DrawerPosition.RIGHT
 
         // Scrim — full-screen dim behind the sheet; tap to close
         scrimView = View(launcher).apply {
