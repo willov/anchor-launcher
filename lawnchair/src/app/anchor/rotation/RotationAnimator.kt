@@ -63,13 +63,13 @@ class RotationAnimator(private val launcher: LawnchairLauncher) {
 
     private fun onRotationDetected() {
         val overlay = overlayView ?: return
+        overlay.animate().cancel()
         overlay.setBackgroundColor(getWallpaperColor())
+        // Snap to fully opaque immediately so no intermediate icon positions are ever visible.
+        // The fade-OUT after finishBindingItems provides the smooth reveal.
+        overlay.alpha = 1f
         overlay.visibility = View.VISIBLE
         pendingFadeOut = true
-        overlay.animate()
-            .alpha(1f)
-            .setDuration(FADE_IN_MS)
-            .start()
     }
 
     /** Call from LawnchairLauncher.finishBindingItems() once icons are rebound after rotation. */
@@ -97,7 +97,6 @@ class RotationAnimator(private val launcher: LawnchairLauncher) {
     }
 
     companion object {
-        private const val FADE_IN_MS  = 150L
         private const val FADE_OUT_MS = 250L
     }
 }
