@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+  <!-- Background -->
+  <rect width="108" height="108" fill="#1A2744"/>
+
+  <!-- Anchor — scaled to 70% around centre (54,54) -->
+  <!-- transform="scale(0.70) translate(from centre)" equivalent: translate(54,54) scale(0.70) translate(-54,-54) -->
+  <g transform="translate(54,54) scale(0.70) translate(-54,-54)" stroke="#E8EAF6" stroke-width="5" fill="none" stroke-linecap="round">
+
+    <!-- Ring at top -->
+    <path d="M44,26 A10,10 0 0,1 64,26 A10,10 0 0,1 44,26 Z"/>
+
+    <!-- Shank -->
+    <line x1="54" y1="36" x2="54" y2="84"/>
+
+    <!-- Stock / crossbar -->
+    <line x1="20" y1="50" x2="88" y2="50"/>
+
+    <!-- Ball at left end of crossbar -->
+    <circle cx="20" cy="50" r="4" fill="#E8EAF6" stroke="none"/>
+
+    <!-- Ball at right end of crossbar -->
+    <circle cx="88" cy="50" r="4" fill="#E8EAF6" stroke="none"/>
+
+    <!-- Left fluke arm -->
+    <path d="M54,84 C40,88 22,80 20,66"/>
+
+    <!-- Right fluke arm -->
+    <path d="M54,84 C68,88 86,80 88,66"/>
+
+  </g>
+</svg>
