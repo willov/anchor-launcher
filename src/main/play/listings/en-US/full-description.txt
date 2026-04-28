@@ -1,0 +1,32 @@
+Tired of your icons jumping to random positions every time you rotate your phone?
+
+Every other launcher reflows your grid when the orientation changes — your carefully placed icons shuffle to new spots, your muscle memory is broken, and you're back to searching for everything.
+
+Anchor Launcher is different. Icons stay anchored to the same physical screen location whether you're holding your phone in portrait or landscape. Rotate freely. Nothing moves.
+
+<b>How it works</b>
+
+When you rotate, Anchor mathematically transposes your icon grid so each icon lands at the same physical pixel it occupied before. The system rotation makes everything right-side-up as usual — the unique part is that your icons are still exactly where you left them.
+
+No other Android launcher does this. It's been requested on XDA and GitHub for over a decade. Anchor ships it.
+
+<b>Built for people who rotate</b>
+
+— Tablet users who switch between portrait and landscape constantly
+— Gaming phone and landscape-first device users
+— Physical keyboard phone users (Fxtec, etc.)
+— Anyone who has ever muttered "why did everything move again?"
+
+<b>What else is included</b>
+
+— 2D navigation matrix: organise your home screens into rows. Swipe left/right between pages in a row; swipe down/up to move between rows. Each row remembers its own scroll position independently.
+— Alphabetical app drawer with A–Z letter index strip for fast one-tap access to any section
+— Built on Lawnchair 15 — all the polish of a mature launcher with Anchor's spatial layer on top
+— Clean, uncluttered home screen by default
+— No ads. Ever.
+
+<b>A note on support</b>
+
+After 30 days, Anchor will ask once if you'd like to support development. You can say yes or no — the app works exactly the same either way.
+
+Built on Lawnchair (https://github.com/LawnchairLauncher/lawnchair), based on AOSP Launcher3. Apache 2.0.

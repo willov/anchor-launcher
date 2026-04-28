@@ -414,8 +414,21 @@ public class CellLayout extends ViewGroup {
                 break;
         }
 
-        mCellWidth = mCellHeight = -1;
-        mFixedCellWidth = mFixedCellHeight = -1;
+        // Anchor: if cellWidthPx == cellHeightPx (square cells), lock the fixed size so
+        // CellLayout.onMeasure does not re-derive from measured view width/height.  This
+        // eliminates the 1–2 px rounding difference that causes icons to land at slightly
+        // different physical positions between portrait and landscape.
+        if (mContainerType == WORKSPACE
+                && deviceProfile.cellWidthPx > 0
+                && deviceProfile.cellWidthPx == deviceProfile.cellHeightPx) {
+            mFixedCellWidth  = deviceProfile.cellWidthPx;
+            mFixedCellHeight = deviceProfile.cellHeightPx;
+            mCellWidth       = mFixedCellWidth;
+            mCellHeight      = mFixedCellHeight;
+        } else {
+            mCellWidth = mCellHeight = -1;
+            mFixedCellWidth = mFixedCellHeight = -1;
+        }
     }
 
     /**

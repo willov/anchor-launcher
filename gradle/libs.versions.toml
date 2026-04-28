@@ -36,6 +36,7 @@ google-protobuf = "com.google.protobuf:0.9.6"
 cash-licensee = "app.cash.licensee:1.14.1"
 rikka-refine = { id = "dev.rikka.tools.refine", version.ref = "refine" }
 diffplug-spotless = "com.diffplug.spotless:8.4.0"
+triplet-play = { id = "com.github.triplet.play", version = "4.0.0" }
 
 [libraries]
 # AndroidX

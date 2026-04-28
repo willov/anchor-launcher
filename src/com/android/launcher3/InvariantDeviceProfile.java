@@ -624,6 +624,11 @@ public class InvariantDeviceProfile {
                     dp.workspaceBottomPadding = 0;
                     dp.cellLayoutPaddingPx.set(0, 0, 0, 0);
                     dp.cellLayoutBorderSpacePx.set(g, g);
+                    // Lock cell dimensions to exactly S so CellLayout.onMeasure uses our
+                    // computed value rather than re-deriving from measured view size (which
+                    // can differ by 1–2 px due to integer rounding at measurement time).
+                    dp.cellWidthPx = s;
+                    dp.cellHeightPx = s;
                     // Center the icon+text block vertically within the square cell so the icon
                     // sits at the physical centre of the cell in all orientations.
                     // iconDrawablePaddingPx (icon-to-label gap) is left at whatever Lawnchair

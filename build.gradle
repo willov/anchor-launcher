@@ -17,6 +17,7 @@ plugins {
     alias(libs.plugins.cash.licensee)
     alias(libs.plugins.rikka.refine)
     alias(libs.plugins.diffplug.spotless)
+    alias(libs.plugins.triplet.play)
 }
 
 allprojects {
@@ -132,13 +133,10 @@ final def buildCommit = providers.exec {
 final def ciBuild = System.getenv("CI") == "true"
 final def ciRef = System.getenv("GITHUB_REF") ?: ""
 final def ciRunNumber = System.getenv("GITHUB_RUN_NUMBER") ?: ""
-final def isReleaseBuild = ciBuild && ciRef.contains("beta")
-final def devReleaseName = ciBuild ? "Dev.(#${ciRunNumber})" : "Dev.(${buildCommit})"
 
-final def version = "16"
-final def releaseName = "Development 5.1"
-final def versionDisplayName = "${version}.${isReleaseBuild ? releaseName : devReleaseName}"
-final def majorVersion = versionDisplayName.split("\\.")[0]
+// Anchor Launcher versioning (independent of Lawnchair's version scheme)
+final def anchorVersionName = "0.1"
+final def anchorVersionCode = 1
 
 final def quickstepMinSdk = "29"
 final def quickstepMaxSdk = "36"
@@ -146,14 +144,10 @@ final def quickstepMaxSdk = "36"
 android {
     namespace "com.android.launcher3"
     defaultConfig {
-        /*
-         * Lawnchair Launcher 16.0 Development 5.1
-         * see CONTRIBUTING.md#versioning-scheme
-         */
-        versionCode 16_00_01_05_01
-        versionName "${versionDisplayName}"
-        buildConfigField "String", "VERSION_DISPLAY_NAME", "\"${versionDisplayName}\""
-        buildConfigField "String", "MAJOR_VERSION", "\"${majorVersion}\""
+        versionCode anchorVersionCode
+        versionName anchorVersionName
+        buildConfigField "String", "VERSION_DISPLAY_NAME", "\"${anchorVersionName}\""
+        buildConfigField "String", "MAJOR_VERSION", "\"${anchorVersionName.split('\\.')[0]}\""
         buildConfigField "String", "COMMIT_HASH", "\"${buildCommit}\""
         buildConfigField "boolean", "ENABLE_AUTO_INSTALLS_LAYOUT", "false"
 
@@ -166,7 +160,7 @@ android {
     applicationVariants.configureEach { variant ->
         variant.outputs.configureEach {
             def channel = variant.productFlavors.last().name
-            outputFileName = "Lawnchair.${variant.versionName}.$channel.${variant.buildType.name}.apk"
+            outputFileName = "AnchorLauncher.${variant.versionName}.$channel.${variant.buildType.name}.apk"
         }
     }
 
@@ -287,13 +281,20 @@ android {
         }
 
         play {
-            applicationId "app.lawnchair.play"
+            applicationId "se.willovapps.anchor"
             dimension "channel"
             isDefault true
         }
 
         configureEach {
             resValue("string", "launcher_component", "${applicationId}/app.lawnchair.LawnchairLauncher")
+        }
+    }
+
+    // Anchor: enable Triple-T publishing only for the 'play' channel flavor.
+    playConfigs {
+        play {
+            enabled.set(true)
         }
     }
 
@@ -352,6 +353,31 @@ android {
             manifest.srcFile "quickstep/AndroidManifest.xml"
         }
     }
+}
+
+// Anchor: Triple-T — publish App Bundle to Google Play.
+// Disabled globally; only the 'play' channel flavor has enabled.set(true) via playConfigs above.
+//
+// Uses the shared Codemagic service account key. Credentials are resolved in this order:
+//   1. ~/.secrets/private/keys/google-play-codemagic-service-account.json  (local dev)
+//   2. ANDROID_PUBLISHER_CREDENTIALS env var (set this in CI — Triple-T reads it automatically)
+//
+// Before first publish, make sure se.willovapps.anchor is added to the service account's
+// permitted apps in the Play Console (Users and permissions → Service accounts).
+final def sharedPlayKey = new File(
+    System.getProperty("user.home"),
+    "Documents/.secrets/private/keys/google-play-codemagic-service-account.json"
+)
+
+play {
+    enabled.set(false)
+    if (sharedPlayKey.exists()) {
+        serviceAccountCredentials.set(sharedPlayKey)
+    }
+    // If the file doesn't exist (e.g. on CI), Triple-T automatically falls back
+    // to the ANDROID_PUBLISHER_CREDENTIALS environment variable.
+    track.set("internal")
+    defaultToAppBundles.set(true)
 }
 
 baselineProfile {
