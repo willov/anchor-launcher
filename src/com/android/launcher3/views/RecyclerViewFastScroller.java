@@ -447,7 +447,8 @@ public class RecyclerViewFastScroller extends View {
 
     boolean shouldUseLetterFastScroller() {
         return Flags.letterFastScroller()
-                && getScrollerLocation() == FastScrollerLocation.ALL_APPS_SCROLLER;
+                && getScrollerLocation() == FastScrollerLocation.ALL_APPS_SCROLLER
+                && new app.anchor.AnchorPreferences(getContext()).getDrawerLetterScroller();
     }
 
     @Override

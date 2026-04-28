@@ -38,6 +38,8 @@
     <string name="anchor_drawer_right_label">App drawer on right</string>
     <string name="anchor_drawer_right_description">Place the app drawer as the rightmost page. Toggle off to move it to the left.</string>
     <string name="anchor_drawer_cols_label">App drawer columns (0 = auto)</string>
+    <string name="anchor_drawer_letter_scroller_label">Letter index on app drawer</string>
+    <string name="anchor_drawer_letter_scroller_description">Show an A–Z strip on the right edge for quick section jumping</string>
     <string name="anchor_rotation_transition_label">Rotation animation</string>
     <string name="anchor_rotation_transition_traditional">Traditional</string>
     <string name="anchor_rotation_transition_instant">Instant</string>

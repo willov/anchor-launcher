@@ -21,6 +21,11 @@ class AnchorPreferences(context: Context) {
         get() = prefs.getInt(KEY_DRAWER_COLS, 0)
         set(value) { prefs.edit().putInt(KEY_DRAWER_COLS, value).apply() }
 
+    /** True (default) = show the full A–Z letter list on the right edge of the app drawer. */
+    var drawerLetterScroller: Boolean
+        get() = prefs.getBoolean(KEY_DRAWER_LETTER_SCROLLER, true)
+        set(value) { prefs.edit().putBoolean(KEY_DRAWER_LETTER_SCROLLER, value).apply() }
+
     /** Which animation to use when the device rotates. One of the TRANSITION_* constants. */
     var rotationTransition: String
         get() = prefs.getString(KEY_ROTATION_TRANSITION, TRANSITION_CROSSFADE)!!
@@ -64,6 +69,7 @@ class AnchorPreferences(context: Context) {
         private const val PREFS_NAME             = "anchor_prefs"
         private const val KEY_DRAWER_RIGHT        = "drawer_on_right"
         private const val KEY_DRAWER_COLS         = "drawer_columns"
+        private const val KEY_DRAWER_LETTER_SCROLLER = "drawer_letter_scroller"
         private const val KEY_ROTATION_TRANSITION = "rotation_transition"
         private const val KEY_STATUS_BAR_SWIPE    = "status_bar_swipe_action"
         private const val KEY_ROW_COUNT           = "row_count"

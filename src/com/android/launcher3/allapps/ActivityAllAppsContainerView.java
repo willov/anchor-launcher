@@ -182,7 +182,7 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
 
     /** {@code true} when rendered view is in search state instead of the scroll state. */
     private boolean mIsSearching;
-    boolean showFastScroller;
+    protected boolean showFastScroller;
     private boolean mRebindAdaptersAfterSearchAnimation;
     private int mNavBarScrimHeight = 0;
     public SearchRecyclerView mSearchRecyclerView;
@@ -1683,6 +1683,16 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
     /** Returns the instance of @{code SearchTransitionController}. */
     public SearchTransitionController getSearchTransitionController() {
         return mSearchTransitionController;
+    }
+
+    /** Main apps list — used by Anchor's AlphabetIndexView overlay. */
+    protected AlphabeticalAppsList<T> getMainAppsList() {
+        return mAH.get(AdapterHolder.MAIN).mAppsList;
+    }
+
+    /** Main apps RecyclerView — used by Anchor's AlphabetIndexView scroll listener. */
+    protected AllAppsRecyclerView getMainAppsRecyclerView() {
+        return mAH.get(AdapterHolder.MAIN).mRecyclerView;
     }
 
     /** Holds a {@link BaseAllAppsAdapter} and related fields. */

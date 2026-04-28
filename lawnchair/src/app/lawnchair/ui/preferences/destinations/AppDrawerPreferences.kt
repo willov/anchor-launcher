@@ -40,6 +40,10 @@ import app.lawnchair.preferences.getAdapter
 import app.lawnchair.preferences.preferenceManager
 import app.lawnchair.preferences2.preferenceManager2
 import app.lawnchair.ui.preferences.LocalIsExpandedScreen
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import app.lawnchair.ui.preferences.components.AppDrawerHapticFeedbackPreference
 import app.lawnchair.ui.preferences.components.NavigationActionPreference
 import app.lawnchair.ui.preferences.components.SuggestionsPreference
@@ -195,6 +199,19 @@ fun AppDrawerPreferences(
                 SwitchPreference(
                     label = stringResource(id = R.string.pref_all_apps_show_scrollbar_title),
                     adapter = prefs2.showScrollbar.getAdapter(),
+                )
+            }
+            Item {
+                val anchorPrefs = remember { app.anchor.AnchorPreferences(context) }
+                var letterScroller by remember { mutableStateOf(anchorPrefs.drawerLetterScroller) }
+                SwitchPreference(
+                    checked = letterScroller,
+                    onCheckedChange = { newValue ->
+                        letterScroller = newValue
+                        anchorPrefs.drawerLetterScroller = newValue
+                    },
+                    label = stringResource(id = R.string.anchor_drawer_letter_scroller_label),
+                    description = stringResource(id = R.string.anchor_drawer_letter_scroller_description),
                 )
             }
         }
