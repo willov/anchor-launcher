@@ -2,6 +2,15 @@
 
 All notable changes to Anchor Launcher will be documented here.
 
+## [0.2] - 2026-04-29
+
+### Added
+- **Alphabetical section dividers toggle** — new option in App Drawer → Advanced to disable the inline A–Z section headers. On by default.
+
+### Fixed
+- Icons and labels were clipped inside their cells. The square-cell sizing now re-fits icon and padding to the computed cell size after Lawnchair's layout pass, so content never overflows regardless of grid size or screen density.
+- Swiping down from the status bar area while already on the top row was navigating to the row below instead of playing the bounce animation. Now consistent with the workspace swipe gesture.
+
 ## [0.1] - 2026-04-28
 
 Initial release of Anchor Launcher, forked from Lawnchair 16-dev (based on AOSP Launcher3).
