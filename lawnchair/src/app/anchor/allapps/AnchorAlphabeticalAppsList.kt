@@ -40,12 +40,14 @@ class AnchorAlphabeticalAppsList<T>(
 ) : LawnchairAlphabeticalAppsList<T>(context, appsStore, workProfileManager, privateProfileManager)
     where T : Context, T : ActivityContext {
 
+    // Keep our own reference — mActivityContext in the superclass is private.
+    private val anchorContext: Context = context
+
     override fun addAppsWithSections(appList: List<AppInfo?>?, startPosition: Int): Int {
         if (appList.isNullOrEmpty()) return startPosition
 
         // If section headers are disabled, delegate entirely to Lawnchair.
-        val ctx = mActivityContext as Context
-        if (!app.anchor.AnchorPreferences(ctx).drawerSectionHeaders) {
+        if (!app.anchor.AnchorPreferences(anchorContext).drawerSectionHeaders) {
             return super.addAppsWithSections(appList, startPosition)
         }
 

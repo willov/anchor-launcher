@@ -5,6 +5,7 @@ import android.os.Looper
 import android.util.Log
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
+import android.view.animation.OvershootInterpolator
 import android.widget.FrameLayout
 import app.anchor.AnchorPreferences
 import app.lawnchair.LawnchairLauncher
@@ -72,6 +73,30 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
         val from = activeRowIndex
         activeRowIndex--
         animateRowTransition(from, activeRowIndex)
+    }
+
+    /**
+     * Plays a brief downward nudge to signal there is no row above.
+     * Called by both [app.anchor.navigation.TwoRowSwipeTouchController] and
+     * [app.anchor.navigation.SwipeDownStatusBarController] so both entry points share the same
+     * feedback.
+     */
+    fun bounceTopEdge() {
+        val workspace = launcher.workspace
+        val nudge = BOUNCE_NUDGE_DP * launcher.resources.displayMetrics.density
+        workspace.animate().cancel()
+        workspace.animate()
+            .translationY(nudge)
+            .setDuration(80)
+            .setInterpolator(DecelerateInterpolator())
+            .withEndAction {
+                workspace.animate()
+                    .translationY(0f)
+                    .setDuration(200)
+                    .setInterpolator(OvershootInterpolator(1.8f))
+                    .start()
+            }
+            .start()
     }
 
     // ── Drag handling ───────────────────────────────────────────────────────────────────────────
@@ -437,5 +462,6 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
     companion object {
         private const val PHASE_MS = 150L
         private const val TAG = "RowNav"
+        private const val BOUNCE_NUDGE_DP = 24f
     }
 }

@@ -82,7 +82,7 @@ class SwipeDownStatusBarController(
             AnchorPreferences(launcher).statusBarSwipeAction == AnchorPreferences.SWIPE_NEXT_ROW
         )
         if (navigateRows && nav != null) {
-            if (nav.activeRowIndex < nav.rowCount - 1) nav.navigateUp() else nav.navigateDown()
+            if (nav.activeRowIndex < nav.rowCount - 1) nav.navigateUp() else nav.bounceTopEdge()
             return
         }
         expandStatusBar(touchX)

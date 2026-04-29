@@ -2,8 +2,6 @@ package app.anchor.navigation
 
 import android.graphics.PointF
 import android.view.MotionEvent
-import android.view.animation.DecelerateInterpolator
-import android.view.animation.OvershootInterpolator
 import app.lawnchair.LawnchairLauncher
 import com.android.launcher3.AbstractFloatingView
 import com.android.launcher3.LauncherState
@@ -90,7 +88,7 @@ class TwoRowSwipeTouchController(
                 if (manager.activeRowIndex < manager.rowCount - 1) {
                     manager.navigateUp()
                 } else {
-                    bounceTopEdge()
+                    manager.bounceTopEdge()
                 }
             } else if (manager.activeRowIndex > 0) {
                 manager.navigateDown()
@@ -104,25 +102,6 @@ class TwoRowSwipeTouchController(
 
     override fun onDragEnd(velocity: PointF) {
         detector.finishedScrolling()
-    }
-
-    /** Animate a brief downward nudge to indicate there is no row above. */
-    private fun bounceTopEdge() {
-        val workspace = launcher.workspace
-        val nudge = BOUNCE_NUDGE_DP * launcher.resources.displayMetrics.density
-        workspace.animate().cancel()
-        workspace.animate()
-            .translationY(nudge)
-            .setDuration(80)
-            .setInterpolator(DecelerateInterpolator())
-            .withEndAction {
-                workspace.animate()
-                    .translationY(0f)
-                    .setDuration(200)
-                    .setInterpolator(OvershootInterpolator(1.8f))
-                    .start()
-            }
-            .start()
     }
 
     private fun computeVelocity(delta: Float, millis: Long): Float {
@@ -141,7 +120,6 @@ class TwoRowSwipeTouchController(
 
     companion object {
         private const val TRIGGER_VELOCITY = 2.25f
-        private const val BOUNCE_NUDGE_DP = 24f
         private val DAMPENING_RC = (1000f / (2f * PI.toFloat() * 10f))
     }
 }
