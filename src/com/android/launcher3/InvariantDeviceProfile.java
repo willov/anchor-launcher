@@ -634,6 +634,27 @@ public class InvariantDeviceProfile {
                     // iconDrawablePaddingPx (icon-to-label gap) is left at whatever Lawnchair
                     // computed — it does not affect icon spatial consistency, only label position.
                     dp.iconCenterVertically = true;
+
+                    // Re-fit icon content to S.  Lawnchair computed iconSizePx /
+                    // iconDrawablePaddingPx / iconTextSizePx against its own (larger) cellHeightPx.
+                    // After we shrink the cell to S those values may overflow the cell, causing
+                    // the icon+label to be clipped.  Scale the non-text portion down so that
+                    // iconSizePx + iconDrawablePaddingPx + textH <= s.
+                    int textH = Utilities.calculateTextHeight(dp.iconTextSizePx);
+                    int contentH = dp.iconSizePx + dp.iconDrawablePaddingPx + textH;
+                    if (contentH > s) {
+                        int targetIconAndPad = s - textH;
+                        if (targetIconAndPad > 0) {
+                            float ratio = (float) targetIconAndPad
+                                    / (dp.iconSizePx + dp.iconDrawablePaddingPx);
+                            dp.iconSizePx = Math.max(1, (int) (dp.iconSizePx * ratio));
+                            dp.iconDrawablePaddingPx =
+                                    Math.max(0, (int) (dp.iconDrawablePaddingPx * ratio));
+                        } else {
+                            dp.iconSizePx = Math.max(1, s / 2);
+                            dp.iconDrawablePaddingPx = 0;
+                        }
+                    }
                 });
     }
 
