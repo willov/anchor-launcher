@@ -1,0 +1,5 @@
+Bug fixes and improvements.
+
+• Fixed icons and labels being clipped inside their cells on some screen sizes and grid configurations.
+• Fixed a bug where swiping down from the top of the screen while on the top row would navigate down instead of playing the spring bounce.
+• New option in App Drawer → Advanced to disable alphabetical section dividers.

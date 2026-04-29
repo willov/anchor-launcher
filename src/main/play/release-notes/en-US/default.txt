@@ -1,3 +1,1 @@
-First release of Anchor Launcher.
-
-Icons now stay anchored to the same physical screen position when you rotate your phone — no reflow, no jumping. The grid transposes mathematically so every icon lands exactly where it was.
+Bug fixes and improvements.
