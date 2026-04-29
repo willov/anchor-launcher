@@ -203,6 +203,19 @@ fun AppDrawerPreferences(
             }
             Item {
                 val anchorPrefs = remember { app.anchor.AnchorPreferences(context) }
+                var sectionHeaders by remember { mutableStateOf(anchorPrefs.drawerSectionHeaders) }
+                SwitchPreference(
+                    checked = sectionHeaders,
+                    onCheckedChange = { newValue ->
+                        sectionHeaders = newValue
+                        anchorPrefs.drawerSectionHeaders = newValue
+                    },
+                    label = stringResource(id = R.string.anchor_drawer_section_headers_label),
+                    description = stringResource(id = R.string.anchor_drawer_section_headers_description),
+                )
+            }
+            Item {
+                val anchorPrefs = remember { app.anchor.AnchorPreferences(context) }
                 var letterScroller by remember { mutableStateOf(anchorPrefs.drawerLetterScroller) }
                 SwitchPreference(
                     checked = letterScroller,

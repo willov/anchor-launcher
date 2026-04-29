@@ -43,6 +43,12 @@ class AnchorAlphabeticalAppsList<T>(
     override fun addAppsWithSections(appList: List<AppInfo?>?, startPosition: Int): Int {
         if (appList.isNullOrEmpty()) return startPosition
 
+        // If section headers are disabled, delegate entirely to Lawnchair.
+        val ctx = mActivityContext as Context
+        if (!app.anchor.AnchorPreferences(ctx).drawerSectionHeaders) {
+            return super.addAppsWithSections(appList, startPosition)
+        }
+
         // Snapshot how many fast-scroller sections exist before Lawnchair's call.
         val sectionsBefore = getFastScrollerSections().size
 

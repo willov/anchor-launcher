@@ -40,6 +40,8 @@
     <string name="anchor_built_on_aosp_desc">Lawnchair is itself built on AOSP Launcher3, the foundation of the Android home screen experience.</string>
     <string name="anchor_drawer_letter_scroller_label">Letter index on app drawer</string>
     <string name="anchor_drawer_letter_scroller_description">Show an A–Z strip on the right edge for quick section jumping</string>
+    <string name="anchor_drawer_section_headers_label">Alphabetical section dividers</string>
+    <string name="anchor_drawer_section_headers_description">Show A, B, C… headings between app groups in the drawer</string>
     <string name="anchor_rotation_transition_label">Rotation animation</string>
     <string name="anchor_rotation_transition_traditional">Traditional</string>
     <string name="anchor_rotation_transition_instant">Instant</string>

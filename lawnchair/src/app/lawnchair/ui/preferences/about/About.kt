@@ -244,7 +244,7 @@ fun About(
             ) {
                 ClickablePreference(
                     label = "Lawnchair",
-                    description = stringResource(id = R.string.anchor_built_on_lawnchair_desc),
+                    subtitle = stringResource(id = R.string.anchor_built_on_lawnchair_desc),
                     onClick = {
                         val intent = Intent(Intent.ACTION_VIEW, "https://github.com/LawnchairLauncher/lawnchair".toUri())
                         if (intent.resolveActivity(context.packageManager) != null) context.startActivity(intent)
@@ -262,7 +262,7 @@ fun About(
             ) {
                 ClickablePreference(
                     label = "AOSP Launcher3",
-                    description = stringResource(id = R.string.anchor_built_on_aosp_desc),
+                    subtitle = stringResource(id = R.string.anchor_built_on_aosp_desc),
                     onClick = {
                         val intent = Intent(Intent.ACTION_VIEW, "https://android.googlesource.com/platform/packages/apps/Launcher3".toUri())
                         if (intent.resolveActivity(context.packageManager) != null) context.startActivity(intent)

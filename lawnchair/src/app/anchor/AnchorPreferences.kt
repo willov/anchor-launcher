@@ -16,6 +16,11 @@ class AnchorPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_DRAWER_LETTER_SCROLLER, true)
         set(value) { prefs.edit().putBoolean(KEY_DRAWER_LETTER_SCROLLER, value).apply() }
 
+    /** True (default) = insert alphabetical section headers (A, B, C…) between app groups in the drawer. */
+    var drawerSectionHeaders: Boolean
+        get() = prefs.getBoolean(KEY_DRAWER_SECTION_HEADERS, true)
+        set(value) { prefs.edit().putBoolean(KEY_DRAWER_SECTION_HEADERS, value).apply() }
+
     /** Which animation to use when the device rotates. One of the TRANSITION_* constants. */
     var rotationTransition: String
         get() = prefs.getString(KEY_ROTATION_TRANSITION, TRANSITION_CROSSFADE)!!
@@ -58,6 +63,7 @@ class AnchorPreferences(context: Context) {
     companion object {
         private const val PREFS_NAME             = "anchor_prefs"
         private const val KEY_DRAWER_LETTER_SCROLLER = "drawer_letter_scroller"
+        private const val KEY_DRAWER_SECTION_HEADERS  = "drawer_section_headers"
         private const val KEY_ROTATION_TRANSITION = "rotation_transition"
         private const val KEY_STATUS_BAR_SWIPE    = "status_bar_swipe_action"
         private const val KEY_ROW_COUNT           = "row_count"
