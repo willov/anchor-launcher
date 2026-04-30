@@ -48,8 +48,20 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
     private var isDragging = false
     private var currentDragOverlay: TwoRowDragOverlay? = null
 
+    // Snapshot of the user's page at drag start (by screen ID, since page indices may shift
+    // during the drag if Launcher3 inserts/removes EXTRA_EMPTY_SCREEN). Used by onDragEnded to
+    // restore the workspace if the drag did not legitimately move the user to another page.
+    private var preDragScreenId: Int = -1
+    private var preDragRowPageIndex: Int = 0
+
+    // Gates rowPageIndex writes during the onDragEnded cleanup sequence. abortScrollerAnimation
+    // and updateScrollRange can fire transitional onPageEndTransition events with stale page
+    // indices that would otherwise clobber rowPageIndex with the wrong value.
+    private var suppressPageSettle: Boolean = false
+
     private val handler = Handler(Looper.getMainLooper())
     private val clearTransitionFlag = Runnable { isTransitioning = false }
+    private val clearPendingRestore = Runnable { launcher.workspace.clearPendingRestoreScreenId() }
 
     fun setup() { /* deferred to onWorkspacePageSettled */ }
 
@@ -105,6 +117,15 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
     fun onDragStarted() {
         if (!initialized) return
         isDragging = true
+        // Clear any leftover sticky restore from a previous drag that may not have timed out.
+        handler.removeCallbacks(clearPendingRestore)
+        launcher.workspace.clearPendingRestoreScreenId()
+        // Snapshot the user's current page (by screen ID) so onDragEnded can restore it if the
+        // drag did not legitimately move them. Screen IDs are stable across EXTRA insertion /
+        // removal whereas page indices shift, so we record the ID rather than the index.
+        val workspace = launcher.workspace
+        preDragScreenId = workspace.getScreenIdForPageIndex(workspace.currentPage)
+        preDragRowPageIndex = rowPageIndex.getOrElse(activeRowIndex) { 0 }
         // Reposition EXTRA_EMPTY_SCREEN (if Launcher3 inserted one) to sit immediately after
         // the active row's last page so the user can drag right to create a new page.
         // Do NOT call updateScrollRange here: Launcher3 just inserted EXTRA via addView which
@@ -112,7 +133,7 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
         // setAllowedPageRange → updateMinAndMaxScrollX() would set mMaxScroll = 0, causing our
         // scrollTo override to snap the workspace to position 0. mAllowedPageEnd is already
         // correct from the last onWorkspacePageSettled call.
-        launcher.workspace.repositionExtraEmptyScreenForDrag()
+        workspace.repositionExtraEmptyScreenForDrag()
         installDragOverlay()
     }
 
@@ -147,9 +168,102 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
         isDragging = false
         currentDragOverlay?.let { if (it.parent != null) launcher.dragLayer.removeView(it) }
         currentDragOverlay = null
-        // Pick up screens Launcher3 created during the drag and assign them to the current row.
-        adoptNewScreens()
-        updateScrollRange(activeRowIndex)
+
+        val workspace = launcher.workspace
+        val savedScreenId = preDragScreenId
+        val savedRowPageIdx = preDragRowPageIndex
+        preDragScreenId = -1
+
+        // Detect a legitimate page move BEFORE doing anything that might alter scroller state.
+        //
+        // mCurrentPage cannot tell "intentional page-to-page drag" from "auto-scrolled toward
+        // delete bar" — both end with mCurrentPage on a different page than where the user
+        // started. The reliable signal is whether Workspace.onDrop fired during this drag:
+        //   • Drop on a workspace cell → onDrop fired → mLastDropOnWorkspace = true.
+        //   • Drop on DeleteDropTarget / cancel → onDrop never called → flag stays false.
+        //
+        // For a delete drop, we ignore mCurrentPage entirely and always restore to the saved
+        // screen, no matter how far auto-scroll dragged the workspace during the drag.
+        val droppedOnWorkspace = workspace.didLastDropLandOnWorkspace()
+        val curScreenId = workspace.getScreenIdForPageIndex(workspace.currentPage)
+        val rowIds = rowScreenIds.getOrNull(activeRowIndex)
+        // EXTRA_EMPTY_SCREEN_IDs are negative; FIRST_SCREEN_ID is 0 and is a real, droppable
+        // screen (row 0 page 1). Filter out only the EXTRA IDs.
+        val userMovedPages = droppedOnWorkspace
+                && curScreenId >= 0
+                && curScreenId != savedScreenId
+                && rowIds != null
+                && curScreenId in rowIds
+
+        // Cancel any in-flight scroller BEFORE shrinking mAllowedPageEnd via updateScrollRange.
+        // Root cause of the "delete-icon snaps one page right" bug: Launcher3's drag handling
+        // (repositionExtraEmptyScreenForDrag + auto-scroll) leaves mScroller running toward
+        // EXTRA's index. updateScrollRange then reduces mAllowedPageEnd to exclude EXTRA. From
+        // that point every computeScroll() tick calls our scrollTo() which clamps to the new
+        // last-allowed page — one page right of where the user actually was. Aborting first
+        // stops the scroller and clears mNextPage so computeScrollHelper no longer runs.
+        // Wrapped in suppressPageSettle so the synchronous pageEndTransition() inside the
+        // abort cannot clobber rowPageIndex with a stale page value.
+        //
+        // For non-page-move drops (delete, reposition within page), also activate the sticky
+        // page restore on Workspace BEFORE running adoptNewScreens / updateScrollRange. Once
+        // active, every setCurrentPage call — including Launcher3's deferred one fired from
+        // removeExtraEmptyScreenDelayed via runOnPageScrollsInitialized after the state
+        // transition completes — gets redirected to the saved screen's page. This defeats the
+        // ordering issue where post-message timing alone cannot guarantee our restore runs
+        // last. Cleared on a delayed callback long enough for the state machine to settle.
+        //
+        // Skip the sticky restore if the saved screen is no longer in the active row — this
+        // happens when the user navigated rows during the drag. Restoring to the saved screen
+        // would teleport the workspace to a different row than activeRowIndex.
+        val savedStillInActiveRow = savedScreenId >= 0 && rowIds != null && savedScreenId in rowIds
+        if (!userMovedPages && savedStillInActiveRow) {
+            workspace.setPendingRestoreScreenId(savedScreenId)
+            handler.removeCallbacks(clearPendingRestore)
+            handler.postDelayed(clearPendingRestore, PENDING_RESTORE_TIMEOUT_MS)
+        }
+        suppressPageSettle = true
+        try {
+            workspace.abortScrollerAnimation()
+            // Pick up screens Launcher3 created during the drag and assign them to the current row.
+            adoptNewScreens()
+            updateScrollRange(activeRowIndex)
+        } finally {
+            suppressPageSettle = false
+        }
+
+        // Post-drag fixup runs at the END of the message queue — strictly after all
+        // currently-queued layout work, including the deferred setCurrentPage callback that
+        // Launcher3 registers via its StateListener (SPRING_LOADED → NORMAL transition fires
+        // removeExtraEmptyScreenDelayed → runOnPageScrollsInitialized(setCurrentPage(...))).
+        // The sticky restore above also defends against any later setCurrentPage calls; this
+        // post is a belt-and-suspenders fixup for rowPageIndex bookkeeping plus an explicit
+        // setCurrentPage in case the workspace landed somewhere unexpected.
+        if (savedScreenId >= 0 || userMovedPages) {
+            workspace.post {
+                if (isDragging) return@post  // user started a new drag in the meantime
+                val ids = rowScreenIds.getOrNull(activeRowIndex)
+                if (!userMovedPages && savedStillInActiveRow) {
+                    val targetIndex = workspace.getPageIndexForScreenId(savedScreenId)
+                    if (targetIndex >= 0 && targetIndex != workspace.currentPage) {
+                        workspace.setCurrentPage(targetIndex)
+                    }
+                    val pageInRow = ids?.indexOf(savedScreenId) ?: -1
+                    rowPageIndex[activeRowIndex] = when {
+                        pageInRow >= 0 -> pageInRow
+                        ids != null && ids.isNotEmpty() ->
+                            savedRowPageIdx.coerceAtMost(ids.size - 1)
+                        else -> 0
+                    }
+                } else {
+                    // User legitimately moved to another page in the active row — record it so
+                    // future row-switches return here, not to the pre-drag page.
+                    val landedScreenId = workspace.getScreenIdForPageIndex(workspace.currentPage)
+                    val pageInRow = ids?.indexOf(landedScreenId) ?: -1
+                    if (pageInRow >= 0) rowPageIndex[activeRowIndex] = pageInRow
+                }
+            }
+        }
     }
 
     // ── Page tracking ────────────────────────────────────────────────────────────────────────────
@@ -163,6 +277,11 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
             initialize()
             return
         }
+        // Suppressed during the onDragEnded cleanup window: abortScrollerAnimation fires
+        // pageEndTransition synchronously and updateScrollRange can re-trigger settle events
+        // with transitional page indices. Letting those through would write the wrong value
+        // into rowPageIndex (the very symptom we're fixing).
+        if (suppressPageSettle) return
         // Refresh scroll bounds on every page settle — handles cases where page indices shifted
         // (e.g. EXTRA removed after drag, page deleted) without a full navigation cycle.
         // Skip during drag: Launcher3 inserts EXTRA_EMPTY_SCREEN via addView, making
@@ -463,5 +582,9 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
         private const val PHASE_MS = 150L
         private const val TAG = "RowNav"
         private const val BOUNCE_NUDGE_DP = 24f
+        // Long enough for the SPRING_LOADED → NORMAL state transition that fires
+        // removeExtraEmptyScreenDelayed → runOnPageScrollsInitialized(setCurrentPage(...))
+        // to have completed. Empirically the transition is ~200-250ms.
+        private const val PENDING_RESTORE_TIMEOUT_MS = 600L
     }
 }

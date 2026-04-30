@@ -10,6 +10,8 @@ All notable changes to Anchor Launcher will be documented here.
 ### Fixed
 - Icons and labels were clipped inside their cells. The square-cell sizing now re-fits icon and padding to the computed cell size after Lawnchair's layout pass, so content never overflows regardless of grid size or screen density.
 - Swiping down from the status bar area while already on the top row was navigating to the row below instead of playing the bounce animation. Now consistent with the workspace swipe gesture.
+- Workspace no longer snaps one page to the right after a drag (delete, reposition, or page move) on rows above row 0. The stale auto-scroll toward the extra empty screen is now cancelled before the row's scroll bounds are reapplied, and the pre-drag page is restored via a screen-ID-based sticky redirect that survives Launcher3's deferred page changes.
+- Dragging an icon down to a lower row and across to another page no longer teleports back to the source row's remembered page. The post-drag restore now only fires when the saved screen is still in the active row.
 
 ## [0.1] - 2026-04-28
 

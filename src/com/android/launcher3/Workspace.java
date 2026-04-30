@@ -219,6 +219,21 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     private final java.util.Set<Integer> mProtectedScreenIds = new java.util.HashSet<>(
             java.util.Collections.singleton(WorkspaceLayoutManager.FIRST_SCREEN_ID));
 
+    // Anchor: when set (>= 0), every setCurrentPage() call resolves to the page index of this
+    // screen ID instead of the requested page. Used by TwoRowNavigationManager to defeat
+    // Launcher3's deferred setCurrentPage from removeExtraEmptyScreenDelayed (scheduled via
+    // runOnPageScrollsInitialized) which would otherwise override our post-drag restore.
+    // Cleared explicitly by clearPendingRestoreScreenId() once the post-drag cleanup is done.
+    private int mPendingRestoreScreenId = -1;
+
+    // Anchor: true if Workspace.onDrop fired during the current drag — i.e. the user dropped on
+    // a real workspace cell rather than on DeleteDropTarget or an external target. Reset in
+    // onDragStart, set in onDrop, read by TwoRowNavigationManager.onDragEnded to distinguish
+    // "user intentionally moved an icon between pages" (mCurrentPage at drag-end is meaningful)
+    // from "user dropped on delete/cancel" (mCurrentPage was corrupted by drag auto-scroll
+    // moving the workspace toward the trash icon — the saved page must be restored).
+    private boolean mLastDropOnWorkspace = false;
+
     // Anchor: called (deferred via runOnPageScrollsInitialized) after stripEmptyScreens removes
     // pages, so TwoRowNavigationManager can refresh its mAllowedPageEnd before the user scrolls.
     private Runnable mOnWorkspaceScreensChanged;
@@ -537,6 +552,10 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         if (ENFORCE_DRAG_EVENT_ORDER) {
             enforceDragParity("onDragStart", 0, 0);
         }
+
+        // Anchor: reset the drop-on-workspace flag at the start of every drag so it accurately
+        // reflects only this drag's outcome.
+        mLastDropOnWorkspace = false;
 
         if (mDragInfo != null && mDragInfo.cell != null) {
             CellLayout layout = (CellLayout) (mDragInfo.cell instanceof LauncherAppWidgetHostView
@@ -2248,6 +2267,12 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
 
     @Override
     public void onDrop(final DragObject d, DragOptions options) {
+        // Anchor: record that this drag ended on the workspace (vs DeleteDropTarget or an
+        // external target). TwoRowNavigationManager uses this at drag-end to distinguish a
+        // legitimate page-move drop from a delete-bar drop where mCurrentPage was corrupted
+        // by drag auto-scroll moving the workspace toward the trash icon.
+        mLastDropOnWorkspace = true;
+
         mDragViewVisualCenter = d.getVisualCenter(mDragViewVisualCenter);
         CellLayout dropTargetLayout = mDropToLayout;
 
@@ -3463,6 +3488,51 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         }
         mRestoredPages.clear();
         mSavedStates = null;
+    }
+
+    /**
+     * Sets a "sticky" page restore for the post-drag window. Until cleared, every setCurrentPage
+     * call (including Launcher3's own deferred ones from removeExtraEmptyScreenDelayed) is
+     * redirected to the page that currently hosts this screen ID. Pass -1 (or call
+     * clearPendingRestoreScreenId) to disable.
+     */
+    public void setPendingRestoreScreenId(int screenId) {
+        mPendingRestoreScreenId = screenId;
+    }
+
+    public void clearPendingRestoreScreenId() {
+        mPendingRestoreScreenId = -1;
+    }
+
+    /**
+     * Returns true if Workspace.onDrop fired during the most recent drag — i.e. the drop
+     * landed on a real workspace cell. False for drops on DeleteDropTarget or external targets.
+     * TwoRowNavigationManager uses this to decide whether to restore the pre-drag page.
+     */
+    public boolean didLastDropLandOnWorkspace() {
+        return mLastDropOnWorkspace;
+    }
+
+    @Override
+    public void setCurrentPage(int currentPage) {
+        if (mPendingRestoreScreenId >= 0) {
+            int redirected = getPageIndexForScreenId(mPendingRestoreScreenId);
+            if (redirected >= 0 && redirected != currentPage) {
+                currentPage = redirected;
+            }
+        }
+        super.setCurrentPage(currentPage);
+    }
+
+    @Override
+    public void setCurrentPage(int currentPage, int overridePrevPage) {
+        if (mPendingRestoreScreenId >= 0) {
+            int redirected = getPageIndexForScreenId(mPendingRestoreScreenId);
+            if (redirected >= 0 && redirected != currentPage) {
+                currentPage = redirected;
+            }
+        }
+        super.setCurrentPage(currentPage, overridePrevPage);
     }
 
     /** Called by TwoRowNavigationManager to restrict horizontal scroll to the active row. */
