@@ -2,6 +2,20 @@
 
 All notable changes to Anchor Launcher will be documented here.
 
+## [Unreleased]
+
+### Added
+- App drawer column count now scales automatically with the available screen width. Icons in the drawer are sized to match the workspace square cell size; the launcher fills as many columns as will fit. This gives a density-consistent drawer in portrait and landscape on all device types, without any manual column setting.
+
+### Fixed
+- Large widgets (spanning multiple cells) were deleted from the database after a screen rotation. The transpose math was only correct for 1×1 icons — for multi-cell widgets a different bounding-box corner becomes the top-left after rotation, causing `cellY + spanY > numRows` which Launcher3 treats as out-of-bounds and removes. The position mapping is now span-aware, correctly identifying the new top-left in all four orientations.
+- Icons and labels were clipped on dense phone grids. The square-cell sizing now applies a 4 dp safety margin so the icon+label block is never pressed flush against the cell boundary, accounting for font-metric rounding and BubbleTextView internal padding.
+- App drawer icons overlapped the A–Z letter index strip on the right edge. The RecyclerView now reserves 36 dp of right padding so all icons remain visible.
+- Apps whose names start with a digit or symbol were grouped under `·` in the app drawer instead of `#`. All non-alphabetic starters now correctly appear under `#`.
+- Several settings screens and system prompts still showed "Lawnchair" instead of "Anchor". All user-visible strings in the launcher UI have been updated.
+- Dragging a widget from the picker could auto-navigate to a page outside the current row. The widget-search loop in the drag start path is now clamped to the active row's page range.
+- Pressing Back on any non-home screen now navigates back to home (row 0, page 0) instead of doing nothing.
+
 ## [0.2] - 2026-04-29
 
 ### Added

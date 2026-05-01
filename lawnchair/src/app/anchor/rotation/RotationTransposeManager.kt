@@ -85,16 +85,27 @@ class RotationTransposeManager(private val context: Context) {
                     val spanX = c.getInt(idxSpanX)
                     val spanY = c.getInt(idxSpanY)
 
-                    val (portraitCol, portraitRow) = GridTransposeHelper.reverseMapToPortrait(
-                        cellX, cellY, portraitCols, portraitRows, fromRotation,
-                    )
-                    val (newCellX, newCellY) = GridTransposeHelper.remapCoordinates(
-                        portraitCol, portraitRow, portraitCols, portraitRows, toRotation,
-                    )
-
+                    // Reverse display spans to portrait-canonical spans first (just a swap for
+                    // 90°/270°). These are needed by the span-aware position reverse below.
                     val (portraitSpanX, portraitSpanY) = GridTransposeHelper.reverseSpanToPortrait(
                         spanX, spanY, fromRotation,
                     )
+
+                    // Span-aware reverse: recovers the portrait top-left corner of the widget.
+                    // The plain reverseMapToPortrait would only be correct for 1×1 items — for
+                    // multi-cell widgets the portrait top-left maps to a *different* corner of the
+                    // bounding box in the rotated orientation, causing cellY+spanY > numRows and
+                    // checkItemPlacement removing the widget from the DB.
+                    val (portraitCol, portraitRow) = GridTransposeHelper.reverseWidgetPositionToPortrait(
+                        cellX, cellY, spanX, spanY, portraitCols, portraitRows, fromRotation,
+                    )
+
+                    // Span-aware forward mapping to the new orientation.
+                    val (newCellX, newCellY) = GridTransposeHelper.remapWidgetPosition(
+                        portraitCol, portraitRow, portraitSpanX, portraitSpanY,
+                        portraitCols, portraitRows, toRotation,
+                    )
+
                     val (newSpanX, newSpanY) = GridTransposeHelper.spanForRotation(
                         portraitSpanX, portraitSpanY, toRotation,
                     )

@@ -585,8 +585,17 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                 // widgets as they cannot be placed inside a folder.
                 // Start at the current page and search right (on LTR) until finding a page with
                 // enough space. Since an empty screen is the furthest right, a page must be found.
+                //
+                // Anchor: clamp the search to mAllowedPageEnd so widget drags from the widget
+                // picker don't auto-navigate to a page belonging to a different row. EXTRA has
+                // not been repositioned into the active row yet (repositionExtraEmptyScreenForDrag
+                // runs later, in TwoRowNavigationManager.onDragStarted), so searching beyond
+                // mAllowedPageEnd would land on another row's first page, not on EXTRA.
                 int currentPage = getDestinationPage();
-                for (int pageIndex = currentPage; pageIndex < getPageCount(); pageIndex++) {
+                if (mAllowedPageEnd >= 0) {
+                    currentPage = Math.min(currentPage, mAllowedPageEnd);
+                }
+                for (int pageIndex = currentPage; pageIndex <= (mAllowedPageEnd >= 0 ? mAllowedPageEnd : getPageCount() - 1); pageIndex++) {
                     CellLayout page = (CellLayout) getPageAt(pageIndex);
                     if (page.hasReorderSolution(dragObject.dragInfo)) {
                         setCurrentPage(pageIndex);

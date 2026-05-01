@@ -67,10 +67,9 @@ public class AlphabeticIndexCompat {
                 if (startsWithLetter) {
                     return mDefaultMiscLabel;
                 } else {
-                    // In languages where these differ, this ensures that we differentiate
-                    // between the misc section in the native language and a misc section
-                    // for everything else.
-                    return MID_DOT;
+                    // Anchor: group all symbol/punctuation starters under '#' rather than the
+                    // mid-dot so they appear together with digit-starting apps in one section.
+                    return "#";
                 }
             }
         }

@@ -88,6 +88,29 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
     }
 
     /**
+     * Navigate directly to row 0, page 0 (the home screen).
+     * If already on row 0, page 0, this is a no-op.
+     * Used by the back gesture in [LawnchairLauncher.onStateBack].
+     */
+    fun navigateToHome() {
+        if (!initialized) return
+        val isAlreadyHome = activeRowIndex == 0 && rowPageIndex.getOrElse(0) { 0 } == 0
+        if (isAlreadyHome) return
+        val from = activeRowIndex
+        if (activeRowIndex != 0) {
+            activeRowIndex = 0
+            animateRowTransition(from, 0)
+        } else {
+            // Already on row 0 but not on page 0 — snap to first page.
+            val ids = rowScreenIds.getOrNull(0) ?: return
+            if (ids.isNotEmpty()) {
+                val targetPage = launcher.workspace.getPageIndexForScreenId(ids[0])
+                if (targetPage >= 0) launcher.workspace.snapToPage(targetPage)
+            }
+        }
+    }
+
+    /**
      * Plays a brief downward nudge to signal there is no row above.
      * Called by both [app.anchor.navigation.TwoRowSwipeTouchController] and
      * [app.anchor.navigation.SwipeDownStatusBarController] so both entry points share the same

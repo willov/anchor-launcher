@@ -271,6 +271,20 @@ class LawnchairLauncher : QuickstepLauncher() {
         super.onNewIntent(intent)
     }
 
+    /**
+     * Intercept the back gesture/button when in NORMAL state:
+     * - If not on home (row 0, page 0), navigate there.
+     * - Otherwise let the parent handle it (default: no-op on the home screen).
+     */
+    override fun onStateBack() {
+        if (isInState(LauncherState.NORMAL)) {
+            // navigateToHome() is a no-op if already on row 0 page 0; otherwise it animates there.
+            twoRowNavigationManager.navigateToHome()
+        } else {
+            super.onStateBack()
+        }
+    }
+
     override fun collectStateHandlers(out: MutableList<StateHandler<LauncherState>>) {
         super.collectStateHandlers(out)
         out.add(SearchBarStateHandler(this))

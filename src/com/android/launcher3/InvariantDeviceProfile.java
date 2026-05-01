@@ -635,15 +635,38 @@ public class InvariantDeviceProfile {
                     // computed — it does not affect icon spatial consistency, only label position.
                     dp.iconCenterVertically = true;
 
+                    // Anchor: adapt the app drawer column count to the available width.
+                    // The grid XML fixes numAllAppsColumns (e.g. 6) regardless of orientation.
+                    // In landscape the screen is wider, so 6 columns are very sparse; in portrait
+                    // on a narrow phone the same count may be about right. Computing the natural
+                    // column count from the available width and the square cell size s gives a
+                    // density-consistent drawer in both orientations and on all device types:
+                    //   • Portrait / width-constrained: s ≈ (availW - (numCols-1)·g) / numCols
+                    //     → naturalCols ≈ numCols  (no change)
+                    //   • Landscape / height-constrained: s is smaller relative to availW
+                    //     → naturalCols > numCols  (more columns, less wasted space)
+                    int naturalDrawerCols = Math.min((availW + g) / (s + g), 12);
+                    if (naturalDrawerCols > dp.numShownAllAppsColumns) {
+                        dp.numShownAllAppsColumns = naturalDrawerCols;
+                    }
+
                     // Re-fit icon content to S.  Lawnchair computed iconSizePx /
                     // iconDrawablePaddingPx / iconTextSizePx against its own (larger) cellHeightPx.
                     // After we shrink the cell to S those values may overflow the cell, causing
                     // the icon+label to be clipped.  Scale the non-text portion down so that
-                    // iconSizePx + iconDrawablePaddingPx + textH <= s.
+                    // iconSizePx + iconDrawablePaddingPx + textH <= budget.
+                    //
+                    // We use a budget slightly smaller than S (8dp total, 4dp each side) because:
+                    //  • BubbleTextView's font metrics can slightly exceed calculateTextHeight()
+                    //    due to typeface/line-spacing differences, causing 1–2px overflow at the
+                    //    cell boundary.
+                    //  • It also gives icons visible breathing room so they don't appear crammed.
+                    int safetyPx = Math.round(4 * density);  // 4dp total vertical margin
+                    int budget = s - safetyPx;
                     int textH = Utilities.calculateTextHeight(dp.iconTextSizePx);
                     int contentH = dp.iconSizePx + dp.iconDrawablePaddingPx + textH;
-                    if (contentH > s) {
-                        int targetIconAndPad = s - textH;
+                    if (contentH > budget) {
+                        int targetIconAndPad = budget - textH;
                         if (targetIconAndPad > 0) {
                             float ratio = (float) targetIconAndPad
                                     / (dp.iconSizePx + dp.iconDrawablePaddingPx);

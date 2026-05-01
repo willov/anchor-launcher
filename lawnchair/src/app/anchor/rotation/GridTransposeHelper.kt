@@ -93,4 +93,61 @@ object GridTransposeHelper {
         displaySpanY: Int,
         rotation: Int,
     ): Pair<Int, Int> = spanForRotation(displaySpanX, displaySpanY, rotation)
+
+    /**
+     * Span-aware position mapping: maps the portrait top-left of a widget to the correct
+     * top-left in the display orientation for [rotation].
+     *
+     * [remapCoordinates] only maps a single cell (top-left corner) and is correct for 1×1 items.
+     * For multi-cell widgets the top-left in portrait is NOT the top-left in the rotated grid —
+     * a different corner of the bounding box becomes the new top-left. Without this correction
+     * the transposed position overflows the grid bounds and [checkItemPlacement] removes the
+     * widget.
+     *
+     * Derivation for ROTATION_90 (clockwise): cell (c,r) → (r, pCols-1-c).
+     *   Portrait bounding box: cols [col, col+spanX-1], rows [row, row+spanY-1].
+     *   Landscape X range: [row, row+spanY-1]  → newCellX = row
+     *   Landscape Y range: [pCols-1-(col+spanX-1), pCols-1-col]  → newCellY = pCols-col-spanX
+     *
+     * Verifies to [remapCoordinates] when spanX=spanY=1.
+     */
+    fun remapWidgetPosition(
+        portraitCol: Int, portraitRow: Int,
+        portraitSpanX: Int, portraitSpanY: Int,
+        portraitCols: Int, portraitRows: Int,
+        rotation: Int,
+    ): Pair<Int, Int> = when (rotation) {
+        Surface.ROTATION_0   -> Pair(portraitCol, portraitRow)
+        Surface.ROTATION_90  -> Pair(portraitRow, portraitCols - portraitCol - portraitSpanX)
+        Surface.ROTATION_180 -> Pair(portraitCols - portraitCol - portraitSpanX,
+                                     portraitRows - portraitRow - portraitSpanY)
+        Surface.ROTATION_270 -> Pair(portraitRows - portraitRow - portraitSpanY, portraitCol)
+        else                 -> Pair(portraitCol, portraitRow)
+    }
+
+    /**
+     * Span-aware reverse mapping: recovers the portrait (col, row) for a widget given its
+     * *display* cell coordinates and *display* span dimensions for [rotation].
+     *
+     * Uses display spans (as read from the DB) rather than portrait spans, because those are
+     * what's stored when the device is in [rotation].
+     *
+     * Verifies to [reverseMapToPortrait] when displaySpanX=displaySpanY=1.
+     */
+    fun reverseWidgetPositionToPortrait(
+        displayCol: Int, displayRow: Int,
+        displaySpanX: Int, displaySpanY: Int,
+        portraitCols: Int, portraitRows: Int,
+        rotation: Int,
+    ): Pair<Int, Int> = when (rotation) {
+        Surface.ROTATION_0   -> Pair(displayCol, displayRow)
+        // Forward 90°: newCellX=pRow, newCellY=pCols-pCol-pSpanX (where pSpanX=displaySpanY)
+        Surface.ROTATION_90  -> Pair(portraitCols - displayRow - displaySpanY, displayCol)
+        // Forward 180°: newCellX=pCols-pCol-pSpanX, newCellY=pRows-pRow-pSpanY (spans unchanged)
+        Surface.ROTATION_180 -> Pair(portraitCols - displayCol - displaySpanX,
+                                     portraitRows - displayRow - displaySpanY)
+        // Forward 270°: newCellX=pRows-pRow-pSpanY, newCellY=pCol (where pSpanY=displaySpanX)
+        Surface.ROTATION_270 -> Pair(displayRow, portraitRows - displayCol - displaySpanX)
+        else                 -> Pair(displayCol, displayRow)
+    }
 }

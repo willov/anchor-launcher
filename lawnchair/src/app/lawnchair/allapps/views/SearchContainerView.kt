@@ -47,6 +47,13 @@ class SearchContainerView @JvmOverloads constructor(
         lp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM)
         addView(letterIndex, lp)
 
+        // Reserve space in the RecyclerView so icons don't scroll behind the letter strip.
+        val rightPaddingPx = ((28 + 8) * resources.displayMetrics.density).toInt()
+        getMainAppsRecyclerView()?.apply {
+            setPadding(paddingLeft, paddingTop, rightPaddingPx, paddingBottom)
+            clipToPadding = true
+        }
+
         letterIndex.onLetterSelected = { letter ->
             val lm = getMainAppsRecyclerView()?.layoutManager as? LinearLayoutManager
             if (lm != null) {
