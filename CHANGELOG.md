@@ -8,6 +8,7 @@ All notable changes to Anchor Launcher will be documented here.
 - App drawer column count now scales automatically with the available screen width. Icons in the drawer are sized to match the workspace square cell size; the launcher fills as many columns as will fit. This gives a density-consistent drawer in portrait and landscape on all device types, without any manual column setting.
 
 ### Fixed
+- **Icons drifting between portrait and landscape rotations** — Icons now land at exact glass pixel locations after 90° rotation on all devices.
 - Large widgets (spanning multiple cells) were deleted from the database after a screen rotation. The transpose math was only correct for 1×1 icons — for multi-cell widgets a different bounding-box corner becomes the top-left after rotation, causing `cellY + spanY > numRows` which Launcher3 treats as out-of-bounds and removes. The position mapping is now span-aware, correctly identifying the new top-left in all four orientations.
 - Icons and labels were clipped on dense phone grids. The square-cell sizing now applies a 4 dp safety margin so the icon+label block is never pressed flush against the cell boundary, accounting for font-metric rounding and BubbleTextView internal padding.
 - App drawer icons overlapped the A–Z letter index strip on the right edge. The RecyclerView now reserves 36 dp of right padding so all icons remain visible.

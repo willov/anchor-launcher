@@ -121,14 +121,8 @@ fun AppDrawerPreferences(
             }
         }
         PreferenceGroup(heading = stringResource(id = R.string.grid)) {
-            Item {
-                SliderPreference(
-                    label = stringResource(id = R.string.app_drawer_columns),
-                    adapter = prefs2.drawerColumns.getAdapter(),
-                    step = 1,
-                    valueRange = 3..10,
-                )
-            }
+            // Anchor: drawer column count is derived automatically from the icon size and
+            // available screen width, so the manual columns slider is redundant and hidden.
             Item {
                 SliderPreference(
                     adapter = prefs2.drawerCellHeightFactor.getAdapter(),

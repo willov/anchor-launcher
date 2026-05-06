@@ -183,6 +183,8 @@ public class DeviceProfile {
     public int iconDrawablePaddingPx;
     private int mIconDrawablePaddingOriginalPx;
     public boolean iconCenterVertically;
+    /** When > 0, BubbleTextView places the icon top at this px value (icon centre = S/2). */
+    public int iconTopPaddingPx = 0;
     public int maxIconTextLineCount;
 
     public float cellScaleToFit;
@@ -238,7 +240,7 @@ public class DeviceProfile {
     public int allAppsOpenDuration;
     public int allAppsCloseDuration;
     public int allAppsLeftRightMargin;
-    public final int numShownAllAppsColumns;
+    public int numShownAllAppsColumns;
 
     private final OverviewProfile overviewProfile;
 
@@ -1064,6 +1066,9 @@ public class DeviceProfile {
      * It is important to call this method after the All Apps variables have been set.
      */
     private void hideWorkspaceLabelsIfNotEnoughSpace() {
+        // Anchor: when iconTopPaddingPx > 0 the icon centre is at S/2 and the label
+        // deliberately overflows into the row gap (clipChildren=false). Skip the hiding check.
+        if (iconTopPaddingPx > 0) return;
         float iconTextHeight = Utilities.calculateTextHeight(iconTextSizePx);
         float workspaceCellPaddingY = getCellSize().y - iconSizePx - iconDrawablePaddingPx
                 - iconTextHeight;

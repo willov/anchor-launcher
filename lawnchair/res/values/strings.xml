@@ -101,6 +101,7 @@
     <string name="label">Label</string>
     <string name="icons">Icons</string>
     <string name="grid">Grid</string>
+    <string name="anchor_workspace_spacing_label">Cell spacing (dp)</string>
     <string name="layout">Layout</string>
 
     <!-- Generic styling options -->

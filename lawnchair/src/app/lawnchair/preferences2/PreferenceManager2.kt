@@ -641,6 +641,13 @@ class PreferenceManager2 @Inject constructor(
         onSet = { reloadHelper.reloadGrid() },
     )
 
+    /** Workspace cell gap in dp. Default 16. Drives the square cell size S in withDimensionsOverride. */
+    val workspaceSpacingDp = preference(
+        key = intPreferencesKey(name = "workspace_spacing_dp"),
+        defaultValue = 16,
+        onSet = { reloadHelper.reloadGrid() },
+    )
+
     val additionalFonts = preference(
         key = stringPreferencesKey(name = "additional_fonts"),
         defaultValue = "",

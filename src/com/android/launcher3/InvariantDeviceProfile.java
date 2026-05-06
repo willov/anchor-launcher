@@ -98,6 +98,7 @@ import javax.inject.Inject;
 
 import app.lawnchair.DeviceProfileOverrides.DBGridInfo;
 import app.lawnchair.DeviceProfileOverrides;
+import com.patrykmichalik.opto.core.PreferenceExtensionsKt;
 
 @LauncherAppSingleton
 public class InvariantDeviceProfile {
@@ -591,93 +592,203 @@ public class InvariantDeviceProfile {
                 .withDimensionsOverride(dp -> {
                     // Anchor: square-cell layout.
                     //
-                    // Compute the largest square cell size S that fits both dimensions, then
-                    // centre the grid and pad the remainder. This guarantees:
-                    //   1. Every cell is a square — icon alignment within the cell is
-                    //      orientation-independent, so the icon sits at the same physical pixel
-                    //      in portrait and landscape.
-                    //   2. After the grid transposes (cols↔rows) for landscape the screen
-                    //      dimensions also swap, so S is identical in both orientations and the
-                    //      padding halves swap — icons land at exactly the same physical pixel.
+                    // Compute cell size S from the SHORT screen dimension so it is identical
+                    // in portrait and landscape (see detailed comment below).  Then centre the
+                    // grid and pad the remainder.  This guarantees:
+                    //   1. Every cell is a square — icon alignment is orientation-independent.
+                    //   2. S is the same value in both orientations → icons land at exactly the
+                    //      same physical pixel after the grid transposes.
                     //
                     // availableWidthPx / availableHeightPx already subtract all system-bar
                     // insets (status bar top, nav bar bottom), so no extra adjustment needed.
-                    int numCols = dp.inv.numColumns;
-                    int numRows = dp.inv.numRows;
                     float density = context.getResources().getDisplayMetrics().density;
-                    int g = Math.round(16 * density);  // gutter between cells (px)
+                    // User-adjustable workspace spacing (default 16dp). Read directly so it
+                    // is available before DeviceProfileOverrides.applyUi() runs.
+                    int spacingDp = PreferenceExtensionsKt.firstBlocking(
+                            app.lawnchair.preferences2.PreferenceManager2.INSTANCE
+                                    .get(context).getWorkspaceSpacingDp());
+                    int g = Math.round(spacingDp * density);  // gutter between cells (px)
 
-                    int availW = dp.getDeviceProperties().getAvailableWidthPx();
-                    int availH = dp.getDeviceProperties().getAvailableHeightPx();
+                    // ═══════════════════════════════════════════════════════════════════════
+                    // SPATIAL STABILITY: Icons must land at the same glass pixel after rotation.
+                    // ═══════════════════════════════════════════════════════════════════════
+                    //
+                    // Phase 2 fix: Compute S from orientation-invariant values only.
+                    //
+                    // Problem: Using per-orientation insets or min(workW/cols, workH/rows) can
+                    // yield different S values in portrait vs landscape because:
+                    //   - maxInset differs (status bar on top in portrait, side in landscape)
+                    //   - min() may select a different axis between orientations
+                    //
+                    // Solution: Use only values that are identical in both orientations:
+                    //   shortRaw   = min(rawW, rawH)           // same physical edge
+                    //   shortCells = min(portCols, portRows)   // same count (roles swap)
+                    //   S = (shortRaw - 2P - (shortCells-1)*g) / shortCells
+                    //
+                    // P is computed from the max inset across ALL supported profiles (both
+                    // orientations) to guarantee it's identical regardless of current rotation.
+                    // ═══════════════════════════════════════════════════════════════════════
 
-                    // Largest S that fits width and height simultaneously.
-                    int sFromW = (availW - (numCols - 1) * g) / numCols;
-                    int sFromH = (availH - (numRows - 1) * g) / numRows;
-                    int s = Math.min(sFromW, sFromH);
+                    int rawW = dp.getDeviceProperties().getWidthPx();
+                    int rawH = dp.getDeviceProperties().getHeightPx();
+                    Rect ins = dp.getInsets();
 
-                    // Distribute leftover space as equal padding on both sides of each axis.
-                    int padH = (availW - (numCols * s + (numCols - 1) * g)) / 2;
-                    int padV = (availH - (numRows * s + (numRows - 1) * g)) / 2;
+                    // Phase 2: Find max inset across ALL supported profiles (both orientations)
+                    // to guarantee P is identical regardless of current rotation.
+                    int maxInsetAllOrientations = Math.max(Math.max(ins.top, ins.bottom),
+                            Math.max(ins.left, ins.right));
+                    for (DeviceProfile profile : dp.inv.supportedProfiles) {
+                        Rect profIns = profile.getInsets();
+                        maxInsetAllOrientations = Math.max(maxInsetAllOrientations,
+                                Math.max(Math.max(profIns.top, profIns.bottom),
+                                        Math.max(profIns.left, profIns.right)));
+                    }
+                    // 8dp extra ensures the grid never clips into system UI on any device.
+                    int P = maxInsetAllOrientations + Math.round(8 * density);
 
-                    dp.workspacePadding.set(padH, padV, padH, padV);
+                    // Safety margin: icon drawable must not exceed the cell boundary.
+                    int safetyPx = Math.round(4 * density);
+
+                    // Read portrait-canonical grid dimensions from prefs. Never read from
+                    // dp.inv.numColumns/numRows — that is shared singleton state that
+                    // AnchorTransposeHook.afterInitGrid() may have already swapped for
+                    // landscape. Portrait profiles built in the same initGrid() call would
+                    // then see landscape-swapped values → wrong S and wrong padding.
+                    boolean dpLand = dp.getDeviceProperties().isLandscape();
+                    app.lawnchair.preferences.PreferenceManager anchorPm =
+                            app.lawnchair.preferences.PreferenceManager.getInstance(context);
+                    int portCols = Math.max(1, anchorPm.getWorkspaceColumns().get());
+                    int portRows = Math.max(1, anchorPm.getWorkspaceRows().get());
+                    int numCols = dpLand ? portRows : portCols;
+                    int numRows = dpLand ? portCols : portRows;
+
+                    // Phase 2: Compute S from the SHORT side only — identical in both orientations.
+                    // shortRaw = min(rawW, rawH) is the same physical screen edge in both rotations.
+                    // shortCells = min(portCols, portRows) is the same count (just swapped roles).
+                    int shortRaw = Math.min(rawW, rawH);
+                    int shortCells = Math.min(portCols, portRows);
+                    int shortSide = shortRaw - 2 * P;
+                    int s = Math.max(1, (shortSide - (shortCells - 1) * g) / shortCells);
+
+                    // Phase 3: Round S down to even to avoid parity-induced 1px drift.
+                    // When (rawW - gridW) is odd, the extra pixel goes to one side. After 90° CW,
+                    // that edge becomes a different axis and the icon shifts. Even S guarantees
+                    // gridW and gridH have the same parity relationship with rawW/rawH.
+                    s = (s / 2) * 2;
+                    if (s < 2) s = 2;  // minimum even cell size
+
+                    // Centre the grid symmetrically in the raw screen area.
+                    //
+                    // Workspace is positioned at (0,0) in the window (it is an Insettable child
+                    // of LauncherRootView — InsettableFrameLayout gives it setInsets() but no
+                    // margin offset).  workspacePadding is therefore relative to raw screen size.
+                    //
+                    // Spatial-consistency proof for ROTATION_90 (clockwise):
+                    //   Portrait icon at grid (c, r):  screen centre = (padH_p + c*(S+g) + S/2,
+                    //                                                    padV_p + r*(S+g) + S/2)
+                    //   After 90° CW the glass maps (Gx,Gy) → landscape screen (Gy, rawW−Gx).
+                    //   Grid transpose: displayCol=r, displayRow=numCols_p−1−c.
+                    //   Landscape icon centre = (padH_l + r*(S+g) + S/2, padV_l + (C_p−1−c)*(S+g) + S/2).
+                    //   Expanding: these equal the mapped glass coordinates iff padH_l = padV_p
+                    //   and padV_l + gridW_l = rawW_p − padH_p.  Both are satisfied when all
+                    //   paddings are (rawDim − gridDim)/2 because the portrait/landscape
+                    //   dimensions swap symmetrically.  No inset subtraction needed.
+                    int gridW = numCols * s + (numCols - 1) * g;
+                    int gridH = numRows * s + (numRows - 1) * g;
+                    int padH = (rawW - gridW) / 2;
+                    int padV = (rawH - gridH) / 2;
+
                     dp.workspaceTopPadding = 0;
                     dp.workspaceBottomPadding = 0;
                     dp.cellLayoutPaddingPx.set(0, 0, 0, 0);
-                    dp.cellLayoutBorderSpacePx.set(g, g);
-                    // Lock cell dimensions to exactly S so CellLayout.onMeasure uses our
-                    // computed value rather than re-deriving from measured view size (which
-                    // can differ by 1–2 px due to integer rounding at measurement time).
-                    dp.cellWidthPx = s;
-                    dp.cellHeightPx = s;
-                    // Center the icon+text block vertically within the square cell so the icon
-                    // sits at the physical centre of the cell in all orientations.
-                    // iconDrawablePaddingPx (icon-to-label gap) is left at whatever Lawnchair
-                    // computed — it does not affect icon spatial consistency, only label position.
+                    // iconCenterVertically = true causes BubbleTextView to enter its onMeasure
+                    // centering branch, where we intercept with iconTopPaddingPx (set below) to
+                    // place the icon drawable at cell centre rather than centering the full block.
                     dp.iconCenterVertically = true;
 
-                    // Anchor: adapt the app drawer column count to the available width.
-                    // The grid XML fixes numAllAppsColumns (e.g. 6) regardless of orientation.
-                    // In landscape the screen is wider, so 6 columns are very sparse; in portrait
-                    // on a narrow phone the same count may be about right. Computing the natural
-                    // column count from the available width and the square cell size s gives a
-                    // density-consistent drawer in both orientations and on all device types:
-                    //   • Portrait / width-constrained: s ≈ (availW - (numCols-1)·g) / numCols
-                    //     → naturalCols ≈ numCols  (no change)
-                    //   • Landscape / height-constrained: s is smaller relative to availW
-                    //     → naturalCols > numCols  (more columns, less wasted space)
-                    int naturalDrawerCols = Math.min((availW + g) / (s + g), 12);
+                    // Anchor: derive app drawer column count from the portrait-canonical drawer
+                    // cell size, so icon sizes are identical in portrait and landscape (consistent
+                    // with the workspace square-cell spatial invariant).
+                    //
+                    // Using INDEX_DEFAULT (portrait) for both cell width and gap means the same
+                    // icon size is used regardless of orientation. The column count then varies
+                    // naturally: availW grows in landscape → more columns at the same icon size.
+                    //
+                    // Phone profiles often omit allAppsCellWidth; fall back to allAppsIconSize.
+                    //
+                    // Formula: N = (availW + gap) / (cellW + gap)
+                    //
+                    // Example results:
+                    //   Portrait phone  (~360dp, cell~65dp, gap~16dp) → 4-5
+                    //   Landscape phone (~780dp, cell~65dp, gap~16dp) → ~9
+                    //   Portrait tablet (~820dp, cell~96dp, gap~8dp)  → ~8
+                    //   Landscape tablet(~1280dp,cell~96dp, gap~8dp)  → ~12  (capped)
+                    float aaCellDp = dp.inv.allAppsCellSize[INDEX_DEFAULT].x;
+                    if (aaCellDp <= 0) {
+                        aaCellDp = dp.inv.allAppsIconSize[INDEX_DEFAULT];
+                    }
+                    float aaGapDp = dp.inv.allAppsBorderSpaces[INDEX_DEFAULT].x;
+                    if (aaGapDp <= 0) aaGapDp = 16;
+                    int aaCellPx = Math.round(aaCellDp * density);
+                    int aaGapPx  = Math.round(aaGapDp * density);
+                    int availW = dp.getDeviceProperties().getAvailableWidthPx();
+                    int naturalDrawerCols = Math.max(1, Math.min((availW + aaGapPx) / (aaCellPx + aaGapPx), 12));
                     if (naturalDrawerCols > dp.numShownAllAppsColumns) {
                         dp.numShownAllAppsColumns = naturalDrawerCols;
                     }
 
-                    // Re-fit icon content to S.  Lawnchair computed iconSizePx /
-                    // iconDrawablePaddingPx / iconTextSizePx against its own (larger) cellHeightPx.
-                    // After we shrink the cell to S those values may overflow the cell, causing
-                    // the icon+label to be clipped.  Scale the non-text portion down so that
-                    // iconSizePx + iconDrawablePaddingPx + textH <= budget.
-                    //
-                    // We use a budget slightly smaller than S (8dp total, 4dp each side) because:
-                    //  • BubbleTextView's font metrics can slightly exceed calculateTextHeight()
-                    //    due to typeface/line-spacing differences, causing 1–2px overflow at the
-                    //    cell boundary.
-                    //  • It also gives icons visible breathing room so they don't appear crammed.
-                    int safetyPx = Math.round(4 * density);  // 4dp total vertical margin
-                    int budget = s - safetyPx;
-                    int textH = Utilities.calculateTextHeight(dp.iconTextSizePx);
-                    int contentH = dp.iconSizePx + dp.iconDrawablePaddingPx + textH;
-                    if (contentH > budget) {
-                        int targetIconAndPad = budget - textH;
-                        if (targetIconAndPad > 0) {
-                            float ratio = (float) targetIconAndPad
-                                    / (dp.iconSizePx + dp.iconDrawablePaddingPx);
-                            dp.iconSizePx = Math.max(1, (int) (dp.iconSizePx * ratio));
-                            dp.iconDrawablePaddingPx =
-                                    Math.max(0, (int) (dp.iconDrawablePaddingPx * ratio));
-                        } else {
-                            dp.iconSizePx = Math.max(1, s / 2);
-                            dp.iconDrawablePaddingPx = 0;
-                        }
+                    // Force portrait-canonical icon size so cells are the same physical size
+                    // in both orientations (Lawnchair XML specifies smaller landscape values).
+                    // Rescale iconDrawablePaddingPx proportionally if icon size changes.
+                    int origIconSizePx = dp.iconSizePx;
+                    dp.iconSizePx = Math.max(1, Math.round(dp.inv.iconSize[INDEX_DEFAULT] * density));
+                    if (origIconSizePx > 0 && dp.iconSizePx != origIconSizePx) {
+                        dp.iconDrawablePaddingPx = Math.max(0,
+                                Math.round(dp.iconDrawablePaddingPx
+                                        * (float) dp.iconSizePx / origIconSizePx));
                     }
+
+                    // Clamp icon drawable to cell with safety margin.
+                    if (dp.iconSizePx > s - 2 * safetyPx) {
+                        dp.iconSizePx = Math.max(1, s - 2 * safetyPx);
+                        dp.iconDrawablePaddingPx = 0;
+                    }
+
+                    // Place icon top so drawable centre = S/2. Label hangs below into the
+                    // row gap — CellLayout does not clip children, so this is fine.
+                    dp.iconTopPaddingPx = (s - dp.iconSizePx) / 2;
+
+                    // Square cells: labels overflow naturally into the row gap (standard
+                    // Launcher3 behaviour — clipChildren=false on CellLayout).
+                    dp.cellWidthPx = s;
+                    dp.cellHeightPx = s;
+                    dp.cellLayoutBorderSpacePx.set(g, g);
+
+                    // ═══════════════════════════════════════════════════════════════════════
+                    // Phase 4: Symmetric inset compensation for workspacePadding
+                    // ═══════════════════════════════════════════════════════════════════════
+                    //
+                    // PagedView.onMeasure subtracts insets from the available size BEFORE
+                    // the workspace padding is applied. For the grid to be centered at the
+                    // desired glass position, we must compensate each edge's padding by
+                    // that edge's inset.
+                    //
+                    // This ensures padLeft + ins.left = padH (the raw-screen-centered value),
+                    // and similarly for all four edges. The grid lands at the same glass
+                    // position regardless of which edges have system bars.
+                    // ═══════════════════════════════════════════════════════════════════════
+                    int padLeft = padH - ins.left;
+                    int padTop = padV - ins.top;
+                    int padRight = padH - ins.right;
+                    int padBot = padV - ins.bottom;
+
+                    // Ensure padding values are non-negative (P ≥ maxInset + 8dp guarantees this)
+                    padLeft = Math.max(0, padLeft);
+                    padTop = Math.max(0, padTop);
+                    padRight = Math.max(0, padRight);
+                    padBot = Math.max(0, padBot);
+
+                    dp.workspacePadding.set(padLeft, padTop, padRight, padBot);
                 });
     }
 

@@ -224,6 +224,16 @@ fun HomeScreenPreferences(
                 )
             }
         }
+        PreferenceGroup(heading = stringResource(id = R.string.grid)) {
+            Item {
+                SliderPreference(
+                    label = stringResource(id = R.string.anchor_workspace_spacing_label),
+                    adapter = prefs2.workspaceSpacingDp.getAdapter(),
+                    step = 2,
+                    valueRange = 4..40,
+                )
+            }
+        }
         val homeScreenLabelsAdapter = prefs2.showIconLabelsOnHomeScreen.getAdapter()
         PreferenceGroup(heading = stringResource(id = R.string.icons)) {
             Item {
