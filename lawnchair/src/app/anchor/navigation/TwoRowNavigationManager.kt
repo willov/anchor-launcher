@@ -555,7 +555,13 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
             }
         }
 
-        // Protect upper row screens from stripEmptyScreens() — they are intentionally empty.
+        // Protect screens from stripEmptyScreens():
+        //  - Row 0: protect only the first screen so the bottom row always has at least one page.
+        //    (FIRST_SCREEN_ID=0 is already protected unconditionally in Workspace, but if row 0's
+        //    first screen is a different ID we protect it explicitly here too.)
+        //  - Upper rows (1..N-1): protect ALL screens — they are intentionally empty widget
+        //    canvases and must never be stripped.
+        rowScreenIds[0].firstOrNull()?.let { workspace.protectScreenFromStripping(it) }
         for (r in 1 until rowCount) {
             for (id in rowScreenIds[r]) workspace.protectScreenFromStripping(id)
         }

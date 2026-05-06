@@ -21,6 +21,7 @@ import android.util.SparseArray
 import androidx.annotation.VisibleForTesting
 import androidx.core.util.putAll
 import androidx.core.util.valueIterator
+import app.anchor.AnchorPreferences
 import app.lawnchair.preferences2.PreferenceManager2
 import com.android.launcher3.BuildConfig
 import com.android.launcher3.BuildConfigs
@@ -53,6 +54,16 @@ sealed class WorkspaceData : Iterable<ItemInfo> {
         forEach { if (it.container == CONTAINER_DESKTOP) screenSet.add(it.screenId) }
         if (smartspaceEnabled || screenSet.isEmpty) {
             screenSet.add(Workspace.FIRST_SCREEN_ID)
+        }
+        // Anchor: include saved row screens (rows 1..N-1) so they are created during the
+        // initial bindAddScreens() pass, giving the workspace layout a chance to initialise
+        // page scroll positions for all rows before finishBindingItems() fires. Empty screens
+        // have no DB items and would otherwise be absent from this list, leaving row 1+
+        // without a page until TwoRowNavigationManager.initialize() runs — too late for
+        // isPageScrollsInitialized() to be true when the user first navigates to that row.
+        val anchorPrefs = AnchorPreferences(context)
+        for (r in 1 until anchorPrefs.rowCount) {
+            anchorPrefs.getRowScreenIds(r).mapNotNull { it.toIntOrNull() }.forEach { screenSet.add(it) }
         }
         return screenSet.array
     }

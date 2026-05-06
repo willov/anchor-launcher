@@ -42,6 +42,7 @@ import app.lawnchair.backup.LawnchairBackup
 import app.lawnchair.flowerpot.Flowerpot
 import app.lawnchair.hotseat.DisabledHotseat
 import app.lawnchair.preferences.PreferenceManager
+import app.anchor.AnchorPreferences
 import app.lawnchair.preferences2.PreferenceManager2
 import com.patrykmichalik.opto.core.setBlocking
 import app.lawnchair.ui.ModalBottomSheetContent
@@ -180,6 +181,24 @@ class LawnchairApp : LauncherApplication() {
             val pm2 = PreferenceManager2.getInstance(this)
             pm2.enableSmartspace.setBlocking(false)
             migrations.edit().putBoolean("v1_smartspace_disabled", true).apply()
+        }
+        // Pre-assign screen IDs for each row on fresh install. Row r gets screen ID r
+        // (e.g. row 1 → screen 1, row 2 → screen 2). These IDs are picked up by
+        // collectWorkspaceScreens() so all row screens are created during the initial
+        // bindAddScreens() pass — before the workspace layout happens. Without this,
+        // row 1's screen is created lazily in TwoRowNavigationManager.initialize() (called
+        // from finishBindingItems), which is after the layout pass, so
+        // isPageScrollsInitialized() is still false for that page when the user first
+        // navigates to it, causing scrollTo() to bail silently and both rows to appear
+        // linked to the same page.
+        if (!migrations.getBoolean("v2_row_screens_init", false)) {
+            val anchorPrefs = AnchorPreferences(this)
+            for (r in 1 until anchorPrefs.rowCount) {
+                if (anchorPrefs.getRowScreenIds(r).isEmpty()) {
+                    anchorPrefs.setRowScreenIds(r, setOf(r.toString()))
+                }
+            }
+            migrations.edit().putBoolean("v2_row_screens_init", true).apply()
         }
     }
 
