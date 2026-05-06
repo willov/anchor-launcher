@@ -309,4 +309,4 @@ fun About(
     }
 }
 
-private const val PRIVACY_POLICY = "https://willov-apps.se/anchor/privacy"
+private const val PRIVACY_POLICY = "https://willov-apps.se/anchor/privacy.html"
