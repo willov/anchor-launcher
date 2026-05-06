@@ -197,6 +197,10 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
         val savedRowPageIdx = preDragRowPageIndex
         preDragScreenId = -1
 
+        // Pick up any screens Launcher3 created during the drag (e.g., new page on drop).
+        // Must run BEFORE userMovedPages detection so newly-committed screens are in rowScreenIds.
+        adoptNewScreens()
+
         // Detect a legitimate page move BEFORE doing anything that might alter scroller state.
         //
         // mCurrentPage cannot tell "intentional page-to-page drag" from "auto-scrolled toward
@@ -229,8 +233,8 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
         // abort cannot clobber rowPageIndex with a stale page value.
         //
         // For non-page-move drops (delete, reposition within page), also activate the sticky
-        // page restore on Workspace BEFORE running adoptNewScreens / updateScrollRange. Once
-        // active, every setCurrentPage call — including Launcher3's deferred one fired from
+        // page restore on Workspace BEFORE running updateScrollRange. Once active, every
+        // setCurrentPage call — including Launcher3's deferred one fired from
         // removeExtraEmptyScreenDelayed via runOnPageScrollsInitialized after the state
         // transition completes — gets redirected to the saved screen's page. This defeats the
         // ordering issue where post-message timing alone cannot guarantee our restore runs
@@ -248,8 +252,6 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
         suppressPageSettle = true
         try {
             workspace.abortScrollerAnimation()
-            // Pick up screens Launcher3 created during the drag and assign them to the current row.
-            adoptNewScreens()
             updateScrollRange(activeRowIndex)
         } finally {
             suppressPageSettle = false
