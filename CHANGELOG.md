@@ -4,6 +4,8 @@ All notable changes to Anchor Launcher will be documented here.
 
 ## [Unreleased]
 
+## [0.3] - 2026-05-06
+
 ### Added
 - App drawer column count now scales automatically with the available screen width. Icons in the drawer are sized to match the workspace square cell size; the launcher fills as many columns as will fit. This gives a density-consistent drawer in portrait and landscape on all device types, without any manual column setting.
 
