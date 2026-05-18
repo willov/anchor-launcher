@@ -230,7 +230,7 @@ fun HomeScreenPreferences(
                     label = stringResource(id = R.string.anchor_workspace_spacing_label),
                     adapter = prefs2.workspaceSpacingDp.getAdapter(),
                     step = 2,
-                    valueRange = 4..40,
+                    valueRange = 0..40,
                 )
             }
         }

@@ -61,8 +61,8 @@ class PreferenceManager @Inject constructor(
     val shadowBGIcons = BoolPref("pref_shadowBGIcons", true, recreate)
     val addIconToHome = BoolPref("pref_add_icon_to_home", true)
     val hotseatColumns = IntPref("pref_hotseatColumns", 4, reloadGrid)
-    val workspaceColumns = IntPref("pref_workspaceColumns", 5)
-    val workspaceRows = IntPref("pref_workspaceRows", 7)
+    val workspaceColumns = IntPref("pref_workspaceColumns", 4)
+    val workspaceRows = IntPref("pref_workspaceRows", 9)
     val workspaceIncreaseMaxGridSize = BoolPref("pref_workspace_increase_max_grid_size", false)
     val folderRows = IdpIntPref("pref_folderRows", { numFolderRows[INDEX_DEFAULT] }, reloadGrid)
 

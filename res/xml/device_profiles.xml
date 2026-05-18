@@ -116,12 +116,12 @@
     </grid-option>
 
     <grid-option
-        launcher:name="5_by_5"
-        launcher:numRows="5"
-        launcher:numColumns="5"
+        launcher:name="4_by_9"
+        launcher:numRows="9"
+        launcher:numColumns="4"
         launcher:numFolderRows="4"
         launcher:numFolderColumns="4"
-        launcher:numHotseatIcons="5"
+        launcher:numHotseatIcons="4"
         launcher:numExtendedHotseatIcons="6"
         launcher:dbFile="launcher.db"
         launcher:inlineNavButtonsEndSpacing="@dimen/taskbar_button_margin_split"
@@ -161,8 +161,8 @@
     </grid-option>
 
     <grid-option
-        launcher:name="6_by_5"
-        launcher:numRows="5"
+        launcher:name="6_by_7"
+        launcher:numRows="7"
         launcher:numColumns="6"
         launcher:numSearchContainerColumns="3"
         launcher:numFolderRows="3"

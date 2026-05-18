@@ -625,26 +625,41 @@ public class InvariantDeviceProfile {
                     //   shortCells = min(portCols, portRows)   // same count (roles swap)
                     //   S = (shortRaw - 2P - (shortCells-1)*g) / shortCells
                     //
-                    // P is computed from the max inset across ALL supported profiles (both
-                    // orientations) to guarantee it's identical regardless of current rotation.
+                    // P only needs to protect the SHORT side of the screen:
+                    //   - Portrait left/right insets  (≈0 on gesture-nav phones)
+                    //   - Landscape top/bottom insets (≈0–50px; gesture bar if it stays at bottom)
+                    //
+                    // The LONG side is protected automatically: padV = (rawH − gridH) / 2 is
+                    // always hundreds of pixels larger than portrait top/bottom insets, so
+                    // Phase 4's per-edge compensation always produces positive paddings there.
+                    // Using max(all 4 insets) incorrectly inflates P by the portrait bottom
+                    // inset (gesture nav ≈130px), making cells ~36dp instead of ~55dp.
                     // ═══════════════════════════════════════════════════════════════════════
 
                     int rawW = dp.getDeviceProperties().getWidthPx();
                     int rawH = dp.getDeviceProperties().getHeightPx();
                     Rect ins = dp.getInsets();
 
-                    // Phase 2: Find max inset across ALL supported profiles (both orientations)
-                    // to guarantee P is identical regardless of current rotation.
-                    int maxInsetAllOrientations = Math.max(Math.max(ins.top, ins.bottom),
-                            Math.max(ins.left, ins.right));
+                    boolean dpLand = rawW > rawH;
+
+                    // P must protect the short side only: portrait L/R and landscape T/B.
+                    // Long-side insets are covered by padV = (rawH−gridH)/2, which is always large.
+                    int shortSideInset = dpLand
+                            ? Math.max(ins.top, ins.bottom)
+                            : Math.max(ins.left, ins.right);
                     for (DeviceProfile profile : dp.inv.supportedProfiles) {
                         Rect profIns = profile.getInsets();
-                        maxInsetAllOrientations = Math.max(maxInsetAllOrientations,
-                                Math.max(Math.max(profIns.top, profIns.bottom),
-                                        Math.max(profIns.left, profIns.right)));
+                        int pW = profile.getDeviceProperties().getWidthPx();
+                        int pH = profile.getDeviceProperties().getHeightPx();
+                        int profShortInset = (pW > pH)
+                                ? Math.max(profIns.top, profIns.bottom)
+                                : Math.max(profIns.left, profIns.right);
+                        shortSideInset = Math.max(shortSideInset, profShortInset);
                     }
-                    // 8dp extra ensures the grid never clips into system UI on any device.
-                    int P = maxInsetAllOrientations + Math.round(8 * density);
+                    // 4dp extra keeps the grid clear of system UI on typical devices.
+                    // (Reduced from 8dp; large landscape status-bar insets were inflating P
+                    // and making S too small for the icon+label budget on 5-column phones.)
+                    int P = shortSideInset + Math.round(4 * density);
 
                     // Safety margin: icon drawable must not exceed the cell boundary.
                     int safetyPx = Math.round(4 * density);
@@ -654,7 +669,6 @@ public class InvariantDeviceProfile {
                     // AnchorTransposeHook.afterInitGrid() may have already swapped for
                     // landscape. Portrait profiles built in the same initGrid() call would
                     // then see landscape-swapped values → wrong S and wrong padding.
-                    boolean dpLand = dp.getDeviceProperties().isLandscape();
                     app.lawnchair.preferences.PreferenceManager anchorPm =
                             app.lawnchair.preferences.PreferenceManager.getInstance(context);
                     int portCols = Math.max(1, anchorPm.getWorkspaceColumns().get());
@@ -737,29 +751,50 @@ public class InvariantDeviceProfile {
                         dp.numShownAllAppsColumns = naturalDrawerCols;
                     }
 
-                    // Force portrait-canonical icon size so cells are the same physical size
-                    // in both orientations (Lawnchair XML specifies smaller landscape values).
-                    // Rescale iconDrawablePaddingPx proportionally if icon size changes.
-                    int origIconSizePx = dp.iconSizePx;
-                    dp.iconSizePx = Math.max(1, Math.round(dp.inv.iconSize[INDEX_DEFAULT] * density));
-                    if (origIconSizePx > 0 && dp.iconSizePx != origIconSizePx) {
-                        dp.iconDrawablePaddingPx = Math.max(0,
-                                Math.round(dp.iconDrawablePaddingPx
-                                        * (float) dp.iconSizePx / origIconSizePx));
-                    }
+                    // Icon sizing: symmetric padding + label within cell.
+                    //
+                    // Constraint: iconTopPadding = (S - I) / 2  (equals the side padding,
+                    // so icon centre lands at S/2 in both axes — spatially stable on rotation).
+                    // The same stripe that is "below the icon" in portrait becomes "to the
+                    // right of the icon" in landscape after 90° CW rotation.
+                    //
+                    // Solve for I:  I = S - 2 * (textHeight + drawablePad)
+                    //
+                    // calculateTextHeight returns font-metrics (ascent+descent), which is the
+                    // actual rendered height. If the full font makes the icon < minIconPx, scale
+                    // the font down proportionally so the label still fits at minIconPx icon size.
+                    // Only hide labels if the cell is too small for even an 8dp font.
+                    float textH = Utilities.calculateTextHeight(dp.iconTextSizePx);
+                    int drawablePadPx = Math.round(2 * density);
+                    int labelBudgetPx = (int) Math.ceil(textH) + drawablePadPx;
+                    // round to even (Phase 3 parity rule applies to icon size too)
+                    int targetIconPx = ((s - 2 * labelBudgetPx) / 2) * 2;
+                    int minIconPx = Math.round(24 * density);
 
-                    // Clamp icon drawable to cell with safety margin.
-                    if (dp.iconSizePx > s - 2 * safetyPx) {
-                        dp.iconSizePx = Math.max(1, s - 2 * safetyPx);
-                        dp.iconDrawablePaddingPx = 0;
+                    if (targetIconPx >= minIconPx) {
+                        // Full font fits — use as-is.
+                        dp.iconSizePx = targetIconPx;
+                        dp.iconDrawablePaddingPx = drawablePadPx;
+                    } else {
+                        // Full font makes the icon too small. Scale font down so the label
+                        // fits within the symmetric half-cell at minIconPx icon size.
+                        // availForText = (S − minIconPx) / 2 − drawablePad
+                        int availForText = (s - minIconPx) / 2 - drawablePadPx;
+                        if (availForText >= 8 * density) {
+                            // calculateTextHeight is linear in font size, so scaling holds.
+                            dp.iconTextSizePx *= (float) availForText / textH;
+                            dp.iconSizePx = (minIconPx / 2) * 2;
+                            dp.iconDrawablePaddingPx = drawablePadPx;
+                        } else {
+                            // Cell too small for any readable label — hide it, fill with icon.
+                            dp.iconTextSizePx = 0;
+                            dp.iconDrawablePaddingPx = 0;
+                            dp.maxIconTextLineCount = 0;
+                            dp.iconSizePx = Math.max(2, ((s - 2 * safetyPx) / 2) * 2);
+                        }
                     }
-
-                    // Place icon top so drawable centre = S/2. Label hangs below into the
-                    // row gap — CellLayout does not clip children, so this is fine.
                     dp.iconTopPaddingPx = (s - dp.iconSizePx) / 2;
 
-                    // Square cells: labels overflow naturally into the row gap (standard
-                    // Launcher3 behaviour — clipChildren=false on CellLayout).
                     dp.cellWidthPx = s;
                     dp.cellHeightPx = s;
                     dp.cellLayoutBorderSpacePx.set(g, g);

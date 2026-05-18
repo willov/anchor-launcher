@@ -641,10 +641,10 @@ class PreferenceManager2 @Inject constructor(
         onSet = { reloadHelper.reloadGrid() },
     )
 
-    /** Workspace cell gap in dp. Default 16. Drives the square cell size S in withDimensionsOverride. */
+    /** Workspace cell gap in dp. Default 4. Drives the square cell size S in withDimensionsOverride. */
     val workspaceSpacingDp = preference(
         key = intPreferencesKey(name = "workspace_spacing_dp"),
-        defaultValue = 16,
+        defaultValue = 4,
         onSet = { reloadHelper.reloadGrid() },
     )
 
