@@ -285,6 +285,7 @@
     <string name="icon_sizes">Icon size</string>
 
     <string name="show_labels">Show labels</string>
+    <string name="show_group_labels">Show group labels</string>
     <string name="label_size">Label size</string>
     <string name="twoline_label">Use multiple lines</string>
 

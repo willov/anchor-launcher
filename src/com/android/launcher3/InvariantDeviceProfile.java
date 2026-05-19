@@ -644,17 +644,23 @@ public class InvariantDeviceProfile {
 
                     // P must protect the short side only: portrait L/R and landscape T/B.
                     // Long-side insets are covered by padV = (rawH−gridH)/2, which is always large.
+                    //
+                    // Use info.supportedBounds (fully populated before any profile is built)
+                    // instead of dp.inv.supportedProfiles, which is EMPTY_LIST the first time
+                    // initGrid() runs (profiles are added to supportedProfiles only after the
+                    // entire build loop completes). Using the empty list gave P = 4dp for the
+                    // first (portrait) profile, producing an oversized S that pushed the bottom
+                    // row of icons off-screen on the first launch.
                     int shortSideInset = dpLand
                             ? Math.max(ins.top, ins.bottom)
                             : Math.max(ins.left, ins.right);
-                    for (DeviceProfile profile : dp.inv.supportedProfiles) {
-                        Rect profIns = profile.getInsets();
-                        int pW = profile.getDeviceProperties().getWidthPx();
-                        int pH = profile.getDeviceProperties().getHeightPx();
-                        int profShortInset = (pW > pH)
-                                ? Math.max(profIns.top, profIns.bottom)
-                                : Math.max(profIns.left, profIns.right);
-                        shortSideInset = Math.max(shortSideInset, profShortInset);
+                    for (WindowBounds wb : info.supportedBounds) {
+                        int wbW = wb.bounds.width();
+                        int wbH = wb.bounds.height();
+                        int wbShortInset = (wbW > wbH)
+                                ? Math.max(wb.insets.top, wb.insets.bottom)
+                                : Math.max(wb.insets.left, wb.insets.right);
+                        shortSideInset = Math.max(shortSideInset, wbShortInset);
                     }
                     // 4dp extra keeps the grid clear of system UI on typical devices.
                     // (Reduced from 8dp; large landscape status-bar insets were inflating P
@@ -802,6 +808,33 @@ public class InvariantDeviceProfile {
                     }
                     dp.iconTopPaddingPx = (s - dp.iconSizePx) / 2;
 
+                    // updateWorkspacePadding() ran before this lambda and set folderIconSizePx
+                    // from the XML profile's iconSizePx (pre-override). Recompute it here.
+                    //
+                    // FolderIcon.onMeasure (iconCenterVertically branch) block-centres using
+                    // cellHeightPx = iconSizePx + textH. The topPadding it adds pushes the circle
+                    // down by (s - iconSizePx - textH)/2. To land the circle centre at s/2 — the
+                    // same physical position as a regular workspace icon — the effective icon slot
+                    // fed to the 0.92 factor must be iconSizePx + textH, not iconSizePx alone.
+                    //
+                    // When folder labels are ON we use iconSizePx so the circle fits above the
+                    // label with a small gap. When they are OFF (default) we use the larger
+                    // slot so the circle centre stays aligned with regular icons.
+                    boolean showFolderLabels = PreferenceExtensionsKt.firstBlocking(
+                            app.lawnchair.preferences2.PreferenceManager2.INSTANCE
+                                    .get(context).getShowIconLabelsOnHomeScreenFolder());
+                    int folderSlotPx;
+                    if (!showFolderLabels && dp.iconTextSizePx > 0) {
+                        int textHpx = (int) Utilities.calculateTextHeight(dp.iconTextSizePx);
+                        // Cap so circle stays inside cell: folderIconSizePx ≤ s - topPadding.
+                        int maxSlot = (int) ((s - (s - dp.iconSizePx - textHpx) / 2.0f) / 0.96f);
+                        folderSlotPx = Math.min(dp.iconSizePx + textHpx, maxSlot);
+                    } else {
+                        folderSlotPx = dp.iconSizePx;
+                    }
+                    dp.folderIconSizePx = Math.round(folderSlotPx * 0.92f);
+                    dp.folderIconOffsetYPx = (folderSlotPx - dp.folderIconSizePx) / 2;
+
                     dp.cellWidthPx = s;
                     dp.cellHeightPx = s;
                     dp.cellLayoutBorderSpacePx.set(g, g);
@@ -844,7 +877,21 @@ public class InvariantDeviceProfile {
 
     public void onPreferencesChanged(Context context) {
         Context appContext = context.getApplicationContext();
-        MAIN_EXECUTOR.execute(() -> onConfigChanged(appContext));
+        // Use onPrefsOnlyChanged instead of onConfigChanged: preference changes do not constitute
+        // a rotation event and must not trigger AnchorTransposeHook.beforeConfigChanged, which
+        // would spuriously remap grid coordinates if KEY_LAST_ROTATION ever diverges from the
+        // current rotation.
+        MAIN_EXECUTOR.execute(() -> onPrefsOnlyChanged(appContext));
+    }
+
+    /** Called when user preferences change (not a display config change). Skips transpose hook. */
+    private void onPrefsOnlyChanged(Context context) {
+        Object[] oldState = toModelState();
+        initGrid(context, getCurrentGridName(context));
+        boolean modelPropsChanged = !Arrays.equals(oldState, toModelState());
+        for (OnIDPChangeListener listener : mChangeListeners) {
+            listener.onIdpChanged(modelPropsChanged);
+        }
     }
 
     /**

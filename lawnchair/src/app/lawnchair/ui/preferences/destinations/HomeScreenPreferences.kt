@@ -348,6 +348,12 @@ fun HomeScreenPreferences(
                     label = stringResource(id = R.string.show_labels),
                 )
             }
+            Item {
+                SwitchPreference(
+                    adapter = prefs2.showIconLabelsOnHomeScreenFolder.getAdapter(),
+                    label = stringResource(id = R.string.show_group_labels),
+                )
+            }
             Item(
                 "workspace_label_size",
                 homeScreenLabelsAdapter.state.value,

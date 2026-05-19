@@ -209,12 +209,21 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
         icon.mFolderName = icon.findViewById(R.id.folder_icon_name);
         icon.mFolderName.setText(folderInfo.title);
         icon.mFolderName.setCompoundDrawablePadding(0);
+        // Anchor: the label view is already positioned by topMargin within FolderIcon's FrameLayout.
+        // BubbleTextView.onMeasure adds iconTopPaddingPx when mCenterVertically=true, which would
+        // double-pad the text and push it below the cell boundary. Disable centering here so the
+        // view renders text at its own top (i.e. flush with the label area).
+        icon.mFolderName.setCenterVertically(false);
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) icon.mFolderName.getLayoutParams();
         if (folderInfo.container == ItemInfo.NO_ID) {
             lp.topMargin = grid.getAllAppsProfile().getIconSizePx() + grid.getAllAppsProfile().getIconDrawablePaddingPx();
             icon.mBackground = new PreviewBackground(activity.getDragLayer().getContext());
         } else {
-            lp.topMargin = grid.iconSizePx + grid.iconDrawablePaddingPx;
+            // Anchor: position the label directly below the folder circle (not below iconSizePx).
+            // folderIconOffsetYPx centres the circle within its slot; the circle bottom is at
+            // folderIconOffsetYPx + folderIconSizePx. Adding iconDrawablePaddingPx gives the same
+            // gap between circle and label as a BubbleTextView has between its icon and label.
+            lp.topMargin = grid.folderIconOffsetYPx + grid.folderIconSizePx + grid.iconDrawablePaddingPx;
         }
 
         icon.setTag(folderInfo);
@@ -639,12 +648,20 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         boolean shouldCenterIcon = mActivity.getDeviceProfile().iconCenterVertically;
         if (shouldCenterIcon) {
-            int iconSize = mActivity.getDeviceProfile().iconSizePx;
-            Paint.FontMetrics fm = mFolderName.getPaint().getFontMetrics();
-            int cellHeightPx = iconSize + mFolderName.getCompoundDrawablePadding()
-                    + (int) Math.ceil(fm.bottom - fm.top);
-            setPadding(getPaddingLeft(), (MeasureSpec.getSize(heightMeasureSpec)
-                    - cellHeightPx) / 2, getPaddingRight(), getPaddingBottom());
+            DeviceProfile dp = mActivity.getDeviceProfile();
+            int top;
+            if (dp.iconTopPaddingPx > 0) {
+                // Anchor: use the same top padding as BubbleTextView so the folder label
+                // lands on the same baseline as regular workspace icon labels.
+                top = dp.iconTopPaddingPx;
+            } else {
+                int iconSize = dp.iconSizePx;
+                Paint.FontMetrics fm = mFolderName.getPaint().getFontMetrics();
+                int cellHeightPx = iconSize + mFolderName.getCompoundDrawablePadding()
+                        + (int) Math.ceil(fm.bottom - fm.top);
+                top = (MeasureSpec.getSize(heightMeasureSpec) - cellHeightPx) / 2;
+            }
+            setPadding(getPaddingLeft(), top, getPaddingRight(), getPaddingBottom());
         }
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     }

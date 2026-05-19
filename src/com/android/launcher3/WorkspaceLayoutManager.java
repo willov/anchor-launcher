@@ -116,9 +116,11 @@ public interface WorkspaceLayoutManager {
                                         .getEnableLabelInDock())); // LC-Note: Show/hide folder title based on dock label preference
             }
         } else {
-            // Show folder title if not in the hotseat
             if (child instanceof FolderIcon) {
-                ((FolderIcon) child).setTextVisible(true);
+                ((FolderIcon) child).setTextVisible(
+                        PreferenceExtensionsKt.firstBlocking(
+                                PreferenceManager2.getInstance(child.getContext())
+                                        .getShowIconLabelsOnHomeScreenFolder()));
             }
             layout = getScreenWithId(screenId);
         }
