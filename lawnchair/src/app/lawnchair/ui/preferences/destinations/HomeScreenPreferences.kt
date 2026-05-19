@@ -55,6 +55,16 @@ import com.android.launcher3.LauncherSettings
 import com.android.launcher3.R
 import com.android.launcher3.Utilities
 import com.android.launcher3.celllayout.CellPosMapper
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import com.patrykmichalik.opto.core.setBlocking
 import kotlinx.coroutines.launch
 
 object HomeScreenRoutes {
@@ -235,6 +245,80 @@ fun HomeScreenPreferences(
             }
         }
         val homeScreenLabelsAdapter = prefs2.showIconLabelsOnHomeScreen.getAdapter()
+        var showLabelsOffDialog by remember { mutableStateOf(false) }
+        var showLabelsOnDialog by remember { mutableStateOf(false) }
+        var prevLabelsOn by remember { mutableStateOf(homeScreenLabelsAdapter.state.value) }
+        var dialogAddColumn by remember { mutableStateOf(true) }
+        var dialogIncreaseSpacing by remember { mutableStateOf(true) }
+        var dialogRemoveColumn by remember { mutableStateOf(true) }
+        var dialogReduceSpacing by remember { mutableStateOf(true) }
+
+        if (showLabelsOffDialog) {
+            AlertDialog(
+                onDismissRequest = { showLabelsOffDialog = false },
+                title = { Text(stringResource(id = R.string.labels_off_dialog_title)) },
+                text = {
+                    Column {
+                        Text(stringResource(id = R.string.labels_off_dialog_body))
+                        Spacer(modifier = androidx.compose.ui.Modifier.height(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = dialogAddColumn, onCheckedChange = { dialogAddColumn = it })
+                            Text(stringResource(id = R.string.labels_off_dialog_add_column))
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = dialogIncreaseSpacing, onCheckedChange = { dialogIncreaseSpacing = it })
+                            Text(stringResource(id = R.string.labels_off_dialog_increase_spacing))
+                        }
+                    }
+                },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        if (dialogAddColumn) prefs.workspaceColumns.set(prefs.workspaceColumns.get() + 1)
+                        if (dialogIncreaseSpacing) prefs2.workspaceSpacingDp.setBlocking(12)
+                        showLabelsOffDialog = false
+                    }) { Text(stringResource(id = R.string.labels_off_dialog_apply)) }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { showLabelsOffDialog = false }) {
+                        Text(stringResource(id = android.R.string.cancel))
+                    }
+                },
+            )
+        }
+
+        if (showLabelsOnDialog) {
+            AlertDialog(
+                onDismissRequest = { showLabelsOnDialog = false },
+                title = { Text(stringResource(id = R.string.labels_on_dialog_title)) },
+                text = {
+                    Column {
+                        Text(stringResource(id = R.string.labels_on_dialog_body))
+                        Spacer(modifier = androidx.compose.ui.Modifier.height(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = dialogRemoveColumn, onCheckedChange = { dialogRemoveColumn = it })
+                            Text(stringResource(id = R.string.labels_on_dialog_remove_column))
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = dialogReduceSpacing, onCheckedChange = { dialogReduceSpacing = it })
+                            Text(stringResource(id = R.string.labels_on_dialog_reduce_spacing))
+                        }
+                    }
+                },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        if (dialogRemoveColumn) prefs.workspaceColumns.set(maxOf(1, prefs.workspaceColumns.get() - 1))
+                        if (dialogReduceSpacing) prefs2.workspaceSpacingDp.setBlocking(4)
+                        showLabelsOnDialog = false
+                    }) { Text(stringResource(id = R.string.labels_off_dialog_apply)) }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { showLabelsOnDialog = false }) {
+                        Text(stringResource(id = android.R.string.cancel))
+                    }
+                },
+            )
+        }
+
         PreferenceGroup(heading = stringResource(id = R.string.icons)) {
             Item {
                 SliderPreference(
@@ -247,7 +331,20 @@ fun HomeScreenPreferences(
             }
             Item {
                 SwitchPreference(
-                    adapter = homeScreenLabelsAdapter,
+                    checked = homeScreenLabelsAdapter.state.value,
+                    onCheckedChange = { newValue ->
+                        homeScreenLabelsAdapter.onChange(newValue)
+                        if (prevLabelsOn && !newValue) {
+                            dialogAddColumn = true
+                            dialogIncreaseSpacing = true
+                            showLabelsOffDialog = true
+                        } else if (!prevLabelsOn && newValue) {
+                            dialogRemoveColumn = true
+                            dialogReduceSpacing = true
+                            showLabelsOnDialog = true
+                        }
+                        prevLabelsOn = newValue
+                    },
                     label = stringResource(id = R.string.show_labels),
                 )
             }

@@ -467,7 +467,7 @@ class PreferenceManager2 @Inject constructor(
 
     val showIconLabelsOnHomeScreenFolder = preference(
         key = booleanPreferencesKey(name = "show_icon_labels_on_home_screen_folder"),
-        defaultValue = context.resources.getBoolean(R.bool.config_default_show_icon_labels_on_home_screen),
+        defaultValue = false,
         onSet = { reloadHelper.reloadGrid() },
     )
 
@@ -641,10 +641,10 @@ class PreferenceManager2 @Inject constructor(
         onSet = { reloadHelper.reloadGrid() },
     )
 
-    /** Workspace cell gap in dp. Default 4. Drives the square cell size S in withDimensionsOverride. */
+    /** Workspace cell gap in dp. 4dp on phones, 12dp on tablets. Drives S in withDimensionsOverride. */
     val workspaceSpacingDp = preference(
         key = intPreferencesKey(name = "workspace_spacing_dp"),
-        defaultValue = 4,
+        defaultValue = if (context.resources.configuration.smallestScreenWidthDp >= 600) 12 else 4,
         onSet = { reloadHelper.reloadGrid() },
     )
 

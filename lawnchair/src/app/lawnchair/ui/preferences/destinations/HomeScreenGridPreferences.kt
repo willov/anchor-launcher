@@ -59,7 +59,7 @@ fun HomeScreenGridPreferences(
             }
         }
 
-        val maxGridSize = if (increaseMaxGridSize.state.value) 20 else 10
+        val maxGridSize = if (increaseMaxGridSize.state.value) 30 else 20
 
         PreferenceGroup {
             Item {

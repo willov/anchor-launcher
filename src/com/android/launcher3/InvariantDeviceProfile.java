@@ -758,40 +758,47 @@ public class InvariantDeviceProfile {
                     // The same stripe that is "below the icon" in portrait becomes "to the
                     // right of the icon" in landscape after 90° CW rotation.
                     //
-                    // Solve for I:  I = S - 2 * (textHeight + drawablePad)
+                    // When labels are ON:  I = S - 2*(textHeight + drawablePad).
+                    // calculateTextHeight returns font-metrics (ascent+descent). If the full
+                    // font makes I < minIconPx, scale the font down so the label fits at
+                    // minIconPx. Only hide labels if even an 8dp font doesn't fit.
                     //
-                    // calculateTextHeight returns font-metrics (ascent+descent), which is the
-                    // actual rendered height. If the full font makes the icon < minIconPx, scale
-                    // the font down proportionally so the label still fits at minIconPx icon size.
-                    // Only hide labels if the cell is too small for even an 8dp font.
-                    float textH = Utilities.calculateTextHeight(dp.iconTextSizePx);
-                    int drawablePadPx = Math.round(2 * density);
-                    int labelBudgetPx = (int) Math.ceil(textH) + drawablePadPx;
-                    // round to even (Phase 3 parity rule applies to icon size too)
-                    int targetIconPx = ((s - 2 * labelBudgetPx) / 2) * 2;
+                    // When labels are OFF: fill the cell with the icon so it doesn't look
+                    // tiny with empty space below it.
+                    boolean showLabels = PreferenceExtensionsKt.firstBlocking(
+                            app.lawnchair.preferences2.PreferenceManager2.INSTANCE
+                                    .get(context).getShowIconLabelsOnHomeScreen());
                     int minIconPx = Math.round(24 * density);
 
-                    if (targetIconPx >= minIconPx) {
-                        // Full font fits — use as-is.
-                        dp.iconSizePx = targetIconPx;
-                        dp.iconDrawablePaddingPx = drawablePadPx;
-                    } else {
-                        // Full font makes the icon too small. Scale font down so the label
-                        // fits within the symmetric half-cell at minIconPx icon size.
-                        // availForText = (S − minIconPx) / 2 − drawablePad
-                        int availForText = (s - minIconPx) / 2 - drawablePadPx;
-                        if (availForText >= 8 * density) {
-                            // calculateTextHeight is linear in font size, so scaling holds.
-                            dp.iconTextSizePx *= (float) availForText / textH;
-                            dp.iconSizePx = (minIconPx / 2) * 2;
+                    if (showLabels && dp.iconTextSizePx > 0) {
+                        float textH = Utilities.calculateTextHeight(dp.iconTextSizePx);
+                        int drawablePadPx = Math.round(2 * density);
+                        int labelBudgetPx = (int) Math.ceil(textH) + drawablePadPx;
+                        // round to even (Phase 3 parity rule applies to icon size too)
+                        int targetIconPx = ((s - 2 * labelBudgetPx) / 2) * 2;
+
+                        if (targetIconPx >= minIconPx) {
+                            dp.iconSizePx = targetIconPx;
                             dp.iconDrawablePaddingPx = drawablePadPx;
                         } else {
-                            // Cell too small for any readable label — hide it, fill with icon.
-                            dp.iconTextSizePx = 0;
-                            dp.iconDrawablePaddingPx = 0;
-                            dp.maxIconTextLineCount = 0;
-                            dp.iconSizePx = Math.max(2, ((s - 2 * safetyPx) / 2) * 2);
+                            int availForText = (s - minIconPx) / 2 - drawablePadPx;
+                            if (availForText >= 8 * density) {
+                                dp.iconTextSizePx *= (float) availForText / textH;
+                                dp.iconSizePx = (minIconPx / 2) * 2;
+                                dp.iconDrawablePaddingPx = drawablePadPx;
+                            } else {
+                                dp.iconTextSizePx = 0;
+                                dp.iconDrawablePaddingPx = 0;
+                                dp.maxIconTextLineCount = 0;
+                                dp.iconSizePx = Math.max(2, ((s - 2 * safetyPx) / 2) * 2);
+                            }
                         }
+                    } else {
+                        // Labels off — fill cell with icon, no label budget wasted.
+                        dp.iconTextSizePx = 0;
+                        dp.iconDrawablePaddingPx = 0;
+                        dp.maxIconTextLineCount = 0;
+                        dp.iconSizePx = Math.max(2, ((s - 2 * safetyPx) / 2) * 2);
                     }
                     dp.iconTopPaddingPx = (s - dp.iconSizePx) / 2;
 

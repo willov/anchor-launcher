@@ -102,6 +102,15 @@
     <string name="icons">Icons</string>
     <string name="grid">Grid</string>
     <string name="anchor_workspace_spacing_label">Cell spacing (dp)</string>
+    <string name="labels_off_dialog_title">Labels turned off</string>
+    <string name="labels_off_dialog_body">Adjust layout for the extra space?</string>
+    <string name="labels_off_dialog_add_column">Add an extra column</string>
+    <string name="labels_off_dialog_increase_spacing">Increase cell spacing to 12dp</string>
+    <string name="labels_off_dialog_apply">Apply</string>
+    <string name="labels_on_dialog_title">Labels turned on</string>
+    <string name="labels_on_dialog_body">Revert layout adjustments for labels?</string>
+    <string name="labels_on_dialog_remove_column">Remove a column</string>
+    <string name="labels_on_dialog_reduce_spacing">Reduce cell spacing to 4dp</string>
     <string name="layout">Layout</string>
 
     <!-- Generic styling options -->
