@@ -4,6 +4,32 @@ All notable changes to Anchor Launcher will be documented here.
 
 ## [Unreleased]
 
+### Added
+- Rotation animation now has a **Fade duration** slider (50–600 ms) that controls how quickly icons fade back in after a rotation.
+- Dialog when toggling labels off offers to add a column and increase cell spacing; toggling labels back on offers the reverse.
+- Grid row/column slider max raised to 20 (30 with the extended range toggle) to support label-free high-density layouts.
+- Folder labels can now be shown on the home screen via Settings → Home Screen → Show labels on folders.
+
+### Changed
+- Rotation animation modes are now **Traditional / Instant / Fade**. "Fade" hides the icons instantly during the grid rebind (so the system's pre-transpose reflow never flashes through) and fades them back in over the pixel-stable wallpaper once settled. The fade-in speed is set by the new slider. The legacy "Crossfade" setting is migrated to "Fade".
+- Wallpaper stabilization reworked to a single world-camera model. The wallpaper is now a fixed 2D world with one camera position `(worldX, worldY)`; page scroll moves the camera horizontally by a continuous gesture-driven delta, row transitions move it vertically, and rotation never touches the camera — so a pure rotation is pixel-perfect by construction. This replaces the previous four-offset model with its rotation-sync locks and drift animator, which were the source of the background snapping back to the page baseline after navigating rows and then scrolling.
+- Rotation transition no longer fills the screen with the wallpaper's dominant colour. The workspace icons are hidden during the grid rebind and faded back in once it settles, over the already pixel-stable wallpaper — a cleaner, non-jarring transition.
+
+### Fixed
+- After rotating on the first page of an upper navigation row, that page visibly slid in from the side while the wallpaper stayed still. Cause: the row-contiguity reorder physically re-adds CellLayout views, and the workspace's `LayoutTransition` animated that move. The reorder is now wrapped to suppress the transition, so it is instant. A secondary one-frame page-flip during rebind is also prevented by setting the active row's parked screen as a pending-restore target before the rebind.
+- Background no longer snaps back to the page baseline after navigating up/down a row and then swiping horizontally (removed the drift-to-baseline behaviour entirely).
+- Removed the "background drift after rotation" setting (the world-camera model has no baseline to drift toward).
+- Labels on the bottom row were clipped — font-metrics height is now used for the label budget so text always fits inside the cell.
+- Icons were undersized when labels were off — the label budget no longer shrinks the icon when labels are disabled.
+- Folder labels disabled by default — folder names were clipping on the bottom row; folders are identifiable by their icon previews.
+- Folder icon circle now matches the size of regular workspace icons and stays vertically centred in its cell.
+- Default grid changed to 4×9 on phones (was 5×7) to better use the screen space freed by removing the hotseat and smartspace.
+- Cell spacing now defaults to 4 dp on phones and 12 dp on tablets.
+- Cell spacing slider minimum lowered to 0 dp.
+- Folder label text was not appearing even when the toggle was enabled — a double-padding bug in the label view pushed text below the cell boundary. Labels now render correctly.
+- Bottom row of icons was shifted outside the visible workspace on first launch — the cell-size calculation used an empty profile list on the first `initGrid()` call, giving a padding of 4 dp instead of the correct ~44 dp and producing an oversized grid. Now reads insets from `DisplayController.Info.supportedBounds`, which is fully populated before any profile is built.
+- Preference changes (e.g. toggling labels) no longer risk spuriously remapping grid coordinates — the reload path now bypasses the rotation-transpose hook that is only appropriate for display orientation changes.
+
 ## [0.3] - 2026-05-06
 
 ### Added

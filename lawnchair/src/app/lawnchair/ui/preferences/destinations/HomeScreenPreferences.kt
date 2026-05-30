@@ -409,9 +409,9 @@ fun HomeScreenPreferences(
             }
         }
         PreferenceGroup(heading = stringResource(id = R.string.anchor_section_label)) {
+            val anchorPrefs = remember { app.anchor.AnchorPreferences(context) }
+            var transition by remember { mutableStateOf(anchorPrefs.rotationTransition) }
             Item {
-                val anchorPrefs = remember { app.anchor.AnchorPreferences(context) }
-                var transition by remember { mutableStateOf(anchorPrefs.rotationTransition) }
                 val transitionAdapter = customPreferenceAdapter(transition) { newValue ->
                     transition = newValue
                     anchorPrefs.rotationTransition = newValue
@@ -425,11 +425,41 @@ fun HomeScreenPreferences(
                         ListPreferenceEntry(app.anchor.AnchorPreferences.TRANSITION_INSTANT) {
                             stringResource(id = R.string.anchor_rotation_transition_instant)
                         },
-                        ListPreferenceEntry(app.anchor.AnchorPreferences.TRANSITION_CROSSFADE) {
-                            stringResource(id = R.string.anchor_rotation_transition_crossfade)
+                        ListPreferenceEntry(app.anchor.AnchorPreferences.TRANSITION_FADE) {
+                            stringResource(id = R.string.anchor_rotation_transition_fade)
                         },
                     ),
                     label = stringResource(id = R.string.anchor_rotation_transition_label),
+                )
+            }
+            // Fade duration only applies to the Fade mode.
+            if (transition == app.anchor.AnchorPreferences.TRANSITION_FADE) {
+                Item {
+                    var duration by remember { mutableStateOf(anchorPrefs.rotationFadeDurationMs) }
+                    val durationAdapter = customPreferenceAdapter(duration) { newValue ->
+                        duration = newValue
+                        anchorPrefs.rotationFadeDurationMs = newValue
+                    }
+                    SliderPreference(
+                        label = stringResource(id = R.string.anchor_rotation_fade_duration_label),
+                        adapter = durationAdapter,
+                        valueRange = app.anchor.AnchorPreferences.FADE_DURATION_MIN..
+                            app.anchor.AnchorPreferences.FADE_DURATION_MAX,
+                        step = 25,
+                        showUnit = "ms",
+                    )
+                }
+            }
+            Item {
+                var useTest by remember { mutableStateOf(anchorPrefs.useTestWallpaper) }
+                val useTestAdapter = customPreferenceAdapter(useTest) { newValue ->
+                    useTest = newValue
+                    anchorPrefs.useTestWallpaper = newValue
+                }
+                SwitchPreference(
+                    adapter = useTestAdapter,
+                    label = stringResource(id = R.string.anchor_test_wallpaper_label),
+                    description = stringResource(id = R.string.anchor_test_wallpaper_description),
                 )
             }
         }

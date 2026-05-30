@@ -37,6 +37,7 @@ import app.anchor.navigation.SwipeDownStatusBarController
 import app.anchor.navigation.TwoRowNavigationManager
 import app.anchor.navigation.TwoRowSwipeTouchController
 import app.anchor.rotation.RotationAnimator
+import app.anchor.rotation.WallpaperStabilizationManager
 import app.lawnchair.data.AppDatabase
 import app.lawnchair.data.wallpaper.service.WallpaperService
 import app.lawnchair.gestures.GestureController
@@ -102,6 +103,7 @@ import kotlinx.coroutines.launch
 class LawnchairLauncher : QuickstepLauncher() {
     val twoRowNavigationManager by unsafeLazy { TwoRowNavigationManager(this) }
     val rotationAnimator by unsafeLazy { RotationAnimator(this) }
+    val wallpaperStabilizationManager by unsafeLazy { WallpaperStabilizationManager(this) }
 
     private val defaultOverlay by unsafeLazy { OverlayCallbackImpl(this) }
     private val prefs by unsafeLazy { PreferenceManager.getInstance(this) }
@@ -259,6 +261,13 @@ class LawnchairLauncher : QuickstepLauncher() {
         AppDatabase.INSTANCE.get(this).checkpointSync()
     }
 
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        // Set the rotation overlay opaque BEFORE super() triggers the view relayout.
+        // This ensures the overlay covers the workspace rebind rather than being one event late.
+        rotationAnimator.notifyConfigChanging(newConfig)
+        super.onConfigurationChanged(newConfig)
+    }
+
     override fun onNewIntent(intent: Intent?) {
         if (intent != null && intent.action == LawnchairShortcutActivity.START_ACTION) {
             val handlerString = intent.getStringExtra(LawnchairShortcutActivity.EXTRA_HANDLER)
@@ -309,8 +318,12 @@ class LawnchairLauncher : QuickstepLauncher() {
     override fun setupViews() {
         super.setupViews()
         twoRowNavigationManager.setup()
+        wallpaperStabilizationManager.setup()
         rotationAnimator.setup()
         workspace.setAnchorTwoRowManager(twoRowNavigationManager)
+        workspace.setWallpaperStabilizerCallback { offset ->
+            wallpaperStabilizationManager.onScrollOffset(offset)
+        }
         getDragController().addDragListener(object : DragController.DragListener {
             override fun onDragStart(dragObject: DropTarget.DragObject, options: DragOptions) {
                 twoRowNavigationManager.onDragStarted()
@@ -322,10 +335,27 @@ class LawnchairLauncher : QuickstepLauncher() {
     }
 
     override fun finishBindingItems(pagesBoundFirst: com.android.launcher3.util.IntSet) {
+        // Before super() runs Launcher3's transient setCurrentPage during rebind, set the active
+        // row's parked screen as a pending-restore target. Workspace.setCurrentPage redirects to it
+        // immediately, so the page never momentarily flips to the wrong index (which renders as the
+        // page "sliding in from another screen" on upper-row pages that aren't workspace-page-0).
+        val parked = twoRowNavigationManager.parkedScreenId()
+        if (parked >= 0) workspace.setPendingRestoreScreenId(parked)
         super.finishBindingItems(pagesBoundFirst)
+        // After config-change rebind Launcher3 may have reconstructed workspace pages in a
+        // different order (interleaving rows). Re-sort and enforce contiguity before
+        // onWorkspacePageSettled calls updateScrollRange, so range indices are correct.
+        twoRowNavigationManager.enforceContiguity()
         // Ensure row-matrix initialization happens even if the user never scrolls horizontally.
         // onPageEndTransition only fires after a scroll animation; this call covers the startup case.
         twoRowNavigationManager.onWorkspacePageSettled(workspace.currentPage)
+        // Parking is done — clear the pending-restore redirect set before super() so it doesn't
+        // interfere with subsequent user navigation.
+        if (parked >= 0) workspace.clearPendingRestoreScreenId()
+        // Clear any transient transition state left over from a rotation that interrupted a
+        // row-switch. The world camera position itself is untouched — a rotation is pixel-perfect
+        // by construction, so there is nothing to re-sync here.
+        wallpaperStabilizationManager.resetForWorkspaceReady()
         rotationAnimator.onWorkspaceRebound()
     }
 

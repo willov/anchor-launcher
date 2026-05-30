@@ -21,10 +21,40 @@ class AnchorPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_DRAWER_SECTION_HEADERS, true)
         set(value) { prefs.edit().putBoolean(KEY_DRAWER_SECTION_HEADERS, value).apply() }
 
-    /** Which animation to use when the device rotates. One of the TRANSITION_* constants. */
+    /**
+     * True (default) — wallpaper pixels stay at the same glass positions after rotation.
+     * A full-screen view renders the wallpaper with a canvas counter-rotation so the spatial
+     * stability invariant extends to the background, not just the icon grid.
+     */
+    var wallpaperRotationLock: Boolean
+        get() = prefs.getBoolean(KEY_WALLPAPER_ROTATION_LOCK, true)
+        set(value) { prefs.edit().putBoolean(KEY_WALLPAPER_ROTATION_LOCK, value).apply() }
+
+    /**
+     * Debug: render a generated test pattern (2D colour gradient + labelled grid) instead of the
+     * real device wallpaper for the stabilized background. Lets the rotation/parallax behaviour be
+     * verified visually. Default off. Takes effect on the next launcher restart.
+     */
+    var useTestWallpaper: Boolean
+        get() = prefs.getBoolean(KEY_USE_TEST_WALLPAPER, false)
+        set(value) { prefs.edit().putBoolean(KEY_USE_TEST_WALLPAPER, value).apply() }
+
+    /**
+     * Which animation to use when the device rotates. One of the TRANSITION_* constants.
+     * The legacy [TRANSITION_CROSSFADE] value is migrated to [TRANSITION_FADE] on read.
+     */
     var rotationTransition: String
-        get() = prefs.getString(KEY_ROTATION_TRANSITION, TRANSITION_CROSSFADE)!!
+        get() = when (val v = prefs.getString(KEY_ROTATION_TRANSITION, TRANSITION_FADE)!!) {
+            TRANSITION_CROSSFADE -> TRANSITION_FADE
+            else -> v
+        }
         set(value) { prefs.edit().putString(KEY_ROTATION_TRANSITION, value).apply() }
+
+    /** Duration (ms) of the fade for [TRANSITION_FADE]. */
+    var rotationFadeDurationMs: Int
+        get() = prefs.getInt(KEY_FADE_DURATION, FADE_DURATION_DEFAULT)
+            .coerceIn(FADE_DURATION_MIN, FADE_DURATION_MAX)
+        set(value) { prefs.edit().putInt(KEY_FADE_DURATION, value).apply() }
 
     /**
      * What a downward swipe from the top edge does.
@@ -64,7 +94,10 @@ class AnchorPreferences(context: Context) {
         private const val PREFS_NAME             = "anchor_prefs"
         private const val KEY_DRAWER_LETTER_SCROLLER = "drawer_letter_scroller"
         private const val KEY_DRAWER_SECTION_HEADERS  = "drawer_section_headers"
+        private const val KEY_WALLPAPER_ROTATION_LOCK = "wallpaper_rotation_lock"
+        private const val KEY_USE_TEST_WALLPAPER = "use_test_wallpaper"
         private const val KEY_ROTATION_TRANSITION = "rotation_transition"
+        private const val KEY_FADE_DURATION       = "rotation_fade_duration_ms"
         private const val KEY_STATUS_BAR_SWIPE    = "status_bar_swipe_action"
         private const val KEY_ROW_COUNT           = "row_count"
         private const val KEY_ROW_SCREENS_PREFIX  = "row_screens_"
@@ -72,9 +105,17 @@ class AnchorPreferences(context: Context) {
         const val SWIPE_NOTIFICATIONS = "notifications"
         const val SWIPE_NEXT_ROW      = "next_row"
 
-        const val TRANSITION_TRADITIONAL = "traditional"
-        const val TRANSITION_INSTANT     = "instant"
-        const val TRANSITION_CROSSFADE   = "crossfade"
+        const val TRANSITION_TRADITIONAL  = "traditional"
+        const val TRANSITION_INSTANT      = "instant"
+        // Fade the icons out, rebind the grid hidden, fade them back in over the stabilized
+        // wallpaper. The legacy "crossfade" value maps here for backward compatibility.
+        const val TRANSITION_FADE         = "fade"
+        const val TRANSITION_CROSSFADE    = "crossfade"  // legacy value → treated as TRANSITION_FADE
+
+        // Fade duration bounds (ms) for the fade-based transitions.
+        const val FADE_DURATION_MIN = 50
+        const val FADE_DURATION_MAX = 600
+        const val FADE_DURATION_DEFAULT = 150
 
         const val MAX_ROWS = 5
     }

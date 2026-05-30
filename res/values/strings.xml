@@ -45,7 +45,10 @@
     <string name="anchor_rotation_transition_label">Rotation animation</string>
     <string name="anchor_rotation_transition_traditional">Traditional</string>
     <string name="anchor_rotation_transition_instant">Instant</string>
-    <string name="anchor_rotation_transition_crossfade">Crossfade</string>
+    <string name="anchor_rotation_transition_fade">Fade</string>
+    <string name="anchor_rotation_fade_duration_label">Fade duration</string>
+    <string name="anchor_test_wallpaper_label">Debug: test wallpaper</string>
+    <string name="anchor_test_wallpaper_description">Show a generated test pattern (gradient + grid) instead of the real wallpaper, to verify rotation and parallax. Restart required.</string>
 
     <!-- Work folder name -->
     <string name="work_folder_name">Work</string>

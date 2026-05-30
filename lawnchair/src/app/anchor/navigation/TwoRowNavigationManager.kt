@@ -294,6 +294,27 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
     // ── Page tracking ────────────────────────────────────────────────────────────────────────────
 
     /**
+     * Re-sorts [rowScreenIds] by current workspace page index and calls reorderPages() to enforce
+     * row contiguity. Called from [LawnchairLauncher.finishBindingItems] after config-change
+     * rebind — Launcher3 rebuilds the workspace in its own order, which can interleave pages from
+     * different rows (e.g. [row0_p0, row0_p1, row1_p0, row1_p1, row0_p2] instead of the desired
+     * [row0_p0, row0_p1, row0_p2, row1_p0, row1_p1]).
+     *
+     * Must be called BEFORE [onWorkspacePageSettled] so that [updateScrollRange] sees the
+     * corrected indices.
+     */
+    fun enforceContiguity() {
+        if (!initialized) return
+        val workspace = launcher.workspace
+        for (r in rowScreenIds.indices) {
+            rowScreenIds[r].sortBy { id ->
+                workspace.getPageIndexForScreenId(id).takeIf { it >= 0 } ?: Int.MAX_VALUE
+            }
+        }
+        workspace.reorderPages(rowScreenIds.flatten())
+    }
+
+    /**
      * Called from [LawnchairLauncher.finishBindingItems] and [LawnchairLauncher.onPageEndTransition].
      * Triggers lazy initialization on the first call, then tracks the per-row page position.
      */
@@ -364,7 +385,15 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
         handler.removeCallbacks(clearTransitionFlag)
         handler.postDelayed(clearTransitionFlag, PHASE_MS * 2 + 100)
 
+        // cancel() may synchronously fire any prior animation's withEndAction (which might call
+        // unfreezeOffset), so we freeze AFTER cancel to guarantee the freeze takes effect.
         workspace.animate().cancel()
+        launcher.wallpaperStabilizationManager.freezeOffset()
+        launcher.wallpaperStabilizationManager.onRowTransition(
+            toRow = toRow,
+            totalRows = rowScreenIds.size,
+            durationMs = PHASE_MS * 2,
+        )
         workspace.animate()
             .translationY(exitTranslation)
             .setDuration(PHASE_MS)
@@ -378,6 +407,7 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
                     .setDuration(PHASE_MS)
                     .setInterpolator(DecelerateInterpolator())
                     .withEndAction {
+                        launcher.wallpaperStabilizationManager.unfreezeOffset()
                         handler.removeCallbacks(clearTransitionFlag)
                         isTransitioning = false
                     }
@@ -391,6 +421,20 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
         val pageIdx = rowPageIndex.getOrElse(rowIndex) { 0 }
         val screenId = ids.getOrElse(pageIdx) { ids.firstOrNull() ?: return 0 }
         return launcher.workspace.getPageIndexForScreenId(screenId)
+    }
+
+    /**
+     * The screen ID the active row is currently parked on (its remembered page). Returns -1 if not
+     * yet initialised. Used by [LawnchairLauncher.finishBindingItems] to set a pending-restore target
+     * *before* super() runs, so Launcher3's transient setCurrentPage during rebind is redirected to
+     * the correct page immediately — preventing a one-frame page flip (the "slides in from another
+     * screen" artifact) on a row whose parked page is not workspace-page-0.
+     */
+    fun parkedScreenId(): Int {
+        if (!initialized) return -1
+        val ids     = rowScreenIds.getOrNull(activeRowIndex) ?: return -1
+        val pageIdx = rowPageIndex.getOrElse(activeRowIndex) { 0 }
+        return ids.getOrElse(pageIdx) { ids.firstOrNull() ?: -1 }
     }
 
     private fun updateScrollRange(rowIndex: Int) {

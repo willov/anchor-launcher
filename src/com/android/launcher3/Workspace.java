@@ -251,6 +251,17 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         mAnchorTwoRowManager = manager;
     }
 
+    // Anchor: wallpaper stabilization — receives the canonical parallax offset every scroll frame.
+    public interface WallpaperOffsetCallback {
+        void onOffsetChanged(float offset);
+    }
+    @Nullable
+    private WallpaperOffsetCallback mWallpaperStabilizerCallback;
+
+    public void setWallpaperStabilizerCallback(WallpaperOffsetCallback cb) {
+        mWallpaperStabilizerCallback = cb;
+    }
+
     /**
      * CellInfo for the cell that is currently being dragged
      */
@@ -530,6 +541,21 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     private float getWallpaperOffsetForPage(int page) {
         int pageScroll = getScrollForPage(page);
         return mWallpaperOffset.wallpaperOffsetForScroll(pageScroll);
+    }
+
+    /**
+     * Returns the wallpaper parallax offset (0..1) relative to the current row's page range.
+     * Unlike {@code mWallpaperOffset.wallpaperOffsetForScroll} which uses absolute scrollX across
+     * all workspace pages, this is scoped to [mAllowedPageStart..mAllowedPageEnd]. This means
+     * switching rows at the same relative page position produces the same offset, preventing
+     * cross-row jumps in the wallpaper position.
+     */
+    public float getCurrentWallpaperOffset() {
+        int startScroll = getScrollForPage(mAllowedPageStart);
+        int endScroll   = getScrollForPage(Math.min(mAllowedPageEnd, getPageCount() - 1));
+        int range = endScroll - startScroll;
+        if (range <= 0) return 0f;
+        return Math.max(0f, Math.min(1f, (float)(getScrollX() - startScroll) / range));
     }
 
     /**
@@ -1499,6 +1525,13 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         // Inform the Launcher activity that the page transition ended so that it can react to the
         // newly visible page if it wants to.
         mLauncher.onPageEndTransition();
+
+        // Sync wallpaper offset when a page settles, including instantaneous jumps via
+        // setCurrentPage (which don't go through computeScroll). This ensures the correct
+        // position is shown after rotation repositions the workspace without animation.
+        if (mWallpaperStabilizerCallback != null) {
+            mWallpaperStabilizerCallback.onOffsetChanged(getCurrentWallpaperOffset());
+        }
     }
 
     public void setLauncherOverlay(LauncherOverlayTouchProxy overlay) {
@@ -1655,6 +1688,9 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     public void computeScroll() {
         super.computeScroll();
         mWallpaperOffset.syncWithScroll();
+        if (mWallpaperStabilizerCallback != null) {
+            mWallpaperStabilizerCallback.onOffsetChanged(getCurrentWallpaperOffset());
+        }
     }
 
     @Override
@@ -3531,6 +3567,10 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
             }
         }
         super.setCurrentPage(currentPage);
+        // setCurrentPage() is a programmatic page jump, not a user gesture. In the world-camera
+        // model the wallpaper camera is moved only by real scroll gestures (via computeScroll →
+        // onOffsetChanged), so we deliberately do NOT drive the camera from here — doing so would
+        // inject a spurious delta on every row-nav park / rotation rebind.
     }
 
     @Override
@@ -3542,6 +3582,7 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
             }
         }
         super.setCurrentPage(currentPage, overridePrevPage);
+        // Programmatic jump — see setCurrentPage(int) above: the camera is gesture-driven only.
     }
 
     /** Called by TwoRowNavigationManager to restrict horizontal scroll to the active row. */
@@ -3560,6 +3601,31 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         // Update PagedView's mMinScroll/mMaxScroll so the built-in edge-glow effect fires at
         // row boundaries rather than only at the absolute workspace edges.
         updateMinAndMaxScrollX();
+    }
+
+    /**
+     * Returns true when the workspace is fully settled: no page transition in progress,
+     * scroller finished, and no pending snap target. Use this to detect when it is safe to
+     * reveal the rotation overlay — checking the scroller alone is not sufficient because
+     * mIsPageInTransition may still be set (meaning onPageEndTransition hasn't fired yet,
+     * and a subsequent onWorkspacePageSettled → snapToPage may be about to start).
+     */
+    public boolean isPageScrollSettled() {
+        if (isPageInTransition() || !mScroller.isFinished() || mNextPage != INVALID_PAGE) {
+            return false;
+        }
+        // Also require scrollX to actually match the current page's target scroll. After a rotation
+        // rebind on a row whose first page is not workspace-page-0 (e.g. an upper navigation row),
+        // mCurrentPage is correct but scrollX is still 0 — the position correction hasn't run yet.
+        // The scroller is "finished" in that instant, so without this check we would reveal the
+        // workspace and then visibly slide it to the right scroll position. Tolerate 1px rounding.
+        if (isPageScrollsInitialized()) {
+            int target = getScrollForPage(getCurrentPage());
+            if (Math.abs(getScrollX() - target) > 1) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
@@ -3602,16 +3668,26 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                 (mCurrentPage >= 0 && mCurrentPage < getChildCount())
                         ? (CellLayout) getChildAt(mCurrentPage) : null;
 
-        // Move each known layout into its target position without touching un-listed screens.
-        int insertAt = 0;
-        for (int screenId : screenIdOrder) {
-            CellLayout cl = mWorkspaceScreens.get(screenId);
-            if (cl == null) continue;
-            int from = indexOfChild(cl);
-            if (from == insertAt) { insertAt++; continue; }
-            if (from >= 0) removeViewAt(from);
-            addView(cl, insertAt);
-            insertAt++;
+        // Disable the workspace LayoutTransition while we physically move CellLayouts. Without this,
+        // each removeViewAt()/addView() animates the page sliding to its new slot (the
+        // CHANGE_DISAPPEARING transition). After a rotation rebind that reorder is needed to restore
+        // row contiguity, and the slide is visible as the page "sliding in from another screen" on a
+        // row whose pages were interleaved. The reshuffle must be instant.
+        disableLayoutTransitions();
+        try {
+            // Move each known layout into its target position without touching un-listed screens.
+            int insertAt = 0;
+            for (int screenId : screenIdOrder) {
+                CellLayout cl = mWorkspaceScreens.get(screenId);
+                if (cl == null) continue;
+                int from = indexOfChild(cl);
+                if (from == insertAt) { insertAt++; continue; }
+                if (from >= 0) removeViewAt(from);
+                addView(cl, insertAt);
+                insertAt++;
+            }
+        } finally {
+            enableLayoutTransitions();
         }
 
         // Rebuild mScreenOrder from the new child order (un-listed extras land at the tail).
@@ -3734,7 +3810,7 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     @Override
     public void scrollTo(int x, int y) {
         if (!isPageScrollsInitialized()) {
-            android.util.Log.w("AnchorNav", "scrollTo(" + x + ") STALE BLOCK scrollX=" + getScrollX(), new Exception("scrollTo stale"));
+            // mPageScrolls not yet valid — ignore this scroll so we don't snap to a stale position.
             return;
         }
         int childCount = getChildCount();
