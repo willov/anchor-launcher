@@ -44,6 +44,16 @@ public class WallpaperOffsetInterpolator {
     private boolean mLockedToDefaultPage;
     private int mNumScreens;
 
+    // Anchor: preserves the system-wallpaper horizontal position across a row switch. Rows have
+    // independent page positions, so following scrollX directly would jump the wallpaper to the new
+    // row's parked-page offset. When frozen, the reported offset = the preserved value plus the
+    // DELTA of the live row-relative offset since the freeze — so the position is held across the
+    // switch but still tracks the user's horizontal scroll in the new row (a delta model, matching
+    // the custom-image world-camera). Frozen while mFrozen is true.
+    private boolean mFrozen = false;
+    private float mFrozenBaseOffset = 0f;   // preserved offset at freeze time
+    private float mFrozenLiveAtFreeze = Float.NaN;  // live row-relative offset at freeze time
+
     private PreferenceManager prefs;
 
     public WallpaperOffsetInterpolator(Workspace<?> workspace) {
@@ -60,6 +70,39 @@ public class WallpaperOffsetInterpolator {
      */
     public void setLockToDefaultPage(boolean lockToDefaultPage) {
         mLockedToDefaultPage = lockToDefaultPage;
+    }
+
+    /**
+     * Anchor: preserve the system-wallpaper horizontal offset across a row switch. Captures the
+     * current offset; subsequent scrolls in the new row move it by their delta. Called by the row
+     * manager at the start of a row transition. The freeze persists (it is not auto-released) so the
+     * preserved position survives indefinitely until the next row switch re-freezes it.
+     */
+    public void freezeHorizontalOffset() {
+        // Capture the offset the user CURRENTLY sees. If we're already frozen (e.g. up → scroll →
+        // down), that's the accumulated effective offset (base + scroll delta), NOT the raw
+        // scroll-derived value — otherwise the second row switch would snap to the new row's actual
+        // scroll position instead of preserving what's on screen.
+        if (mFrozen && !Float.isNaN(mFrozenLiveAtFreeze)) {
+            float live = rawRowRelativeOffset(mWorkspace.getScrollX());
+            mFrozenBaseOffset = Utilities.boundToRange(
+                    mFrozenBaseOffset + (live - mFrozenLiveAtFreeze), 0f, 1f);
+        } else {
+            mFrozenBaseOffset = rawRowRelativeOffset(mWorkspace.getScrollX());
+        }
+        mFrozenLiveAtFreeze = Float.NaN;  // re-baselined on the first sync after the switch settles
+        mFrozen = true;
+    }
+
+    public void unfreezeHorizontalOffset() {
+        mFrozen = false;
+        mFrozenLiveAtFreeze = Float.NaN;
+    }
+
+    /** The live row-relative (or full-stack) offset for a scroll, ignoring the freeze. */
+    private float rawRowRelativeOffset(int scroll) {
+        wallpaperOffsetForScroll(scroll, getNumScrollableScreensExcludingEmpty(), sTempInt);
+        return sTempInt[1] == 0 ? 0f : ((float) sTempInt[0]) / sTempInt[1];
     }
 
     public boolean isLockedToDefaultPage() {
@@ -99,9 +142,18 @@ public class WallpaperOffsetInterpolator {
         // _______   _______   ________
         // |P0|P1|   |P2|P3|   |P4|<E>|
         // ¯¯¯¯¯¯¯   ¯¯¯¯¯¯¯   ¯¯¯¯¯¯¯¯
-        int endIndex = getNumPagesExcludingEmpty() - 1;
-        final int leftPageIndex = mIsRtl ? endIndex : 0;
-        final int rightPageIndex = mIsRtl ? 0 : endIndex;
+        // Anchor: in multi-row mode, scope the parallax range to the active row's pages so that
+        // navigating UP/DOWN a row (which moves scrollX to a different flat-stack position) does not
+        // snap the system wallpaper. Within a row it still gives normal left/right parallax.
+        final boolean anchorRowActive = mWorkspace.isAnchorRowRangeActive();
+        int firstIndex = 0;
+        int lastIndex = getNumPagesExcludingEmpty() - 1;
+        if (anchorRowActive) {
+            firstIndex = mWorkspace.getAllowedPageStart();
+            lastIndex = mWorkspace.getAllowedPageEnd();
+        }
+        final int leftPageIndex = mIsRtl ? lastIndex : firstIndex;
+        final int rightPageIndex = mIsRtl ? firstIndex : lastIndex;
 
         // Calculate the scroll range
         int leftPageScrollX = mWorkspace.getScrollForPage(leftPageIndex);
@@ -117,6 +169,17 @@ public class WallpaperOffsetInterpolator {
         int adjustedScroll = scroll - leftPageScrollX -
                 mWorkspace.getLayoutTransitionOffsetForPage(0);
         adjustedScroll = Utilities.boundToRange(adjustedScroll, 0, scrollRange);
+
+        // Anchor: when scoped to a row, map the offset directly to [0,1] over that row's scroll
+        // range (out[0]/out[1] = adjustedScroll/scrollRange). This keeps every row's parallax in the
+        // same 0..1 band, so switching rows doesn't move the wallpaper, and avoids the flat-stack
+        // screen-count maths below (which assumes the whole workspace is one scrollable strip).
+        if (anchorRowActive) {
+            out[0] = mIsRtl ? (scrollRange - adjustedScroll) : adjustedScroll;
+            out[1] = scrollRange;
+            return;
+        }
+
         out[1] = (numScreensForWallpaperParallax - 1) * scrollRange;
 
         // The offset is now distributed 0..1 between the left and right pages that we care about,
@@ -130,8 +193,18 @@ public class WallpaperOffsetInterpolator {
     }
 
     public float wallpaperOffsetForScroll(int scroll) {
-        wallpaperOffsetForScroll(scroll, getNumScrollableScreensExcludingEmpty(), sTempInt);
-        return ((float) sTempInt[0]) / sTempInt[1];
+        float live = rawRowRelativeOffset(scroll);
+        if (!mFrozen) {
+            return live;
+        }
+        // Frozen (post row-switch): hold the preserved offset, plus the user's scroll delta in the
+        // new row since the freeze. Re-baseline mFrozenLiveAtFreeze on the first call so the row's
+        // parked-page position counts as "no delta" — the wallpaper stays put on the switch itself.
+        if (Float.isNaN(mFrozenLiveAtFreeze)) {
+            mFrozenLiveAtFreeze = live;
+        }
+        float result = mFrozenBaseOffset + (live - mFrozenLiveAtFreeze);
+        return Utilities.boundToRange(result, 0f, 1f);
     }
 
     /**
@@ -168,6 +241,18 @@ public class WallpaperOffsetInterpolator {
     public void syncWithScroll() {
         int numScreens = getNumScrollableScreensExcludingEmpty();
         wallpaperOffsetForScroll(mWorkspace.getScrollX(), numScreens, sTempInt);
+        // Anchor: while preserving horizontal position across a row switch, override the computed
+        // offset with the frozen value (base + scroll delta in the new row). Re-express it as the
+        // arg1/arg2 ratio the offset handler expects, reusing the live range as the denominator.
+        if (mFrozen && sTempInt[1] > 0) {
+            float live = (float) sTempInt[0] / sTempInt[1];
+            if (Float.isNaN(mFrozenLiveAtFreeze)) {
+                mFrozenLiveAtFreeze = live;
+            }
+            float frozen = Utilities.boundToRange(
+                    mFrozenBaseOffset + (live - mFrozenLiveAtFreeze), 0f, 1f);
+            sTempInt[0] = Math.round(frozen * sTempInt[1]);
+        }
         Message msg = Message.obtain(mHandler, MSG_UPDATE_OFFSET, sTempInt[0], sTempInt[1],
                 mWindowToken);
         if (numScreens != mNumScreens) {

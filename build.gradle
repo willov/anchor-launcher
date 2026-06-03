@@ -135,8 +135,8 @@ final def ciRef = System.getenv("GITHUB_REF") ?: ""
 final def ciRunNumber = System.getenv("GITHUB_RUN_NUMBER") ?: ""
 
 // Anchor Launcher versioning (independent of Lawnchair's version scheme)
-final def anchorVersionName = "0.2"
-final def anchorVersionCode = 2
+final def anchorVersionName = "0.4"
+final def anchorVersionCode = 4
 
 final def quickstepMinSdk = "29"
 final def quickstepMaxSdk = "36"
@@ -378,6 +378,9 @@ play {
     // to the ANDROID_PUBLISHER_CREDENTIALS environment variable.
     track.set("internal")
     defaultToAppBundles.set(true)
+    // Keep as draft until the Play Console store listing is fully completed.
+    // Once the app is out of draft state, remove this line.
+    releaseStatus.set(com.github.triplet.gradle.androidpublisher.ReleaseStatus.DRAFT)
 }
 
 baselineProfile {

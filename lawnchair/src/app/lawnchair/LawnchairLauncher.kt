@@ -539,6 +539,8 @@ class LawnchairLauncher : QuickstepLauncher() {
     override fun onResume() {
         super.onResume()
         restartIfPending()
+        // Apply any wallpaper source/image change made in Settings without a manual restart.
+        wallpaperStabilizationManager.reapplyIfChanged()
 
         dragLayer.viewTreeObserver.addOnDrawListener(
             object : ViewTreeObserver.OnDrawListener {

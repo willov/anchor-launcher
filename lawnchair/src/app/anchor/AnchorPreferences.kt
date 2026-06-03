@@ -22,13 +22,35 @@ class AnchorPreferences(context: Context) {
         set(value) { prefs.edit().putBoolean(KEY_DRAWER_SECTION_HEADERS, value).apply() }
 
     /**
-     * True (default) — wallpaper pixels stay at the same glass positions after rotation.
-     * A full-screen view renders the wallpaper with a canvas counter-rotation so the spatial
-     * stability invariant extends to the background, not just the icon grid.
+     * Which image the stabilized background renders. One of the WALLPAPER_SOURCE_* constants.
+     *
+     * - [WALLPAPER_SOURCE_SYSTEM] (default): no stabilization — the real device wallpaper is shown
+     *   by the system (FLAG_SHOW_WALLPAPER) and rotates normally. Never black, no permission.
+     * - [WALLPAPER_SOURCE_CUSTOM]: a user-picked image (copied to app storage via the photo picker;
+     *   no permission needed) is rendered with the counter-rotation → pixel-perfect rotation.
+     * - [WALLPAPER_SOURCE_SYSTEM_STABILIZED]: render the real system wallpaper with the
+     *   counter-rotation. Requires reading the wallpaper bitmap, which needs MANAGE_EXTERNAL_STORAGE
+     *   — only available in the github/nightly builds; not a Play-safe path (power-user only).
      */
-    var wallpaperRotationLock: Boolean
-        get() = prefs.getBoolean(KEY_WALLPAPER_ROTATION_LOCK, true)
-        set(value) { prefs.edit().putBoolean(KEY_WALLPAPER_ROTATION_LOCK, value).apply() }
+    var wallpaperSource: String
+        get() = prefs.getString(KEY_WALLPAPER_SOURCE, WALLPAPER_SOURCE_SYSTEM)!!
+        set(value) { prefs.edit().putString(KEY_WALLPAPER_SOURCE, value).apply() }
+
+    /** Absolute path to the user's picked custom wallpaper image in app storage, or null. */
+    var customWallpaperPath: String?
+        get() = prefs.getString(KEY_CUSTOM_WALLPAPER_PATH, null)
+        set(value) { prefs.edit().putString(KEY_CUSTOM_WALLPAPER_PATH, value).apply() }
+
+    /**
+     * True when the counter-rotation stabilization should be active (i.e. a bitmap we can render is
+     * available). False ⇒ leave the system wallpaper alone (FLAG_SHOW_WALLPAPER, normal rotation).
+     */
+    val wallpaperStabilizationActive: Boolean
+        get() = useTestWallpaper ||
+            // Custom source only counts as active once an image has actually been picked, otherwise
+            // there is no bitmap to render and the background would go black.
+            (wallpaperSource == WALLPAPER_SOURCE_CUSTOM && customWallpaperPath != null) ||
+            wallpaperSource == WALLPAPER_SOURCE_SYSTEM_STABILIZED
 
     /**
      * Debug: render a generated test pattern (2D colour gradient + labelled grid) instead of the
@@ -94,7 +116,8 @@ class AnchorPreferences(context: Context) {
         private const val PREFS_NAME             = "anchor_prefs"
         private const val KEY_DRAWER_LETTER_SCROLLER = "drawer_letter_scroller"
         private const val KEY_DRAWER_SECTION_HEADERS  = "drawer_section_headers"
-        private const val KEY_WALLPAPER_ROTATION_LOCK = "wallpaper_rotation_lock"
+        private const val KEY_WALLPAPER_SOURCE = "wallpaper_source"
+        private const val KEY_CUSTOM_WALLPAPER_PATH = "custom_wallpaper_path"
         private const val KEY_USE_TEST_WALLPAPER = "use_test_wallpaper"
         private const val KEY_ROTATION_TRANSITION = "rotation_transition"
         private const val KEY_FADE_DURATION       = "rotation_fade_duration_ms"
@@ -116,6 +139,11 @@ class AnchorPreferences(context: Context) {
         const val FADE_DURATION_MIN = 50
         const val FADE_DURATION_MAX = 600
         const val FADE_DURATION_DEFAULT = 150
+
+        // Wallpaper source for the stabilized background.
+        const val WALLPAPER_SOURCE_SYSTEM = "system"                       // default: no stabilization
+        const val WALLPAPER_SOURCE_CUSTOM = "custom"                       // user-picked image
+        const val WALLPAPER_SOURCE_SYSTEM_STABILIZED = "system_stabilized" // needs MANAGE_EXTERNAL_STORAGE
 
         const val MAX_ROWS = 5
     }

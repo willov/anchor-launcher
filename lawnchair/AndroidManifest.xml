@@ -32,6 +32,9 @@
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.READ_HISTORY_BOOKMARKS" />
     <uses-permission android:name="android.permission.WRITE_HISTORY_BOOKMARKS" />
+    <!-- Anchor: set the picked custom image as the system wallpaper too (normal permission,
+         auto-granted, Play-safe) so the home/lock/recents background all match. -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
     <uses-permission android:name="android.permission.INTERACT_ACROSS_USERS" tools:ignore="ProtectedPermissions"/>
     <uses-permission android:name="android.permission.INTERACT_ACROSS_USERS_FULL" tools:ignore="ProtectedPermissions"/>
     <uses-permission android:name="android.permission.MANAGE_USERS" tools:ignore="ProtectedPermissions"/>

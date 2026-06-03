@@ -65,10 +65,25 @@ object LauncherOptionsPopup {
         val optionOrder = prefs2
             .launcherPopupOrder.firstBlocking().toLauncherOptions()
 
-        val wallpaperResString =
-            if (Utilities.existsStyleWallpapers(launcher)) R.string.styles_wallpaper_button_text else R.string.wallpapers
+        // Anchor: when a custom image is the wallpaper source, the system "Wallpaper & style" no
+        // longer drives what the user sees on the home screen — so relabel the entry to "Anchor
+        // wallpaper" and point it at our own picker instead.
+        val anchorCustomWallpaper =
+            app.anchor.AnchorPreferences(launcher).wallpaperSource ==
+                app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
+        val wallpaperResString = when {
+            anchorCustomWallpaper -> R.string.anchor_wallpaper_source_label
+            Utilities.existsStyleWallpapers(launcher) -> R.string.styles_wallpaper_button_text
+            else -> R.string.wallpapers
+        }
         val wallpaperResDrawable =
-            if (Utilities.existsStyleWallpapers(launcher)) R.drawable.ic_palette else R.drawable.ic_wallpaper
+            if (Utilities.existsStyleWallpapers(launcher) && !anchorCustomWallpaper) R.drawable.ic_palette else R.drawable.ic_wallpaper
+        val wallpaperAction: (View) -> Boolean =
+            if (anchorCustomWallpaper) {
+                { v -> app.anchor.AnchorWallpaperPicker.launch(launcher); true }
+            } else {
+                onStartWallpaperPicker
+            }
 
         val optionsList = mapOf(
             "lock" to OptionItem(
@@ -104,7 +119,7 @@ object LauncherOptionsPopup {
                 wallpaperResString,
                 wallpaperResDrawable,
                 LauncherEvent.IGNORE,
-                onStartWallpaperPicker,
+                wallpaperAction,
             ),
             "widgets" to OptionItem(
                 launcher,

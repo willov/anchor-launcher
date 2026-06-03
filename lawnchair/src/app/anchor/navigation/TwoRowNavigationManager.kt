@@ -94,19 +94,29 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
      */
     fun navigateToHome() {
         if (!initialized) return
-        val isAlreadyHome = activeRowIndex == 0 && rowPageIndex.getOrElse(0) { 0 } == 0
-        if (isAlreadyHome) return
-        val from = activeRowIndex
+        val workspace = launcher.workspace
+        val ids = rowScreenIds.getOrNull(0) ?: return
+        if (ids.isEmpty()) return
+        val homeScreenId = ids[0]
+        val homePage = workspace.getPageIndexForScreenId(homeScreenId)
+
+        // Base "already home" on the LIVE workspace page, not the cached rowPageIndex (which can be
+        // stale relative to the actual scroll position — e.g. on bottom-row page 1 it was reporting
+        // 0, making this a wrong no-op).
+        val onHomeScreen = activeRowIndex == 0 && workspace.currentPage == homePage
+        if (onHomeScreen) return
+
         if (activeRowIndex != 0) {
+            // From an upper row: drop to row 0, then ensure row 0 is parked on its first page so
+            // back goes all the way home (not just one row down).
+            rowPageIndex[0] = 0
+            val from = activeRowIndex
             activeRowIndex = 0
             animateRowTransition(from, 0)
         } else {
-            // Already on row 0 but not on page 0 — snap to first page.
-            val ids = rowScreenIds.getOrNull(0) ?: return
-            if (ids.isNotEmpty()) {
-                val targetPage = launcher.workspace.getPageIndexForScreenId(ids[0])
-                if (targetPage >= 0) launcher.workspace.snapToPage(targetPage)
-            }
+            // On row 0 but not the first page — snap to it.
+            rowPageIndex[0] = 0
+            if (homePage >= 0) workspace.snapToPage(homePage)
         }
     }
 
@@ -388,6 +398,9 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
         // cancel() may synchronously fire any prior animation's withEndAction (which might call
         // unfreezeOffset), so we freeze AFTER cancel to guarantee the freeze takes effect.
         workspace.animate().cancel()
+        // Preserve the system wallpaper's horizontal position across the row switch (rows have
+        // independent page positions). No-op for the custom-image path, which preserves worldX below.
+        workspace.freezeSystemWallpaperOffset()
         launcher.wallpaperStabilizationManager.freezeOffset()
         launcher.wallpaperStabilizationManager.onRowTransition(
             toRow = toRow,

@@ -65,6 +65,11 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
 
     private var drawable: WallpaperStabilizationDrawable? = null
 
+    // Signature of the wallpaper config currently applied (source + custom path + test flag), so
+    // reapplyIfChanged() can detect a change made in Settings and re-activate without a full restart.
+    private var appliedSignature: String? = null
+    private var listenersRegistered = false
+
     // Wallpaper bitmap cached in private app storage — no permission required to read it back.
     private val cacheFile = File(launcher.filesDir, "wallpaper_stab_cache.jpg")
 
@@ -94,12 +99,21 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     }
 
     fun setup() {
-        if (!AnchorPreferences(launcher).wallpaperRotationLock) {
+        val prefs = AnchorPreferences(launcher)
+        appliedSignature = configSignature(prefs)
+        // Only stabilize when a bitmap we can render is available (custom image, system-stabilized
+        // power-user mode, or the debug test pattern). In the default System source we leave the
+        // window's FLAG_SHOW_WALLPAPER intact so the real wallpaper shows and rotates normally —
+        // never black, no permission, no custom drawable.
+        if (!prefs.wallpaperStabilizationActive) {
             return
         }
+        activate(prefs)
+    }
 
+    private fun activate(prefs: AnchorPreferences) {
         val initialRotation = currentRotation()
-        val rowCount = AnchorPreferences(launcher).rowCount
+        val rowCount = prefs.rowCount
         val d = WallpaperStabilizationDrawable().apply {
             displayRotation = initialRotation
             worldX = 0f
@@ -112,14 +126,41 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         launcher.window?.setBackgroundDrawable(d)
         drawable = d
 
-        DisplayController.INSTANCE.get(launcher).addChangeListener(rotationListener)
-        launcher.registerReceiver(
-            wallpaperChangedReceiver,
-            IntentFilter(Intent.ACTION_WALLPAPER_CHANGED),
-        )
+        if (!listenersRegistered) {
+            DisplayController.INSTANCE.get(launcher).addChangeListener(rotationListener)
+            launcher.registerReceiver(
+                wallpaperChangedReceiver,
+                IntentFilter(Intent.ACTION_WALLPAPER_CHANGED),
+            )
+            listenersRegistered = true
+        }
 
         loadWallpaperAsync()
     }
+
+    /**
+     * Called from [LawnchairLauncher.onResume]. If the wallpaper source / custom image / test flag
+     * changed in Settings since we last applied, re-evaluate and apply without requiring a full
+     * launcher restart. Switching INTO a stabilized source activates the drawable; switching OUT
+     * (back to System) restores FLAG_SHOW_WALLPAPER so the real wallpaper shows again.
+     */
+    fun reapplyIfChanged() {
+        val prefs = AnchorPreferences(launcher)
+        val sig = configSignature(prefs)
+        if (sig == appliedSignature) return
+        appliedSignature = sig
+        if (prefs.wallpaperStabilizationActive) {
+            activate(prefs)
+        } else {
+            // Switched back to System: drop our drawable and let the system composite the wallpaper.
+            drawable = null
+            launcher.window?.setBackgroundDrawable(null)
+            launcher.window?.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+        }
+    }
+
+    private fun configSignature(prefs: AnchorPreferences): String =
+        "${prefs.wallpaperSource}|${prefs.customWallpaperPath}|${prefs.useTestWallpaper}"
 
     /**
      * Called by [app.anchor.navigation.TwoRowNavigationManager] before a row-switch animation
@@ -232,17 +273,40 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     }
 
     private fun loadWallpaperAsync() {
-        val useTest = AnchorPreferences(launcher).useTestWallpaper
+        val prefs = AnchorPreferences(launcher)
+        val useTest = prefs.useTestWallpaper
+        val source = prefs.wallpaperSource
+        val customPath = prefs.customWallpaperPath
         executor.execute {
-            val bitmap = if (useTest) generateTestWallpaper()
-                         else readWallpaperBitmap() ?: readCachedWallpaper()
+            val bitmap = when {
+                useTest -> generateTestWallpaper()
+                source == AnchorPreferences.WALLPAPER_SOURCE_CUSTOM ->
+                    customPath?.let { loadImageFile(it) }
+                // Power-user / github-nightly path: read the real system wallpaper (needs
+                // MANAGE_EXTERNAL_STORAGE). Falls back to the cached copy if the read is denied.
+                source == AnchorPreferences.WALLPAPER_SOURCE_SYSTEM_STABILIZED ->
+                    readWallpaperBitmap() ?: readCachedWallpaper()
+                else -> null
+            }
             if (bitmap == null) {
-                Log.w(TAG, "No wallpaper bitmap available (WallpaperManager denied and no cache)")
+                Log.w(TAG, "No wallpaper bitmap available for source=$source (custom=$customPath)")
             } else {
                 launcher.runOnUiThread { drawable?.wallpaperBitmap = bitmap }
             }
         }
     }
+
+    private fun loadImageFile(path: String): Bitmap? {
+        return try {
+            BitmapFactory.decodeFile(path)?.also {
+                if (it == null) Log.w(TAG, "Custom wallpaper decode failed: $path")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Custom wallpaper read failed: ${e.message}")
+            null
+        }
+    }
+
 
     /**
      * Generates a test wallpaper bitmap with a 2D colour gradient and labelled grid lines.
@@ -296,8 +360,18 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     }
 
     /**
-     * Reads the wallpaper bitmap from WallpaperManager. On success, also writes it to [cacheFile]
-     * so future launches can read it without needing MANAGE_EXTERNAL_STORAGE permission.
+     * Reads the real system wallpaper bitmap from WallpaperManager. Only used by the
+     * [AnchorPreferences.WALLPAPER_SOURCE_SYSTEM_STABILIZED] power-user source.
+     *
+     * **Permission:** `WallpaperManager.getDrawable()` requires `MANAGE_EXTERNAL_STORAGE` (or the
+     * privileged-only `READ_WALLPAPER_INTERNAL`) on Android 13+ — and from Android 14 it may only
+     * return the *default* wallpaper. `MANAGE_EXTERNAL_STORAGE` is declared in the github/nightly
+     * flavour manifests but NOT in the Play build (it is Play-policy-hostile). So this path works
+     * only for self-built github/nightly variants with "All files access" granted. For the Play
+     * build, use [AnchorPreferences.WALLPAPER_SOURCE_CUSTOM] (the permission-free photo picker).
+     *
+     * On success, also writes the bitmap to [cacheFile] so future launches survive a permission
+     * reset (e.g. from `adb install -r`).
      */
     private fun readWallpaperBitmap(): Bitmap? {
         return try {
@@ -358,13 +432,55 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         return ROW_MARGIN + t * (1.0f - 2 * ROW_MARGIN)
     }
 
-    private companion object {
-        const val TAG = "AnchorWallpaper"
+    companion object {
+        private const val TAG = "AnchorWallpaper"
         // Fraction of the wallpaper height reserved as buffer above/below the row range.
         private const val ROW_MARGIN = 0.1f
         // How far the horizontal camera travels (in world fraction) per full row-of-pages sweep.
         // 1.0 = a full left→right scroll across the row moves the camera across the whole remaining
         // wallpaper width. Tune <1.0 for gentler parallax.
         private const val HORIZONTAL_PARALLAX = 1.0f
+
+        /**
+         * Copies the user-picked image [uri] into app-private storage and points
+         * [AnchorPreferences.customWallpaperPath] at it. Photo-picker URIs grant read access without
+         * any permission. Returns true on success. Call on a background thread.
+         *
+         * When [alsoSetSystemWallpaper] is true, the same image is also set as the actual system
+         * wallpaper (home + lock) via [WallpaperManager.setBitmap] — a normal `SET_WALLPAPER`
+         * permission, auto-granted, Play-safe. This makes the chosen image appear everywhere (Anchor
+         * home, lock screen, recents, all-apps blur), not just on the Anchor workspace, so the
+         * stabilized background and the real wallpaper stay in sync. We can SET the wallpaper even
+         * though we can't READ it back.
+         */
+        fun importCustomWallpaper(
+            context: Context,
+            uri: android.net.Uri,
+            alsoSetSystemWallpaper: Boolean = true,
+        ): Boolean {
+            return try {
+                val dest = File(context.filesDir, "custom_wallpaper.jpg")
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                } ?: return false
+                AnchorPreferences(context).customWallpaperPath = dest.absolutePath
+                if (alsoSetSystemWallpaper) {
+                    try {
+                        val bmp = BitmapFactory.decodeFile(dest.absolutePath)
+                        if (bmp != null) {
+                            WallpaperManager.getInstance(context).setBitmap(bmp)
+                        }
+                    } catch (e: Exception) {
+                        // Non-fatal: the Anchor background still works even if setting the system
+                        // wallpaper fails (e.g. device policy restriction).
+                        Log.w(TAG, "Failed to set system wallpaper: ${e.message}")
+                    }
+                }
+                true
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to import custom wallpaper: ${e.message}")
+                false
+            }
+        }
     }
 }

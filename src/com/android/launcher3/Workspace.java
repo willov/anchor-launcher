@@ -251,6 +251,30 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         mAnchorTwoRowManager = manager;
     }
 
+    /**
+     * Anchor: true when the row matrix is restricting horizontal scroll to a sub-range of pages
+     * (i.e. multi-row mode). The system-wallpaper parallax interpolator uses this to scope its
+     * scroll range to the active row, so navigating between rows doesn't snap the system wallpaper
+     * to a different flat-stack position. -1 means "not restricted".
+     */
+    public boolean isAnchorRowRangeActive() {
+        return mAnchorTwoRowManager != null
+                && (mAllowedPageStart > 0 || mAllowedPageEnd < getChildCount() - 1);
+    }
+
+    public int getAllowedPageStart() { return mAllowedPageStart; }
+
+    public int getAllowedPageEnd() { return Math.min(mAllowedPageEnd, getChildCount() - 1); }
+
+    /**
+     * Anchor: preserve the system-wallpaper horizontal position across a row switch (so it doesn't
+     * jump to the new row's parked-page offset). Called by the row manager when a row transition
+     * begins. No-op for custom-image stabilization (that path preserves worldX itself).
+     */
+    public void freezeSystemWallpaperOffset() {
+        mWallpaperOffset.freezeHorizontalOffset();
+    }
+
     // Anchor: wallpaper stabilization — receives the canonical parallax offset every scroll frame.
     public interface WallpaperOffsetCallback {
         void onOffsetChanged(float offset);

@@ -18,6 +18,8 @@ package app.lawnchair.ui.preferences.destinations
 
 import android.content.Context
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,7 +67,9 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import com.patrykmichalik.opto.core.setBlocking
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 object HomeScreenRoutes {
     const val GRID = "grid"
@@ -410,6 +414,68 @@ fun HomeScreenPreferences(
         }
         PreferenceGroup(heading = stringResource(id = R.string.anchor_section_label)) {
             val anchorPrefs = remember { app.anchor.AnchorPreferences(context) }
+            val coroutineScope = rememberCoroutineScope()
+
+            // ── Wallpaper source ───────────────────────────────────────────────────────────────
+            var wallpaperSource by remember { mutableStateOf(anchorPrefs.wallpaperSource) }
+            var customPath by remember { mutableStateOf(anchorPrefs.customWallpaperPath) }
+            val pickImage = rememberLauncherForActivityResult(
+                ActivityResultContracts.PickVisualMedia(),
+            ) { uri ->
+                if (uri != null) {
+                    coroutineScope.launch(Dispatchers.IO) {
+                        val ok = app.anchor.rotation.WallpaperStabilizationManager
+                            .importCustomWallpaper(context, uri)
+                        if (ok) {
+                            anchorPrefs.wallpaperSource =
+                                app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
+                            withContext(Dispatchers.Main) {
+                                wallpaperSource = app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
+                                customPath = anchorPrefs.customWallpaperPath
+                            }
+                        }
+                    }
+                }
+            }
+            Item {
+                val sourceAdapter = customPreferenceAdapter(wallpaperSource) { newValue ->
+                    wallpaperSource = newValue
+                    anchorPrefs.wallpaperSource = newValue
+                }
+                ListPreference(
+                    adapter = sourceAdapter,
+                    entries = listOf(
+                        ListPreferenceEntry(app.anchor.AnchorPreferences.WALLPAPER_SOURCE_SYSTEM) {
+                            stringResource(id = R.string.anchor_wallpaper_source_system)
+                        },
+                        ListPreferenceEntry(app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM) {
+                            stringResource(id = R.string.anchor_wallpaper_source_custom)
+                        },
+                    ),
+                    label = stringResource(id = R.string.anchor_wallpaper_source_label),
+                    description = stringResource(id = R.string.anchor_wallpaper_source_description),
+                )
+            }
+            if (wallpaperSource == app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM) {
+                Item {
+                    ClickablePreference(
+                        label = stringResource(id = R.string.anchor_wallpaper_pick_image_label),
+                        subtitle = if (customPath != null) {
+                            stringResource(id = R.string.anchor_wallpaper_pick_image_set)
+                        } else {
+                            stringResource(id = R.string.anchor_wallpaper_pick_image_none)
+                        },
+                        onClick = {
+                            pickImage.launch(
+                                androidx.activity.result.PickVisualMediaRequest(
+                                    ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                ),
+                            )
+                        },
+                    )
+                }
+            }
+
             var transition by remember { mutableStateOf(anchorPrefs.rotationTransition) }
             Item {
                 val transitionAdapter = customPreferenceAdapter(transition) { newValue ->

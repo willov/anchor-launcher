@@ -42,13 +42,20 @@
     <string name="anchor_drawer_letter_scroller_description">Show an A–Z strip on the right edge for quick section jumping</string>
     <string name="anchor_drawer_section_headers_label">Alphabetical section dividers</string>
     <string name="anchor_drawer_section_headers_description">Show A, B, C… headings between app groups in the drawer</string>
+    <string name="anchor_wallpaper_source_label">Wallpaper</string>
+    <string name="anchor_wallpaper_source_description">Choose a custom image to keep the background pixel-stable when you rotate. The system wallpaper rotates normally.</string>
+    <string name="anchor_wallpaper_source_system">System wallpaper (rotates normally)</string>
+    <string name="anchor_wallpaper_source_custom">Custom image (stays fixed on rotation)</string>
+    <string name="anchor_wallpaper_pick_image_label">Choose image</string>
+    <string name="anchor_wallpaper_pick_image_set">Image selected</string>
+    <string name="anchor_wallpaper_pick_image_none">No image selected</string>
     <string name="anchor_rotation_transition_label">Rotation animation</string>
     <string name="anchor_rotation_transition_traditional">Traditional</string>
     <string name="anchor_rotation_transition_instant">Instant</string>
     <string name="anchor_rotation_transition_fade">Fade</string>
     <string name="anchor_rotation_fade_duration_label">Fade duration</string>
     <string name="anchor_test_wallpaper_label">Debug: test wallpaper</string>
-    <string name="anchor_test_wallpaper_description">Show a generated test pattern (gradient + grid) instead of the real wallpaper, to verify rotation and parallax. Restart required.</string>
+    <string name="anchor_test_wallpaper_description">Show a generated test pattern (gradient + grid) instead of the real wallpaper, to verify rotation and parallax.</string>
 
     <!-- Work folder name -->
     <string name="work_folder_name">Work</string>
