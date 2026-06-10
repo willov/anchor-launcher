@@ -312,6 +312,13 @@ android {
             }
         }
 
+        // Anchor: host-side JVM unit tests for pure (Android-free) logic. Kept in its own dir so it
+        // does NOT pull in the heavyweight instrumented tests/multivalentTests tree.
+        test {
+            java.srcDirs = ['tests/unit']
+            kotlin.directories.add('tests/unit')
+        }
+
         lawn {
             java.srcDirs = ['src_flags', 'src_shortcuts_overrides', 'lawnchair/src', 'tests/shared']
             kotlin.directories.addAll('src_flags', 'src_shortcuts_overrides', 'lawnchair/src', 'tests/shared')
@@ -518,6 +525,11 @@ dependencies {
     implementation libs.androidx.exifinterface
 
     debugImplementation libs.leakcanary.android
+
+    // Anchor: host-side (JVM) unit tests for pure logic (no Android framework needed).
+    // Sources live in tests/unit; run with `./gradlew testLawnWithQuickstepPlayDebugUnitTest`.
+    testImplementation libs.junit
+    testImplementation libs.google.truth
 }
 
 ksp {

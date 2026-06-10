@@ -5,17 +5,21 @@ All notable changes to Anchor Launcher will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Wallpaper parallax** strength slider (Settings → Home Screen, shown with a custom wallpaper): sets how far the wallpaper drifts per page swipe / row switch, as a percent of the screen's short side (0–25 %, default 15 %; 0 turns parallax off).
 - Rotation animation now has a **Fade duration** slider (50–600 ms) that controls how quickly icons fade back in after a rotation.
 - Dialog when toggling labels off offers to add a column and increase cell spacing; toggling labels back on offers the reverse.
 - Grid row/column slider max raised to 20 (30 with the extended range toggle) to support label-free high-density layouts.
 - Folder labels can now be shown on the home screen via Settings → Home Screen → Show labels on folders.
 
 ### Changed
+- Resizing the grid now **keeps icons where they are** instead of compacting them onto the first pages. When the grid shrinks, empty rows/columns are removed from the edges (and an off-edge icon slides just inside the new boundary); when it grows, every icon keeps its exact position and the new space is added at the edge.
+- Wallpaper parallax is now **equal in both directions** — a page swipe and a row switch drift the wallpaper by the same amount, each axis capped independently to what the image allows (so a screen-height image still pans sideways).
 - Rotation animation modes are now **Traditional / Instant / Fade**. "Fade" hides the icons instantly during the grid rebind (so the system's pre-transpose reflow never flashes through) and fades them back in over the pixel-stable wallpaper once settled. The fade-in speed is set by the new slider. The legacy "Crossfade" setting is migrated to "Fade".
 - Wallpaper stabilization reworked to a single world-camera model. The wallpaper is now a fixed 2D world with one camera position `(worldX, worldY)`; page scroll moves the camera horizontally by a continuous gesture-driven delta, row transitions move it vertically, and rotation never touches the camera — so a pure rotation is pixel-perfect by construction. This replaces the previous four-offset model with its rotation-sync locks and drift animator, which were the source of the background snapping back to the page baseline after navigating rows and then scrolling.
 - Rotation transition no longer fills the screen with the wallpaper's dominant colour. The workspace icons are hidden during the grid rebind and faded back in once it settles, over the already pixel-stable wallpaper — a cleaner, non-jarring transition.
 
 ### Fixed
+- In landscape, navigating between rows moved the wallpaper in the wrong vertical direction. The counter-rotation inverts some bitmap axes on the glass; the row transition now accounts for that per rotation, so vertical parallax tracks correctly in every orientation.
 - After rotating on the first page of an upper navigation row, that page visibly slid in from the side while the wallpaper stayed still. Cause: the row-contiguity reorder physically re-adds CellLayout views, and the workspace's `LayoutTransition` animated that move. The reorder is now wrapped to suppress the transition, so it is instant. A secondary one-frame page-flip during rebind is also prevented by setting the active row's parked screen as a pending-restore target before the rebind.
 - Background no longer snaps back to the page baseline after navigating up/down a row and then swiping horizontally (removed the drift-to-baseline behaviour entirely).
 - Removed the "background drift after rotation" setting (the world-camera model has no baseline to drift toward).

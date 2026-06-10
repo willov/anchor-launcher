@@ -76,7 +76,17 @@ class GridSizeMigrationLogic {
 
         val shouldMigrateToStrtictlyTallerGrid =
             shouldMigrateToStrictlyTallerGrid(isDestNewDb, srcDeviceState, destDeviceState)
-        if (shouldMigrateToStrtictlyTallerGrid) {
+        // Anchor: when the new grid is a column-superset of the old one (more columns, no fewer
+        // rows), every existing item still fits at its current (x, y). Copy the workspace verbatim
+        // so icons keep their spatial positions and the new column is simply added empty — instead
+        // of falling through to the placement solver, which re-stacks all icons onto the first pages
+        // (breaking Anchor's spatial-stability model).
+        val isAnchorColumnSuperset =
+            !isAfterRestore &&
+                destDeviceState.columns > srcDeviceState.columns &&
+                destDeviceState.rows >= srcDeviceState.rows
+        val copyVerbatim = shouldMigrateToStrtictlyTallerGrid || isAnchorColumnSuperset
+        if (copyVerbatim) {
             copyTable(source, TABLE_NAME, target.writableDatabase, TABLE_NAME, context)
         } else {
             copyTable(source, TABLE_NAME, target.writableDatabase, TMP_TABLE, context)
@@ -87,9 +97,12 @@ class GridSizeMigrationLogic {
             SQLiteTransaction(target.writableDatabase).use { t ->
                 // We want to add the extra row(s) to the top of the screen, so we shift the grid
                 // down.
-                if (shouldMigrateToStrtictlyTallerGrid) {
-                    Log.d(TAG, "Migrating to strictly taller grid")
-                    if (Flags.oneGridSpecs()) {
+                if (copyVerbatim) {
+                    Log.d(TAG, "Migrating by verbatim copy (taller/wider superset grid)")
+                    // Only the strictly-taller case shifts the grid down to add new rows at the top;
+                    // the column-superset case keeps every position and adds the new column at the
+                    // edge (no shift).
+                    if (shouldMigrateToStrtictlyTallerGrid && Flags.oneGridSpecs()) {
                         shiftWorkspaceByXCells(
                             target.writableDatabase,
                             (destDeviceState.rows - srcDeviceState.rows),
@@ -100,10 +113,12 @@ class GridSizeMigrationLogic {
                     destDeviceState.writeToPrefs(context)
                     t.commit()
 
-                    if (isOneGridMigration(srcDeviceState, destDeviceState)) {
-                        statsLogManager.logger().log(LAUNCHER_ROW_SHIFT_ONE_GRID_MIGRATION)
+                    if (shouldMigrateToStrtictlyTallerGrid) {
+                        if (isOneGridMigration(srcDeviceState, destDeviceState)) {
+                            statsLogManager.logger().log(LAUNCHER_ROW_SHIFT_ONE_GRID_MIGRATION)
+                        }
+                        statsLogManager.logger().log(LAUNCHER_ROW_SHIFT_GRID_MIGRATION)
                     }
-                    statsLogManager.logger().log(LAUNCHER_ROW_SHIFT_GRID_MIGRATION)
 
                     return
                 }
@@ -318,6 +333,18 @@ class GridSizeMigrationLogic {
 
         workspaceToBeAdded.sort()
 
+        // Anchor: preserve the spatial layout across a grid resize instead of compacting everything
+        // onto the first pages (the upstream default). Per screen and per axis, when the content no
+        // longer fits we (1) DROP empty columns/rows — only as many as needed — and shift occupied
+        // cells in by the number of dropped lines before them; (2) if an item still overflows (a full
+        // axis with no empty line left to drop) we CLAMP it to the last valid index; (3) if that
+        // clamped cell is occupied, the item is DROPPED entirely rather than relocated top-left. This
+        // resolves every item, so the upstream compacting solver below normally never runs.
+        preserveAndDropEmptyEdges(
+            workspaceToBeAdded, trgX, trgY, helper, srcReader, destReader, idsInUse,
+        )
+        if (workspaceToBeAdded.isEmpty()) return
+
         // First we create a collection of the screens
         val screens: MutableList<Int> = ArrayList()
         for (screenId in 0..destReader.mLastScreenId) {
@@ -371,6 +398,102 @@ class GridSizeMigrationLogic {
             screenId++
         }
     }
+
+    /**
+     * Anchor spatial-preserving placement (DROP-EMPTY-EDGES). For each screen, each axis is handled
+     * independently:
+     *  - If the content already fits the new size on that axis, every cell keeps its exact
+     *    coordinate (interior gaps are preserved — we do NOT collapse them).
+     *  - If it overflows by `need` lines, we DROP `need` EMPTY columns/rows chosen from the
+     *    right/bottom edge inward, then shift each occupied line left/up by the count of dropped
+     *    lines that lay before it. This slides the off-edge items inward by the minimum, while items
+     *    that fit and lie before the first drop stay put.
+     *
+     *  - If an item still overflows after dropping all available empties (a genuinely full axis), it
+     *    is CLAMPED to the last valid index. If that cell is already occupied, the item is DROPPED
+     *    (removed from the workspace) rather than relocated — we never fall back to the compacting
+     *    solver, which would jump it top-left.
+     *
+     * Concretely the per-axis remap is computed once over the union of occupied lines, so multi-row
+     * screens stay consistent (a column's new index is the same for every item in it). EVERY entry is
+     * resolved (placed or dropped) and removed from [workspaceToBeAdded].
+     *
+     * @VisibleForTesting so the position-preservation behaviour can be unit-tested directly.
+     */
+    @VisibleForTesting
+    fun preserveAndDropEmptyEdges(
+        workspaceToBeAdded: MutableList<DbEntry>,
+        trgX: Int,
+        trgY: Int,
+        helper: DatabaseHelper,
+        srcReader: DbReader,
+        destReader: DbReader,
+        idsInUse: MutableList<Int>,
+    ) {
+        // Occupancy seeded with any items already present in the destination DB, per screen.
+        val occupancyByScreen = HashMap<Int, GridOccupancy>()
+        fun occupancyFor(screenId: Int): GridOccupancy =
+            occupancyByScreen.getOrPut(screenId) {
+                GridOccupancy(trgX, trgY).apply {
+                    destReader.mWorkspaceEntriesByScreenId[screenId]?.forEach { e ->
+                        if (e.cellX in 0 until trgX && e.cellY in 0 until trgY) {
+                            markCells(e.cellX, e.cellY, e.spanX, e.spanY, true)
+                        }
+                    }
+                }
+            }
+
+        val byScreen = workspaceToBeAdded.groupBy { it.screenId }
+        for ((screenId, entries) in byScreen) {
+            // Per-axis remap (old line index -> new line index) by dropping empty edge lines.
+            val occupiedCols = sortedSetOf<Int>()
+            val occupiedRows = sortedSetOf<Int>()
+            for (e in entries) {
+                for (cx in e.cellX until e.cellX + e.spanX) occupiedCols.add(cx)
+                for (cy in e.cellY until e.cellY + e.spanY) occupiedRows.add(cy)
+            }
+            val colMap = dropEmptyEdgesMap(occupiedCols, trgX)
+            val rowMap = dropEmptyEdgesMap(occupiedRows, trgY)
+
+            val occ = occupancyFor(screenId)
+            for (entry in entries.sortedWith(compareBy({ it.cellY }, { it.cellX }))) {
+                val newX = colMap[entry.cellX] ?: entry.cellX
+                val newY = rowMap[entry.cellY] ?: entry.cellY
+                // Every entry is resolved here (placed or dropped) and removed from the to-add list,
+                // so nothing falls through to the upstream compacting solver — a collision means the
+                // item is DROPPED, not relocated top-left.
+                workspaceToBeAdded.remove(entry)
+                val fits = newX + entry.spanX <= trgX && newY + entry.spanY <= trgY
+                if (!fits || !occ.isRegionVacant(newX, newY, entry.spanX, entry.spanY)) {
+                    if (DEBUG) {
+                        Log.d(
+                            TAG,
+                            "Dropping item ${entry.id} on screen $screenId: clamped cell " +
+                                "($newX,$newY) ${if (!fits) "out of bounds" else "occupied"}",
+                        )
+                    }
+                    continue
+                }
+                entry.cellX = newX
+                entry.cellY = newY
+                occ.markCells(newX, newY, entry.spanX, entry.spanY, true)
+                GridSizeMigrationDBController.insertEntryInDb(
+                    helper, entry, srcReader.mTableName, destReader.mTableName, idsInUse,
+                )
+                // Register so later items on this screen treat this cell as occupied.
+                val screenList = destReader.mWorkspaceEntriesByScreenId[screenId]
+                if (screenList != null) {
+                    screenList.add(entry)
+                } else {
+                    destReader.mWorkspaceEntriesByScreenId[screenId] = mutableListOf(entry)
+                }
+            }
+        }
+    }
+
+    /** Per-axis old-index -> new-index remap. Pure math lives in [GridResizePlacement] (unit-tested). */
+    private fun dropEmptyEdgesMap(occupied: Set<Int>, target: Int): Map<Int, Int> =
+        GridResizePlacement.dropEmptyEdges(occupied, target)
 
     private fun placeItems(
         itemsToPlace: WorkspaceItemsToPlace,

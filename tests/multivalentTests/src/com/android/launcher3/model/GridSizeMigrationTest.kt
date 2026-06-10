@@ -37,6 +37,7 @@ import com.android.launcher3.util.SandboxApplication
 import com.google.common.truth.Truth.assertThat
 import org.junit.After
 import org.junit.Before
+import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -86,6 +87,10 @@ class GridSizeMigrationTest {
     @Test
     @Throws(Exception::class)
     @EnableFlags(Flags.FLAG_GRID_MIGRATION_REFACTOR)
+    @Ignore(
+        "Anchor: refactor path now PRESERVES/CLAMPS positions instead of compacting; this upstream " +
+            "test asserts top-left compaction. See preserveAndClampOverflow + the anchor* tests below.",
+    )
     fun testMigrationRefactorFlagOn() {
         testMigration()
     }
@@ -225,6 +230,10 @@ class GridSizeMigrationTest {
     @Test
     @Throws(Exception::class)
     @EnableFlags(Flags.FLAG_GRID_MIGRATION_REFACTOR)
+    @Ignore(
+        "Anchor: refactor path now PRESERVES/CLAMPS positions instead of compacting; this upstream " +
+            "test asserts top-left compaction. See preserveAndClampOverflow + the anchor* tests below.",
+    )
     fun testMigrationBackAndForthRefactorFlagOn() {
         testMigrationBackAndForth()
     }
@@ -904,6 +913,10 @@ class GridSizeMigrationTest {
     @Test
     @Throws(Exception::class)
     @EnableFlags(Flags.FLAG_GRID_MIGRATION_REFACTOR)
+    @Ignore(
+        "Anchor: refactor path now PRESERVES item pages/positions instead of reflowing onto page 0. " +
+            "This upstream test asserts every icon lands on screen 0. See preserveAndClampOverflow.",
+    )
     fun migrateFromSmallerGridBigDifferenceRefactorFlagOn() {
         migrateFromSmallerGridBigDifference()
     }
@@ -980,6 +993,10 @@ class GridSizeMigrationTest {
     @Test
     @Throws(Exception::class)
     @EnableFlags(Flags.FLAG_GRID_MIGRATION_REFACTOR)
+    @Ignore(
+        "Anchor: refactor path now PRESERVES item pages/positions instead of reflowing onto page 0. " +
+            "This upstream test asserts every icon lands on screen 0. See preserveAndClampOverflow.",
+    )
     fun migrateFromLargerGridRefactorFlagOn() {
         migrateFromLargerGrid()
     }
@@ -1051,6 +1068,202 @@ class GridSizeMigrationTest {
 
     private fun enableNewMigrationLogic(srcGridSize: String) {
         LauncherPrefs.get(context).putSync(WORKSPACE_SIZE.to(srcGridSize))
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────────
+    // Anchor: the grid migration was changed to PRESERVE spatial positions across a resize instead
+    // of compacting everything onto the first pages. When an axis no longer fits we DROP empty
+    // columns/rows from the right/bottom edge inward — only as many as needed — and shift the
+    // occupied cells in by the number of dropped lines before them. Items that fit keep their exact
+    // (x, y) and interior gaps are NOT collapsed. These tests lock that behaviour; the upstream tests
+    // that assert compaction on the refactor path are @Ignore'd above.
+    // See GridSizeMigrationLogic.preserveAndDropEmptyEdges.
+    // ─────────────────────────────────────────────────────────────────────────────────────────────
+
+    /** Growing the grid keeps every icon at its exact (x, y); the new space is added at the edge. */
+    @Test
+    @EnableFlags(Flags.FLAG_GRID_MIGRATION_REFACTOR)
+    fun anchorGrowPreservesExactPositions() {
+        // src 4×4:  p1 at (0,0), p2 at (3,0), p3 at (2,3)
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 0, 0, testPackage1, 1, TMP_TABLE)
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 3, 0, testPackage2, 2, TMP_TABLE)
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 2, 3, testPackage3, 3, TMP_TABLE)
+        idp.numDatabaseHotseatIcons = 5
+        idp.numColumns = 6
+        idp.numRows = 6
+        migrateGrid(dbHelper, DbReader(db, TMP_TABLE, context), DbReader(db, TABLE_NAME, context), 5, 5, 6, 6)
+        val loc = desktopLocMap()
+        assertThat(loc[testPackage1]).isEqualTo(Triple(0, 0, 0))
+        assertThat(loc[testPackage2]).isEqualTo(Triple(0, 3, 0)) // kept exact, NOT compacted to (1,0)
+        assertThat(loc[testPackage3]).isEqualTo(Triple(0, 2, 3))
+    }
+
+    /** Shrinking past the right edge drops one empty column from the right; the gap at col 1 stays. */
+    @Test
+    @EnableFlags(Flags.FLAG_GRID_MIGRATION_REFACTOR)
+    fun anchorShrinkDropsRightmostEmptyColumn() {
+        // src 5×5: items in columns {0, 2, 4} on row 0 (columns 1, 3 empty). Shrink to 4 columns.
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 0, 0, testPackage1, 1, TMP_TABLE)
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 2, 0, testPackage2, 2, TMP_TABLE)
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 4, 0, testPackage3, 3, TMP_TABLE)
+        idp.numDatabaseHotseatIcons = 5
+        idp.numColumns = 4
+        idp.numRows = 4
+        migrateGrid(dbHelper, DbReader(db, TMP_TABLE, context), DbReader(db, TABLE_NAME, context), 5, 5, 4, 4)
+        val loc = desktopLocMap()
+        // need=1; drop the rightmost empty column (col 3). cols 0,2 are before it → unchanged; col 4
+        // has one dropped column before it → shifts to 3. The interior gap at col 1 is preserved.
+        assertThat(loc[testPackage1]).isEqualTo(Triple(0, 0, 0))
+        assertThat(loc[testPackage2]).isEqualTo(Triple(0, 2, 0))
+        assertThat(loc[testPackage3]).isEqualTo(Triple(0, 3, 0))
+    }
+
+    /** A single off-edge item slides in by exactly the number of removed columns (the repro). */
+    @Test
+    @EnableFlags(Flags.FLAG_GRID_MIGRATION_REFACTOR)
+    fun anchorShrinkSingleColumnDropsByOne() {
+        // src 5×5: one item alone in column 4, row 0. Shrink 5→4 cols → expected col 3, NOT col 0.
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 4, 0, testPackage1, 1, TMP_TABLE)
+        idp.numDatabaseHotseatIcons = 5
+        idp.numColumns = 4
+        idp.numRows = 4
+        migrateGrid(dbHelper, DbReader(db, TMP_TABLE, context), DbReader(db, TABLE_NAME, context), 5, 5, 4, 4)
+        val loc = desktopLocMap()
+        assertThat(loc[testPackage1]).isEqualTo(Triple(0, 3, 0))
+    }
+
+    /** Shrinking that doesn't overflow any axis keeps exact positions (no needless shifting). */
+    @Test
+    @EnableFlags(Flags.FLAG_GRID_MIGRATION_REFACTOR)
+    fun anchorShrinkWithoutOverflowKeepsExactPositions() {
+        // src 5×5: items in columns {0,1,3} (col 2 empty). Shrink to 4 columns — all still fit.
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 0, 0, testPackage1, 1, TMP_TABLE)
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 1, 0, testPackage2, 2, TMP_TABLE)
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 3, 0, testPackage3, 3, TMP_TABLE)
+        idp.numDatabaseHotseatIcons = 5
+        idp.numColumns = 4
+        idp.numRows = 4
+        migrateGrid(dbHelper, DbReader(db, TMP_TABLE, context), DbReader(db, TABLE_NAME, context), 5, 5, 4, 4)
+        val loc = desktopLocMap()
+        // No column overflows (max is 3 < 4), so the empty col 2 stays and positions are exact.
+        assertThat(loc[testPackage1]).isEqualTo(Triple(0, 0, 0))
+        assertThat(loc[testPackage2]).isEqualTo(Triple(0, 1, 0))
+        assertThat(loc[testPackage3]).isEqualTo(Triple(0, 3, 0))
+    }
+
+    /** Shrinking past the bottom edge drops one empty row from the bottom (the row repro). */
+    @Test
+    @EnableFlags(Flags.FLAG_GRID_MIGRATION_REFACTOR)
+    fun anchorShrinkDropsBottommostEmptyRow() {
+        // src 5×5: items in rows {0, 2, 4} of column 0. Shrink to 4 rows.
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 0, 0, testPackage1, 1, TMP_TABLE)
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 0, 2, testPackage2, 2, TMP_TABLE)
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 0, 4, testPackage3, 3, TMP_TABLE)
+        idp.numDatabaseHotseatIcons = 5
+        idp.numColumns = 5
+        idp.numRows = 4
+        migrateGrid(dbHelper, DbReader(db, TMP_TABLE, context), DbReader(db, TABLE_NAME, context), 5, 5, 5, 4)
+        val loc = desktopLocMap()
+        // need=1; drop the bottommost empty row (row 3). rows 0,2 are before it → unchanged; row 4
+        // has one dropped row before it → shifts to 3. The bottom item slides in by just one row.
+        assertThat(loc[testPackage1]).isEqualTo(Triple(0, 0, 0))
+        assertThat(loc[testPackage2]).isEqualTo(Triple(0, 0, 2))
+        assertThat(loc[testPackage3]).isEqualTo(Triple(0, 0, 3))
+    }
+
+    /**
+     * The bottom-right corner repro: a top-left and a bottom-right item with a big empty band
+     * between them. Shrinking rows must keep the bottom item NEAR THE BOTTOM (drops are alternated
+     * from the bottom then top of the empty band), not reflow it up next to the top-left item.
+     */
+    @Test
+    @EnableFlags(Flags.FLAG_GRID_MIGRATION_REFACTOR)
+    fun anchorShrinkKeepsBottomRightAnchored() {
+        // src 5×9: p1 at top-left (0,0), p2 at bottom-right (4,8). Shrink rows 9→7 (need=2).
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 0, 0, testPackage1, 1, TMP_TABLE)
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 4, 8, testPackage2, 2, TMP_TABLE)
+        idp.numDatabaseHotseatIcons = 5
+        idp.numColumns = 5
+        idp.numRows = 7
+        migrateGrid(dbHelper, DbReader(db, TMP_TABLE, context), DbReader(db, TABLE_NAME, context), 5, 5, 5, 7)
+        val loc = desktopLocMap()
+        // Empty rows 1..7; alternate bottom-first drops rows {7, 1}. p1 keeps (0,0); p2 has 2 dropped
+        // rows below row 8 → row 6 (the new bottom row), staying bottom-right — NOT reflowed up.
+        assertThat(loc[testPackage1]).isEqualTo(Triple(0, 0, 0))
+        assertThat(loc[testPackage2]).isEqualTo(Triple(0, 4, 6))
+    }
+
+    /**
+     * The on-device repro: a FULL axis (no empty column to drop) where the clamp target collides.
+     * The overflow item is DROPPED, NOT handed to the solver which would compact it top-left.
+     */
+    @Test
+    @EnableFlags(Flags.FLAG_GRID_MIGRATION_REFACTOR)
+    fun anchorShrinkFullColumnDropsCollidingItem() {
+        // src 5×5: row 0 fully occupied cols 0..4 (no empty column). Shrink cols 5→4.
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 0, 0, testPackage1, 1, TMP_TABLE)
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 1, 0, testPackage2, 2, TMP_TABLE)
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 2, 0, testPackage3, 3, TMP_TABLE)
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 3, 0, testPackage4, 4, TMP_TABLE)
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 4, 0, testPackage5, 5, TMP_TABLE)
+        idp.numDatabaseHotseatIcons = 5
+        idp.numColumns = 4
+        idp.numRows = 4
+        migrateGrid(dbHelper, DbReader(db, TMP_TABLE, context), DbReader(db, TABLE_NAME, context), 5, 5, 4, 4)
+        val loc = desktopLocMap()
+        // cols 0..3 fit and stay; col 4 has no empty column to drop → clamps to col 3, which is taken
+        // by p4 → collision → p5 is DROPPED (not relocated top-left).
+        assertThat(loc[testPackage1]).isEqualTo(Triple(0, 0, 0))
+        assertThat(loc[testPackage2]).isEqualTo(Triple(0, 1, 0))
+        assertThat(loc[testPackage3]).isEqualTo(Triple(0, 2, 0))
+        assertThat(loc[testPackage4]).isEqualTo(Triple(0, 3, 0))
+        assertThat(loc[testPackage5]).isNull() // dropped, not compacted onto another cell
+    }
+
+    /**
+     * The real on-device shape: top-left item + lone bottom-right item, shrinking BOTH axes
+     * (5×9 → 4×7, like 5×11 → 4×9). The bottom-right item must stay bottom-right, not jump top-left.
+     */
+    @Test
+    @EnableFlags(Flags.FLAG_GRID_MIGRATION_REFACTOR)
+    fun anchorShrinkBottomRightStaysBottomRight() {
+        // src 5×9: item top-left (0,0); lone item bottom-right (4,8). Shrink both axes 5×9 → 4×7.
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 0, 0, testPackage1, 1, TMP_TABLE)
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 4, 8, testPackage2, 2, TMP_TABLE)
+        idp.numDatabaseHotseatIcons = 5
+        idp.numColumns = 4
+        idp.numRows = 7
+        migrateGrid(dbHelper, DbReader(db, TMP_TABLE, context), DbReader(db, TABLE_NAME, context), 5, 5, 4, 7)
+        val loc = desktopLocMap()
+        // cols {0,4}: need=1, empties 1..3 → drop col 3 (bottom-first) → col4 shifts to 3. rows {0,8}:
+        // need=2, empties 1..7 → drop {7,1} → row8 shifts to 6. Bottom-right stays bottom-right.
+        assertThat(loc[testPackage1]).isEqualTo(Triple(0, 0, 0))
+        assertThat(loc[testPackage2]).isEqualTo(Triple(0, 3, 6))
+    }
+
+    /** Each page is preserved/collapsed independently — items never collapse across pages. */
+    @Test
+    @EnableFlags(Flags.FLAG_GRID_MIGRATION_REFACTOR)
+    fun anchorPreservesMultiplePages() {
+        addItem(ITEM_TYPE_APPLICATION, 0, CONTAINER_DESKTOP, 0, 0, testPackage1, 1, TMP_TABLE)
+        addItem(ITEM_TYPE_APPLICATION, 1, CONTAINER_DESKTOP, 1, 1, testPackage2, 2, TMP_TABLE)
+        idp.numDatabaseHotseatIcons = 5
+        idp.numColumns = 6
+        idp.numRows = 6
+        migrateGrid(dbHelper, DbReader(db, TMP_TABLE, context), DbReader(db, TABLE_NAME, context), 5, 5, 6, 6)
+        val loc = desktopLocMap()
+        assertThat(loc[testPackage1]).isEqualTo(Triple(0, 0, 0))
+        assertThat(loc[testPackage2]).isEqualTo(Triple(1, 1, 1)) // stays on page 1, not collapsed to page 0
+    }
+
+    private fun desktopLocMap(): Map<String?, Triple<Int, Int, Int>> {
+        val c = db.query(
+            TABLE_NAME,
+            arrayOf(SCREEN, CELLX, CELLY, INTENT),
+            "container=$CONTAINER_DESKTOP",
+            null, null, null, null,
+        ) ?: throw IllegalStateException()
+        return parseLocMap(c)
     }
 
     private fun addItem(
