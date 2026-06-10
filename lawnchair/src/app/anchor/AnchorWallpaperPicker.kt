@@ -31,6 +31,7 @@ object AnchorWallpaperPicker {
     private const val TAG = "AnchorWallpaper"
 
     fun launch(activity: Activity) {
+        Log.d(TAG, "picker.launch()")
         // ACTION_PICK_IMAGES is the modern, permission-free photo picker (with a documents fallback).
         val intent = Intent(MediaStore.ACTION_PICK_IMAGES).apply { type = "image/*" }
         CoroutineScope(Dispatchers.Main).launch {
@@ -40,10 +41,13 @@ object AnchorWallpaperPicker {
                 Log.w(TAG, "Photo picker failed: ${e.message}")
                 return@launch
             }
-            val uri = result.data?.data ?: return@launch
+            val uri = result.data?.data
+            Log.d(TAG, "picker result: code=${result.resultCode} uri=$uri")
+            if (uri == null) return@launch
             val ok = withContext(Dispatchers.IO) {
                 WallpaperStabilizationManager.importCustomWallpaper(activity, uri)
             }
+            Log.d(TAG, "import ok=$ok → set source=custom")
             if (ok) {
                 AnchorPreferences(activity).wallpaperSource =
                     AnchorPreferences.WALLPAPER_SOURCE_CUSTOM

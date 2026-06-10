@@ -541,6 +541,7 @@ class LawnchairLauncher : QuickstepLauncher() {
         restartIfPending()
         // Apply any wallpaper source/image change made in Settings without a manual restart.
         wallpaperStabilizationManager.reapplyIfChanged()
+        maybeShowWallpaperOnboarding()
 
         dragLayer.viewTreeObserver.addOnDrawListener(
             object : ViewTreeObserver.OnDrawListener {
@@ -565,6 +566,37 @@ class LawnchairLauncher : QuickstepLauncher() {
         super.onDestroy()
         // Only actually closes if required, safe to call if not enabled
         SmartspacerClient.close()
+    }
+
+    /**
+     * First-launch, one-time prompt offering to set a rotation-stable wallpaper. Shown once (gated by
+     * [AnchorPreferences.wallpaperOnboardingShown]) only while still on the default System source, in
+     * the NORMAL state so it doesn't interrupt all-apps/overview. "Choose image" opens Anchor's photo
+     * picker; "Not now" leaves the system wallpaper. Either way it never shows again.
+     */
+    private fun maybeShowWallpaperOnboarding() {
+        val anchorPrefs = app.anchor.AnchorPreferences(this)
+        if (anchorPrefs.wallpaperOnboardingShown) return
+        if (anchorPrefs.wallpaperSource != app.anchor.AnchorPreferences.WALLPAPER_SOURCE_SYSTEM) {
+            // User already chose a non-default source — nothing to onboard; just mark it done.
+            anchorPrefs.wallpaperOnboardingShown = true
+            return
+        }
+        if (!isInState(com.android.launcher3.LauncherState.NORMAL)) return
+        // Defer slightly so the home screen is visible behind the dialog on first launch.
+        workspace.postDelayed({
+            if (isDestroyed || isFinishing) return@postDelayed
+            if (anchorPrefs.wallpaperOnboardingShown) return@postDelayed
+            anchorPrefs.wallpaperOnboardingShown = true
+            android.app.AlertDialog.Builder(this)
+                .setTitle(R.string.anchor_wallpaper_onboarding_title)
+                .setMessage(R.string.anchor_wallpaper_onboarding_message)
+                .setPositiveButton(R.string.anchor_wallpaper_onboarding_choose) { _, _ ->
+                    app.anchor.AnchorWallpaperPicker.launch(this)
+                }
+                .setNegativeButton(R.string.anchor_wallpaper_onboarding_dismiss, null)
+                .show()
+        }, 600)
     }
 
     override fun getDefaultOverlay(): LauncherOverlayManager = defaultOverlay

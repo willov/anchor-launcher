@@ -99,7 +99,12 @@ class BlankActivity : ComponentActivity() {
                     startActivity(intent.getParcelableExtra("intent"))
                 } else {
                     registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-                        resultReceiver.send(it.resultCode, it.data?.extras)
+                        // Forward the FULL result Intent (not just extras) so the data URI and
+                        // clipData survive — e.g. the photo picker returns its image URI in
+                        // Intent.data, which would otherwise be lost.
+                        val b = Bundle()
+                        b.putParcelable(KEY_RESULT_INTENT, it.data)
+                        resultReceiver.send(it.resultCode, b)
                         resultSent = true
                         finish()
                     }.launch(requireNotNull(intent.getParcelableExtra("intent")))
@@ -124,6 +129,8 @@ class BlankActivity : ComponentActivity() {
     }
 
     companion object {
+
+        private const val KEY_RESULT_INTENT = "blank_activity_result_intent"
 
         suspend fun startBlankActivityDialog(
             activity: Activity,
@@ -166,10 +173,10 @@ class BlankActivity : ComponentActivity() {
             return object : ResultReceiver(Handler(Looper.myLooper()!!)) {
 
                 override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
-                    val data = Intent()
-                    if (resultData != null) {
-                        data.putExtras(resultData)
-                    }
+                    // Prefer the full forwarded Intent (carries data URI + extras); fall back to the
+                    // legacy extras-only bundle for any path that still sends one.
+                    val data = resultData?.getParcelable<Intent>(KEY_RESULT_INTENT)
+                        ?: Intent().also { if (resultData != null) it.putExtras(resultData) }
                     callback(ActivityResult(resultCode, data))
                 }
             }

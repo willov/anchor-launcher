@@ -476,6 +476,25 @@ fun HomeScreenPreferences(
                 }
             }
 
+            // Wallpaper parallax strength — only meaningful with the stabilized custom wallpaper.
+            if (wallpaperSource == app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM) {
+                Item {
+                    var parallax by remember { mutableStateOf(anchorPrefs.wallpaperParallaxPercent) }
+                    val parallaxAdapter = customPreferenceAdapter(parallax) { newValue ->
+                        parallax = newValue
+                        anchorPrefs.wallpaperParallaxPercent = newValue
+                    }
+                    SliderPreference(
+                        label = stringResource(id = R.string.anchor_wallpaper_parallax_label),
+                        adapter = parallaxAdapter,
+                        valueRange = app.anchor.AnchorPreferences.PARALLAX_PERCENT_MIN..
+                            app.anchor.AnchorPreferences.PARALLAX_PERCENT_MAX,
+                        step = 1,
+                        showUnit = "%",
+                    )
+                }
+            }
+
             var transition by remember { mutableStateOf(anchorPrefs.rotationTransition) }
             Item {
                 val transitionAdapter = customPreferenceAdapter(transition) { newValue ->

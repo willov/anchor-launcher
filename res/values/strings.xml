@@ -54,6 +54,11 @@
     <string name="anchor_rotation_transition_instant">Instant</string>
     <string name="anchor_rotation_transition_fade">Fade</string>
     <string name="anchor_rotation_fade_duration_label">Fade duration</string>
+    <string name="anchor_wallpaper_parallax_label">Wallpaper parallax</string>
+    <string name="anchor_wallpaper_onboarding_title">Keep your wallpaper in place</string>
+    <string name="anchor_wallpaper_onboarding_message">Anchor can anchor your wallpaper so it stays put when you rotate the screen — just like your icons. Choose an image to enable it? You can change this anytime in Settings → Home Screen → Wallpaper.</string>
+    <string name="anchor_wallpaper_onboarding_choose">Choose image</string>
+    <string name="anchor_wallpaper_onboarding_dismiss">Not now</string>
     <string name="anchor_test_wallpaper_label">Debug: test wallpaper</string>
     <string name="anchor_test_wallpaper_description">Show a generated test pattern (gradient + grid) instead of the real wallpaper, to verify rotation and parallax.</string>
 

@@ -15,7 +15,6 @@ import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.drawable.Drawable
 import android.view.Surface
-import kotlin.math.max
 
 /**
  * Window-background Drawable that renders the wallpaper bitmap with a counter-rotation so that
@@ -89,23 +88,17 @@ class WallpaperStabilizationDrawable : Drawable() {
             rawH = b.height()
         }
 
-        val scrollRoomX = max(0, bmp.width - rawW)
-        val scrollRoomY = max(0, bmp.height - rawH)
-
         // The crop is the SAME in both orientations for a given (worldX, worldY): worldX drives
         // srcLeft (bitmap-X), worldY drives srcTop (bitmap-Y). The counter-rotation canvas below is
         // what repositions those identical pixels onto the rotated glass — so a pure rotation
-        // (camera unchanged) produces the exact same source crop and is pixel-perfect.
+        // (camera unchanged) produces the exact same source crop and is pixel-perfect. The crop math
+        // lives in WallpaperCropMath (pure, unit-tested for the rotation invariant).
         //
         // worldX/worldY are bitmap-space coordinates, not screen-space. The manager is responsible
         // for moving the correct one in response to a gesture (in landscape a horizontal gesture
         // must move worldY, because bitmap-Y is what appears horizontal on the rotated glass).
-        val srcLeft = if (scrollRoomX > 0) (worldX * scrollRoomX).toInt().coerceIn(0, scrollRoomX) else 0
-        val srcTop  = if (scrollRoomY > 0) (worldY * scrollRoomY).toInt().coerceIn(0, scrollRoomY) else 0
-
-        val srcW = rawW.coerceAtMost(bmp.width)
-        val srcH = rawH.coerceAtMost(bmp.height)
-        srcRect.set(srcLeft, srcTop, srcLeft + srcW, srcTop + srcH)
+        val src = WallpaperCropMath.computeSrcRect(worldX, worldY, bmp.width, bmp.height, rawW, rawH)
+        srcRect.set(src.left, src.top, src.right, src.bottom)
         dstRect.set(0, 0, rawW, rawH)
 
         canvas.save()

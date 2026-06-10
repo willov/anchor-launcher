@@ -18,10 +18,12 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.util.Log
+import android.os.Build
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.animation.ValueAnimator
@@ -108,16 +110,27 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         if (!prefs.wallpaperStabilizationActive) {
             return
         }
-        activate(prefs)
+        activate()
     }
 
-    private fun activate(prefs: AnchorPreferences) {
+    private fun activate() {
         val initialRotation = currentRotation()
-        val rowCount = prefs.rowCount
-        val d = WallpaperStabilizationDrawable().apply {
-            displayRotation = initialRotation
-            worldX = 0f
-            worldY = rowOffsetForRow(0, rowCount)
+        val d = WallpaperStabilizationDrawable().apply { displayRotation = initialRotation }
+        // Rest camera for home (row 0, page-0 left edge). The horizontal-on-glass axis rests at 0
+        // (left), the vertical-on-glass axis rests at row 0's canonical offset — assigned to whichever
+        // bitmap axis (and sign) the current rotation maps them to. Keeps cold-start-in-landscape right.
+        val hRest = WallpaperCropMath.horizontalGlassAxis(initialRotation)
+        val vMap = WallpaperCropMath.verticalGlassAxis(initialRotation)
+        val rowCanonical = rowOffsetForRow(0, d) // row 0 → HOME_REST_WORLD_Y (bitmap not loaded yet)
+        val vRest = if (vMap.sign < 0) 1f - rowCanonical else rowCanonical
+        val hRestValue = if (hRest.sign < 0) 1f else 0f // left edge; mirror if axis sign inverted
+        when (hRest.axis) {
+            WallpaperCropMath.WorldAxis.X -> d.worldX = hRestValue
+            WallpaperCropMath.WorldAxis.Y -> d.worldY = hRestValue
+        }
+        when (vMap.axis) {
+            WallpaperCropMath.WorldAxis.X -> d.worldX = vRest
+            WallpaperCropMath.WorldAxis.Y -> d.worldY = vRest
         }
 
         // Remove FLAG_SHOW_WALLPAPER so the system wallpaper surface is not composited behind our
@@ -150,7 +163,7 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         if (sig == appliedSignature) return
         appliedSignature = sig
         if (prefs.wallpaperStabilizationActive) {
-            activate(prefs)
+            activate()
         } else {
             // Switched back to System: drop our drawable and let the system composite the wallpaper.
             drawable = null
@@ -159,8 +172,14 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         }
     }
 
-    private fun configSignature(prefs: AnchorPreferences): String =
-        "${prefs.wallpaperSource}|${prefs.customWallpaperPath}|${prefs.useTestWallpaper}"
+    private fun configSignature(prefs: AnchorPreferences): String {
+        // The custom image is always saved to the same path (custom_wallpaper.jpg, overwritten on
+        // each pick), so the path alone never changes — include the file's mtime so RE-picking a
+        // different image is detected as a change and reapplyIfChanged() reloads it.
+        val customMtime = prefs.customWallpaperPath
+            ?.let { runCatching { File(it).lastModified() }.getOrDefault(0L) } ?: 0L
+        return "${prefs.wallpaperSource}|${prefs.customWallpaperPath}|$customMtime|${prefs.useTestWallpaper}"
+    }
 
     /**
      * Called by [app.anchor.navigation.TwoRowNavigationManager] before a row-switch animation
@@ -185,8 +204,9 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     /**
      * Called from Workspace scroll callbacks with the per-row relative offset (0..1 within the
      * current row's allowed page range). Moves the camera horizontally (on the glass) by the change
-     * in that offset, scaled by [HORIZONTAL_PARALLAX] — a continuous, gesture-driven delta. Never
-     * assigns an absolute page position, so there is no "page baseline" to snap back to.
+     * in that offset, scaled by [equalizedHorizontalSweep] (so one page swipe drifts the wallpaper
+     * the same as one row switch) — a continuous, gesture-driven delta. Never assigns an absolute
+     * page position, so there is no "page baseline" to snap back to.
      *
      * Axis: [worldX]/[worldY] are BITMAP-space axes. The drawable's counter-rotation maps bitmap-Y
      * to the horizontal glass axis in landscape, so a horizontal gesture moves [worldY] in landscape
@@ -204,11 +224,66 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         val delta = offset - lastScrollOffset
         if (delta == 0f) return
         lastScrollOffset = offset
-        val step = delta * HORIZONTAL_PARALLAX
-        if (isLandscape()) {
-            d.worldY = (d.worldY + step).coerceIn(0f, 1f)  // bitmap-Y is horizontal-on-glass
+        // Equal-drift parallax: a full row sweep (offset 0→1) drifts the wallpaper the same glass
+        // pixels as one row switch, so a page swipe and a row switch move it by the same amount.
+        // `offset` is already the row-relative fraction, so the per-frame world step is just
+        // delta × (the full-sweep world travel).
+        val step = delta * equalizedHorizontalSweep(d)
+        // Which bitmap axis is horizontal-on-glass, and its sign, depends on rotation — the
+        // counter-rotation inverts some axes (e.g. bitmap-X on ROT_90 maps to rawW−dx). Centralised
+        // and unit-tested in WallpaperCropMath so all four rotations stay consistent.
+        val m = WallpaperCropMath.horizontalGlassAxis(d.displayRotation)
+        applyCameraDelta(d, m, step)
+    }
+
+    /**
+     * Target wallpaper drift per navigation step, in glass pixels: a user-set percent
+     * ([AnchorPreferences.wallpaperParallaxPercent]) of the screen's short side. 0 = no parallax.
+     */
+    private fun stepDriftPx(): Float {
+        val (sw, sh) = realScreenSize(launcher)
+        val percent = AnchorPreferences(launcher).wallpaperParallaxPercent
+        return (percent / 100f) * minOf(sw, sh)
+    }
+
+    /** Horizontal-on-glass and vertical-on-glass pan headroom (px) for the current rotation+bitmap. */
+    private fun scrollRoomsHV(d: WallpaperStabilizationDrawable): Pair<Int, Int>? {
+        val bmp = d.wallpaperBitmap ?: return null
+        val (sw, sh) = realScreenSize(launcher)
+        val rawW = minOf(sw, sh)
+        val rawH = maxOf(sw, sh)
+        val scrollRoomX = maxOf(0, bmp.width - rawW)
+        val scrollRoomY = maxOf(0, bmp.height - rawH)
+        val hAxis = WallpaperCropMath.horizontalGlassAxis(d.displayRotation).axis
+        return if (hAxis == WallpaperCropMath.WorldAxis.X) {
+            scrollRoomX to scrollRoomY
         } else {
-            d.worldX = (d.worldX + step).coerceIn(0f, 1f)  // bitmap-X is horizontal-on-glass
+            scrollRoomY to scrollRoomX
+        }
+    }
+
+    /**
+     * World-units the horizontal camera travels over a FULL row-of-pages sweep so each page step
+     * drifts [stepDriftPx] glass pixels, capped at the horizontal pan room (independent of vertical).
+     * Falls back to [HORIZONTAL_PARALLAX] until the bitmap is known.
+     */
+    private fun equalizedHorizontalSweep(d: WallpaperStabilizationDrawable): Float {
+        val (scrollRoomH, _) = scrollRoomsHV(d) ?: return HORIZONTAL_PARALLAX
+        val pagesInRow = (launcher.workspace.allowedPageEnd - launcher.workspace.allowedPageStart + 1)
+            .coerceAtLeast(1)
+        val sweep = WallpaperCropMath.horizontalSweepWorld(stepDriftPx(), scrollRoomH, pagesInRow)
+        return if (sweep > 0f) sweep else HORIZONTAL_PARALLAX
+    }
+
+    private fun applyCameraDelta(
+        d: WallpaperStabilizationDrawable,
+        m: WallpaperCropMath.AxisMapping,
+        step: Float,
+    ) {
+        val s = m.sign * step
+        when (m.axis) {
+            WallpaperCropMath.WorldAxis.X -> d.worldX = (d.worldX + s).coerceIn(0f, 1f)
+            WallpaperCropMath.WorldAxis.Y -> d.worldY = (d.worldY + s).coerceIn(0f, 1f)
         }
     }
 
@@ -217,22 +292,34 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
      * Animates the camera vertically (on the glass) to the target row's canonical world position
      * over the same duration as the workspace slide. [toRow] and [totalRows] determine the target.
      *
-     * Axis: a vertical-on-glass move is bitmap-Y in portrait ([worldY]) and bitmap-X in landscape
-     * ([worldX]) — the counterpart of the swap in [onScrollOffset].
+     * Axis: a vertical-on-glass move maps to a (camera axis, sign) per rotation via
+     * [WallpaperCropMath.verticalGlassAxis] — bitmap-Y in portrait, bitmap-X in landscape, and some
+     * rotations invert the sign because of the counter-rotation. The canonical row position
+     * ([rowOffsetForRow], expressed in the worldY/portrait sense) is mirrored to `1 − target` when the
+     * sign is negative so higher rows always drag the wallpaper the same way on the glass.
      */
-    fun onRowTransition(toRow: Int, totalRows: Int, durationMs: Long) {
+    fun onRowTransition(toRow: Int, @Suppress("UNUSED_PARAMETER") totalRows: Int, durationMs: Long) {
         val d = drawable ?: return
-        val target = rowOffsetForRow(toRow, totalRows)
+        val m = WallpaperCropMath.verticalGlassAxis(d.displayRotation)
+        // Row spacing is now D-based (each row one step-drift above the bottom rest), independent of
+        // the total row count — so totalRows is no longer needed for the offset.
+        val canonical = rowOffsetForRow(toRow, d)
+        val target = if (m.sign < 0) 1f - canonical else canonical
         rowAnimator?.cancel()
-        val landscape = isLandscape()
-        val current = if (landscape) d.worldX else d.worldY
+        val current = when (m.axis) {
+            WallpaperCropMath.WorldAxis.X -> d.worldX
+            WallpaperCropMath.WorldAxis.Y -> d.worldY
+        }
         if (kotlin.math.abs(current - target) < 0.005f) return
         rowAnimator = ValueAnimator.ofFloat(current, target).apply {
             duration = durationMs
             interpolator = DecelerateInterpolator()
             addUpdateListener { anim ->
                 val v = anim.animatedValue as Float
-                if (landscape) d.worldX = v else d.worldY = v
+                when (m.axis) {
+                    WallpaperCropMath.WorldAxis.X -> d.worldX = v
+                    WallpaperCropMath.WorldAxis.Y -> d.worldY = v
+                }
             }
             start()
         }
@@ -298,9 +385,7 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
 
     private fun loadImageFile(path: String): Bitmap? {
         return try {
-            BitmapFactory.decodeFile(path)?.also {
-                if (it == null) Log.w(TAG, "Custom wallpaper decode failed: $path")
-            }
+            decodeDownscaled(launcher, path)
         } catch (e: Exception) {
             Log.w(TAG, "Custom wallpaper read failed: ${e.message}")
             null
@@ -423,23 +508,110 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     }
 
     /**
-     * Maps a row index to a vertical world position ([worldY]).
-     * Row 0 (bottom) → near 1.0 (bottom of image); top row → near 0.0 (top of image).
-     * ROW_MARGIN pads both ends so there is always room for future effects (e.g. tilt parallax).
+     * Vertical world position for a row, in the canonical worldY/portrait sense (0 = top of image,
+     * 1 = bottom). Row 0 rests at [HOME_REST_WORLD_Y] (bottom, preserving the lock-screen match);
+     * each row above sits one [stepDriftPx] glass-pixels higher (the SAME drift as a page step),
+     * clamped at the top. Independent of total row count. See [WallpaperCropMath.rowWorldOffset].
      */
-    private fun rowOffsetForRow(rowIndex: Int, totalRows: Int): Float {
-        val t = if (totalRows > 1) 1.0f - rowIndex.toFloat() / (totalRows - 1) else 1.0f
-        return ROW_MARGIN + t * (1.0f - 2 * ROW_MARGIN)
+    private fun rowOffsetForRow(rowIndex: Int, d: WallpaperStabilizationDrawable): Float {
+        val (_, scrollRoomV) = scrollRoomsHV(d) ?: return HOME_REST_WORLD_Y
+        return WallpaperCropMath.rowWorldOffset(rowIndex, stepDriftPx(), scrollRoomV, HOME_REST_WORLD_Y)
     }
 
     companion object {
         private const val TAG = "AnchorWallpaper"
-        // Fraction of the wallpaper height reserved as buffer above/below the row range.
+        // worldY of the home row (row 0) at rest: near the BOTTOM of the image. Kept = the original
+        // 1 − ROW_MARGIN so the lock-screen crop (homeRestCropRect) still matches the home render.
         private const val ROW_MARGIN = 0.1f
-        // How far the horizontal camera travels (in world fraction) per full row-of-pages sweep.
-        // 1.0 = a full left→right scroll across the row moves the camera across the whole remaining
-        // wallpaper width. Tune <1.0 for gentler parallax.
+        private const val HOME_REST_WORLD_Y = 1f - ROW_MARGIN
+        // Equal-drift parallax: each navigation STEP (one page swipe OR one row switch) drifts the
+        // wallpaper by a percent of the screen's SHORT side (AnchorPreferences.wallpaperParallaxPercent),
+        // capped per axis at its own pan room. Same target both axes ⇒ horizontal and vertical match;
+        // an axis with no headroom contributes nothing without zeroing the other.
+        // Fallback horizontal full-sweep travel if bitmap dims aren't known yet.
         private const val HORIZONTAL_PARALLAX = 1.0f
+
+        // The same bitmap is rendered in BOTH orientations (portrait-canonical), so to cover the
+        // screen without stretching it must be at least the screen's LARGER side in both dimensions.
+        // COVER_FACTOR adds a little headroom for parallax; HARD_CAP bounds memory on big sources.
+        // (Larger = more parallax room but more memory → swipe lag; ~1.1×screen is a good balance.)
+        private const val COVER_FACTOR = 1.1f
+        private const val HARD_CAP_FACTOR = 2
+
+        /**
+         * Decodes [path] scaled so it covers the screen in both axes (no stretch when rotated) with a
+         * little parallax headroom, while staying small enough to resample smoothly every scroll
+         * frame. A 4096² GNOME wallpaper or a large photo is power-of-2 pre-sampled then exact-scaled.
+         */
+        /**
+         * The FULL display size (including the status/nav bar areas) — this is what the window
+         * background drawable covers, so the home-screen crop and the system-wallpaper crop must be
+         * computed against it. `resources.displayMetrics` excludes the system bars on modern Android,
+         * which would make the system-set wallpaper ~1–2 % off and read as a slight lock-screen zoom.
+         */
+        private fun realScreenSize(context: Context): Pair<Int, Int> {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val wm = context.getSystemService(WindowManager::class.java)
+                if (wm != null) {
+                    val b = wm.maximumWindowMetrics.bounds
+                    return b.width() to b.height()
+                }
+            }
+            val dm = context.resources.displayMetrics
+            return dm.widthPixels to dm.heightPixels
+        }
+
+        fun decodeDownscaled(context: Context, path: String): Bitmap? {
+            val (sw, sh) = realScreenSize(context)
+            val screenMax = maxOf(sw, sh)
+            val coverTarget = (screenMax * COVER_FACTOR).toInt()   // smaller side should reach this
+            val hardCap = screenMax * HARD_CAP_FACTOR              // larger side at most this
+
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(path, bounds)
+            val srcW = bounds.outWidth
+            val srcH = bounds.outHeight
+            if (srcW <= 0 || srcH <= 0) return BitmapFactory.decodeFile(path)
+
+            val srcMin = minOf(srcW, srcH)
+            val srcMax = maxOf(srcW, srcH)
+            // Downscale toward coverage (only if it wouldn't upscale), then clamp the long side.
+            var scale = if (srcMin > coverTarget) coverTarget.toFloat() / srcMin else 1f
+            if (srcMax * scale > hardCap) scale = hardCap.toFloat() / srcMax
+
+            val targetW = (srcW * scale).toInt().coerceAtLeast(1)
+            var sample = 1
+            while (srcW / (sample * 2) >= targetW) sample *= 2
+            val decoded = BitmapFactory.decodeFile(
+                path, BitmapFactory.Options().apply { inSampleSize = sample },
+            ) ?: return null
+
+            if (decoded.width <= targetW) return decoded
+            val finalScale = targetW.toFloat() / decoded.width
+            val out = Bitmap.createScaledBitmap(
+                decoded, targetW, (decoded.height * finalScale).toInt().coerceAtLeast(1), true,
+            )
+            if (out != decoded) decoded.recycle()
+            return out
+        }
+
+        /**
+         * The rectangle of [src] that the home screen shows at rest (row 0, page 0): worldX = 0
+         * (page-0 left edge), worldY = 1 − [ROW_MARGIN] (bottom row). Passed to
+         * [WallpaperManager.setBitmap] as the `visibleCropHint` so the system displays EXACTLY this
+         * region on the lock screen — matching Anchor's home render — instead of applying its own
+         * center-crop/scale (which shifted the region and zoomed it).
+         */
+        fun homeRestCropRect(src: Bitmap, context: Context): Rect {
+            val (sw, sh) = realScreenSize(context)
+            val screenW = minOf(sw, sh)   // portrait width
+            val screenH = maxOf(sw, sh)   // portrait height
+            val scrollRoomY = maxOf(0, src.height - screenH)
+            val srcTop = ((1f - ROW_MARGIN) * scrollRoomY).toInt().coerceIn(0, scrollRoomY)
+            val cropW = minOf(screenW, src.width)
+            val cropH = minOf(screenH, src.height)
+            return Rect(0, srcTop, cropW, srcTop + cropH)
+        }
 
         /**
          * Copies the user-picked image [uri] into app-private storage and points
@@ -466,9 +638,25 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
                 AnchorPreferences(context).customWallpaperPath = dest.absolutePath
                 if (alsoSetSystemWallpaper) {
                     try {
-                        val bmp = BitmapFactory.decodeFile(dest.absolutePath)
-                        if (bmp != null) {
-                            WallpaperManager.getInstance(context).setBitmap(bmp)
+                        val src = decodeDownscaled(context, dest.absolutePath)
+                        if (src != null) {
+                            // Hand the system the full image plus an explicit visibleCropHint = the
+                            // exact rectangle Anchor shows on the home screen at rest. This makes the
+                            // lock screen display that same region instead of the system applying its
+                            // own center-crop/scale (which shifted the region toward the top and
+                            // zoomed it relative to Anchor's home render).
+                            val cropHint = homeRestCropRect(src, context)
+                            val wm = WallpaperManager.getInstance(context)
+                            // Desired size = the crop's size, so the system renders the cropHint
+                            // region 1:1 instead of scaling it up to a larger canvas and showing the
+                            // top of it (which made lock look zoomed-in and shifted up vs home).
+                            wm.suggestDesiredDimensions(cropHint.width(), cropHint.height())
+                            wm.setBitmap(
+                                src,
+                                cropHint,
+                                true, // allowBackup
+                                WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK,
+                            )
                         }
                     } catch (e: Exception) {
                         // Non-fatal: the Anchor background still works even if setting the system

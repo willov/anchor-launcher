@@ -41,6 +41,11 @@ class AnchorPreferences(context: Context) {
         get() = prefs.getString(KEY_CUSTOM_WALLPAPER_PATH, null)
         set(value) { prefs.edit().putString(KEY_CUSTOM_WALLPAPER_PATH, value).apply() }
 
+    /** True once the first-launch "set a rotation-stable wallpaper?" prompt has been shown. */
+    var wallpaperOnboardingShown: Boolean
+        get() = prefs.getBoolean(KEY_WALLPAPER_ONBOARDING_SHOWN, false)
+        set(value) { prefs.edit().putBoolean(KEY_WALLPAPER_ONBOARDING_SHOWN, value).apply() }
+
     /**
      * True when the counter-rotation stabilization should be active (i.e. a bitmap we can render is
      * available). False ⇒ leave the system wallpaper alone (FLAG_SHOW_WALLPAPER, normal rotation).
@@ -90,6 +95,20 @@ class AnchorPreferences(context: Context) {
         set(value) { prefs.edit().putString(KEY_STATUS_BAR_SWIPE, value).apply() }
 
     /**
+     * Wallpaper parallax strength as a PERCENT of the screen's short side that the wallpaper drifts
+     * per navigation step (one page swipe or one row switch). 0 disables parallax. Capped per axis at
+     * the image's available pan room. Default [PARALLAX_PERCENT_DEFAULT].
+     */
+    var wallpaperParallaxPercent: Int
+        get() = prefs.getInt(KEY_PARALLAX_PERCENT, PARALLAX_PERCENT_DEFAULT)
+            .coerceIn(PARALLAX_PERCENT_MIN, PARALLAX_PERCENT_MAX)
+        set(value) {
+            prefs.edit()
+                .putInt(KEY_PARALLAX_PERCENT, value.coerceIn(PARALLAX_PERCENT_MIN, PARALLAX_PERCENT_MAX))
+                .apply()
+        }
+
+    /**
      * Total number of workspace rows in the 2D navigation matrix. Row 0 is the bottom icon row;
      * rows 1..N-1 are above it. Default 2.
      */
@@ -118,12 +137,14 @@ class AnchorPreferences(context: Context) {
         private const val KEY_DRAWER_SECTION_HEADERS  = "drawer_section_headers"
         private const val KEY_WALLPAPER_SOURCE = "wallpaper_source"
         private const val KEY_CUSTOM_WALLPAPER_PATH = "custom_wallpaper_path"
+        private const val KEY_WALLPAPER_ONBOARDING_SHOWN = "wallpaper_onboarding_shown"
         private const val KEY_USE_TEST_WALLPAPER = "use_test_wallpaper"
         private const val KEY_ROTATION_TRANSITION = "rotation_transition"
         private const val KEY_FADE_DURATION       = "rotation_fade_duration_ms"
         private const val KEY_STATUS_BAR_SWIPE    = "status_bar_swipe_action"
         private const val KEY_ROW_COUNT           = "row_count"
         private const val KEY_ROW_SCREENS_PREFIX  = "row_screens_"
+        private const val KEY_PARALLAX_PERCENT    = "wallpaper_parallax_percent"
 
         const val SWIPE_NOTIFICATIONS = "notifications"
         const val SWIPE_NEXT_ROW      = "next_row"
@@ -146,5 +167,10 @@ class AnchorPreferences(context: Context) {
         const val WALLPAPER_SOURCE_SYSTEM_STABILIZED = "system_stabilized" // needs MANAGE_EXTERNAL_STORAGE
 
         const val MAX_ROWS = 5
+
+        // Wallpaper parallax strength (percent of screen short side per navigation step).
+        const val PARALLAX_PERCENT_MIN = 0
+        const val PARALLAX_PERCENT_MAX = 25
+        const val PARALLAX_PERCENT_DEFAULT = 15
     }
 }
