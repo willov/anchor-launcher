@@ -24,6 +24,25 @@ class AlphabetIndexView @JvmOverloads constructor(
     attrs: AttributeSet? = null,
 ) : View(context, attrs) {
 
+    companion object {
+        /** Width of the strip in dp. */
+        const val STRIP_WIDTH_DP = 28
+        /** Gap in dp between the strip and the app icons. */
+        const val STRIP_GAP_DP = 8
+
+        /**
+         * Total horizontal space (dp) the strip reserves on the right edge of the drawer
+         * RecyclerView so icons never scroll behind it. Single source of truth shared by
+         * [SearchContainerView] and the core padding hook.
+         */
+        const val RESERVED_WIDTH_DP = STRIP_WIDTH_DP + STRIP_GAP_DP
+
+        /** [RESERVED_WIDTH_DP] resolved to pixels for the given context. */
+        @JvmStatic
+        fun reservedWidthPx(context: Context): Int =
+            (RESERVED_WIDTH_DP * context.resources.displayMetrics.density).toInt()
+    }
+
     var letters: List<String> = emptyList()
         set(value) { field = value; invalidate() }
 
@@ -46,9 +65,13 @@ class AlphabetIndexView @JvmOverloads constructor(
 
     private var pressedIndex = -1
 
+    /** Vertical extent the letters are laid out in, inset by padding (clears the search bar at top). */
+    private val contentTop get() = paddingTop.toFloat()
+    private val contentHeight get() = (height - paddingTop - paddingBottom).toFloat()
+
     override fun onDraw(canvas: Canvas) {
         if (letters.isEmpty()) return
-        val itemH = height.toFloat() / letters.size
+        val itemH = contentHeight / letters.size
         val sp  = resources.displayMetrics.scaledDensity
         textPaint.textSize = (itemH * 0.62f).coerceIn(8f * sp, 13f * sp)
 
@@ -59,19 +82,19 @@ class AlphabetIndexView @JvmOverloads constructor(
         // Single pill spanning first → last visible letter
         val visibleIndices = letters.indices.filter { letters[it] in visibleLetters }
         if (visibleIndices.isNotEmpty()) {
-            val spanTop    = itemH * visibleIndices.first()
-            val spanBottom = itemH * (visibleIndices.last() + 1)
+            val spanTop    = contentTop + itemH * visibleIndices.first()
+            val spanBottom = contentTop + itemH * (visibleIndices.last() + 1)
             canvas.drawRoundRect(RectF(pad, spanTop + pad, width - pad, spanBottom - pad), r, r, pillPaint)
         }
 
         // Pressed-state highlight on top
         if (pressedIndex in letters.indices) {
-            val top = itemH * pressedIndex
+            val top = contentTop + itemH * pressedIndex
             canvas.drawRoundRect(RectF(pad, top + pad, width - pad, top + itemH - pad), r, r, highlightPaint)
         }
 
         letters.forEachIndexed { i, letter ->
-            val top      = itemH * i
+            val top      = contentTop + itemH * i
             val baseline = top + itemH / 2f - (textPaint.ascent() + textPaint.descent()) / 2f
             canvas.drawText(letter, cx, baseline, textPaint)
         }
@@ -81,7 +104,8 @@ class AlphabetIndexView @JvmOverloads constructor(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
                 if (letters.isEmpty()) return false
-                val index = (event.y / height * letters.size).toInt().coerceIn(0, letters.size - 1)
+                val rel = (event.y - contentTop) / contentHeight.coerceAtLeast(1f)
+                val index = (rel * letters.size).toInt().coerceIn(0, letters.size - 1)
                 if (index != pressedIndex) {
                     pressedIndex = index
                     invalidate()

@@ -5,6 +5,7 @@ import android.util.AttributeSet
 import android.view.View
 import android.widget.RelativeLayout
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.LinearSmoothScroller
 import androidx.recyclerview.widget.RecyclerView
 import app.anchor.AnchorPreferences
 import app.anchor.applist.AlphabetIndexView
@@ -40,26 +41,53 @@ class SearchContainerView @JvmOverloads constructor(
     }
 
     private fun setupLetterIndex() {
-        val widthPx = (28 * resources.displayMetrics.density).toInt()
+        val widthPx = (AlphabetIndexView.STRIP_WIDTH_DP * resources.displayMetrics.density).toInt()
         val lp = RelativeLayout.LayoutParams(widthPx, RelativeLayout.LayoutParams.WRAP_CONTENT)
         lp.addRule(RelativeLayout.ALIGN_PARENT_END)
         lp.addRule(RelativeLayout.ALIGN_TOP, R.id.all_apps_header)
         lp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM)
         addView(letterIndex, lp)
 
-        // Reserve space in the RecyclerView so icons don't scroll behind the letter strip.
-        val rightPaddingPx = ((28 + 8) * resources.displayMetrics.density).toInt()
-        getMainAppsRecyclerView()?.apply {
-            setPadding(paddingLeft, paddingTop, rightPaddingPx, paddingBottom)
-            clipToPadding = true
+        // Inset the strip's letters below the search bar so the top letters don't collide with it.
+        // Computed from the search view's bottom edge relative to the strip's top (both share this
+        // parent), since heights aren't known until layout.
+        val gapPx = (8 * resources.displayMetrics.density).toInt()
+        val applyTopInset = {
+            val search = getSearchView()
+            if (search != null && search.height > 0) {
+                val topInset = (search.bottom - letterIndex.top + gapPx).coerceAtLeast(0)
+                if (letterIndex.paddingTop != topInset) {
+                    letterIndex.setPadding(0, topInset, 0, gapPx)
+                }
+            }
         }
+        getSearchView()?.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyTopInset() }
+        letterIndex.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyTopInset() }
+        post { applyTopInset() }
+
+        // Reserving right padding so icons don't scroll behind the strip is handled centrally in
+        // ActivityAllAppsContainerView.applyAdapterSideAndBottomPaddings() — doing it here would be
+        // clobbered every time the core re-applies its own padding (on insets/search-state changes).
 
         letterIndex.onLetterSelected = { letter ->
-            val lm = getMainAppsRecyclerView()?.layoutManager as? LinearLayoutManager
+            val rv = getMainAppsRecyclerView()
+            val lm = rv?.layoutManager as? LinearLayoutManager
             if (lm != null) {
                 val target = getMainAppsList().fastScrollerSections
                     .lastOrNull { it.sectionName.toString() == letter }
-                if (target != null) lm.scrollToPositionWithOffset(target.position, 0)
+                if (target != null) {
+                    // Smooth-scroll the section to the top edge rather than snapping. Re-aiming
+                    // mid-drag just retargets the running scroller, so dragging down the rail
+                    // glides through the list instead of jumping.
+                    val scroller = object : LinearSmoothScroller(rv.context) {
+                        override fun getVerticalSnapPreference() = SNAP_TO_START
+                        // ms-per-pixel; smaller = faster.
+                        override fun calculateSpeedPerPixel(dm: android.util.DisplayMetrics) =
+                            12f / dm.densityDpi
+                    }
+                    scroller.targetPosition = target.position
+                    lm.startSmoothScroll(scroller)
+                }
             }
         }
 

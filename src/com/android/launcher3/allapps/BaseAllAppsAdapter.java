@@ -268,18 +268,8 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
             case VIEW_TYPE_BOTTOM_VIEW_TO_SCROLL_TO:
                 return new ViewHolder(new View(mActivityContext));
             case VIEW_TYPE_SECTION_HEADER: {
-                // Anchor: alphabetical section letter header
-                android.widget.TextView header = new android.widget.TextView(mActivityContext);
-                header.setLayoutParams(new RecyclerView.LayoutParams(
-                        RecyclerView.LayoutParams.MATCH_PARENT,
-                        RecyclerView.LayoutParams.WRAP_CONTENT));
-                float dp = mActivityContext.getResources().getDisplayMetrics().density;
-                header.setPadding((int)(16 * dp), (int)(10 * dp), (int)(16 * dp), (int)(4 * dp));
-                header.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12f);
-                header.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-                header.setTextColor(com.android.launcher3.util.Themes.getAttrColor(
-                        mActivityContext, android.R.attr.textColorSecondary));
-                return new ViewHolder(header);
+                // Anchor: alphabetical section letter header with a top hairline group separator.
+                return new ViewHolder(new app.anchor.applist.SectionHeaderView(mActivityContext));
             }
             case VIEW_TYPE_FOLDER:
                 // LC-Feature: Folder support in All Apps
@@ -365,9 +355,13 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                                 : new SectionDecorationInfo(mActivityContext, ROUND_NOTHING);
                 break;
             case VIEW_TYPE_SECTION_HEADER:
-                // Anchor: bind the section letter text
+                // Anchor: bind the section letter text. Skip the top divider on the very first
+                // adapter item so the list doesn't open with a dangling rule above the "A" group.
                 adapterItem = mApps.getAdapterItems().get(position);
-                ((android.widget.TextView) holder.itemView).setText(adapterItem.sectionName);
+                app.anchor.applist.SectionHeaderView sectionHeader =
+                        (app.anchor.applist.SectionHeaderView) holder.itemView;
+                sectionHeader.setText(adapterItem.sectionName);
+                sectionHeader.setDrawTopDivider(position > 0);
                 break;
             case VIEW_TYPE_BOTTOM_VIEW_TO_SCROLL_TO:
             case VIEW_TYPE_ALL_APPS_DIVIDER:

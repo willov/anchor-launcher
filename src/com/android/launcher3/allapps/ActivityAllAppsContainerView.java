@@ -855,13 +855,13 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
             return;
         }
 
-        boolean bgVisible = mSearchUiManager.getBackgroundVisibility();
-        if (scrolledOffset == 0 && !isSearching()) {
-            bgVisible = true;
-        } else if (scrolledOffset > mHeaderThreshold) {
-            bgVisible = false;
-        }
-        mSearchUiManager.setBackgroundVisibility(bgVisible, 1 - prog);
+        // Anchor: keep the search pill background always visible while scrolling. Stock Launcher3
+        // fades it out past mHeaderThreshold, which leaves a bare magnifier icon floating over the
+        // list — jarring. We keep the bar pinned AND fully drawn; the focus-driven hide (search
+        // mode) still works because that calls setBackgroundVisibility directly from
+        // AllAppsSearchInput, bypassing this scroll path.
+        boolean bgVisible = isSearching() ? mSearchUiManager.getBackgroundVisibility() : true;
+        mSearchUiManager.setBackgroundVisibility(bgVisible, 1f);
     }
 
     protected int getHeaderColor(float blendRatio) {
@@ -1329,10 +1329,19 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
 
     private void applyAdapterSideAndBottomPaddings(DeviceProfile grid) {
         int bottomPadding = Math.max(mInsets.bottom, mNavBarScrimHeight);
+        // Anchor: reserve right-edge space on the MAIN list for the A–Z letter strip so icons
+        // never scroll behind it. Applied here (not once in SearchContainerView) because this
+        // method re-assigns mPadding.right on every insets/search-state change and would
+        // otherwise clobber a one-shot padding.
+        int letterStripReservePx =
+                new app.anchor.AnchorPreferences(getContext()).getDrawerLetterScroller()
+                        ? app.anchor.applist.AlphabetIndexView.reservedWidthPx(getContext())
+                        : 0;
         mAH.forEach(adapterHolder -> {
             adapterHolder.mPadding.bottom = bottomPadding;
             adapterHolder.mPadding.left = grid.allAppsPadding.left;
-            adapterHolder.mPadding.right = grid.allAppsPadding.right;
+            adapterHolder.mPadding.right = grid.allAppsPadding.right
+                    + (adapterHolder.mType == AdapterHolder.MAIN ? letterStripReservePx : 0);
             adapterHolder.applyPadding();
         });
     }

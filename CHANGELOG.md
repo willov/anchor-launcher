@@ -12,6 +12,8 @@ All notable changes to Anchor Launcher will be documented here.
 - Folder labels can now be shown on the home screen via Settings → Home Screen → Show labels on folders.
 
 ### Changed
+- App drawer **A–Z letter index** now glides to the tapped section with a smooth scroll instead of snapping; dragging down the strip scrolls continuously through the list.
+- App drawer **search bar stays fully drawn while scrolling**. Previously (stock Lawnchair behaviour) its pill background faded out once you scrolled past a threshold, leaving a bare magnifier icon floating over the list. The bar is now pinned and always shown complete; the focus-driven hide when you tap into search is unchanged.
 - Resizing the grid now **keeps icons where they are** instead of compacting them onto the first pages. When the grid shrinks, empty rows/columns are removed from the edges (and an off-edge icon slides just inside the new boundary); when it grows, every icon keeps its exact position and the new space is added at the edge.
 - Wallpaper parallax is now **equal in both directions** — a page swipe and a row switch drift the wallpaper by the same amount, each axis capped independently to what the image allows (so a screen-height image still pans sideways).
 - Rotation animation modes are now **Traditional / Instant / Fade**. "Fade" hides the icons instantly during the grid rebind (so the system's pre-transpose reflow never flashes through) and fades them back in over the pixel-stable wallpaper once settled. The fade-in speed is set by the new slider. The legacy "Crossfade" setting is migrated to "Fade".
@@ -19,6 +21,8 @@ All notable changes to Anchor Launcher will be documented here.
 - Rotation transition no longer fills the screen with the wallpaper's dominant colour. The workspace icons are hidden during the grid rebind and faded back in once it settles, over the already pixel-stable wallpaper — a cleaner, non-jarring transition.
 
 ### Fixed
+- App drawer icons no longer overlap the A–Z letter index strip. The right-padding reservation was being clobbered every time the core re-applied its own padding (on insets/search-state changes); it is now applied centrally so it always holds.
+- App drawer letter groups now have a visible separator — a hairline rule is drawn across the top of each alphabetical section header (the first header omits it).
 - In landscape, navigating between rows moved the wallpaper in the wrong vertical direction. The counter-rotation inverts some bitmap axes on the glass; the row transition now accounts for that per rotation, so vertical parallax tracks correctly in every orientation.
 - After rotating on the first page of an upper navigation row, that page visibly slid in from the side while the wallpaper stayed still. Cause: the row-contiguity reorder physically re-adds CellLayout views, and the workspace's `LayoutTransition` animated that move. The reorder is now wrapped to suppress the transition, so it is instant. A secondary one-frame page-flip during rebind is also prevented by setting the active row's parked screen as a pending-restore target before the rebind.
 - Background no longer snaps back to the page baseline after navigating up/down a row and then swiping horizontally (removed the drift-to-baseline behaviour entirely).
