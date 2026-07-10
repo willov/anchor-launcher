@@ -383,7 +383,15 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
 
         // During a drag, move to the target row's exact bounds immediately so the user cannot
         // scroll back into the previous row's pages while the animation is playing.
-        if (isDragging) updateScrollRange(toRow)
+        // Also re-park the EXTRA empty screen into the NEW active row: repositionExtraEmptyScreenForDrag
+        // is otherwise only called once at drag start (for the row the drag began on). Without
+        // re-running it here, switching rows mid-drag leaves EXTRA at the previous row's tail, so
+        // dragging to the right edge of the switched row cannot reach an empty screen to spawn a new
+        // page — the user had to drop and re-grab to create a screen on an upper row.
+        if (isDragging) {
+            updateScrollRange(toRow)
+            workspace.repositionExtraEmptyScreenForDrag()
+        }
 
         // Going UP (higher index): current exits DOWN, new enters from ABOVE
         // Going DOWN (lower index): current exits UP,   new enters from BELOW
@@ -413,6 +421,9 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
             .setInterpolator(AccelerateInterpolator())
             .withEndAction {
                 updateScrollRange(toRow)
+                // Re-park EXTRA into the settled row too (see note at the immediate updateScrollRange
+                // above) so new-screen-on-right-edge works for the full duration of the drag.
+                if (isDragging) workspace.repositionExtraEmptyScreenForDrag()
                 workspace.setCurrentPage(targetWorkspacePage(toRow))
                 workspace.translationY = enterTranslation
                 workspace.animate()
