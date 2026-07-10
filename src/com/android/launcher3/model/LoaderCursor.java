@@ -635,28 +635,29 @@ public class LoaderCursor extends CursorWrapper {
 
         final int countX = mIDP.numColumns;
         final int countY = mIDP.numRows;
-        if (item.container == Favorites.CONTAINER_DESKTOP && item.cellX < 0 || item.cellY < 0
-                || item.cellX + item.spanX > countX || item.cellY + item.spanY > countY) {
-            Log.e(TAG, "Error loading shortcut " + item
-                    + " into cell (" + containerIndex + "-" + item.screenId + ":"
-                    + item.cellX + "," + item.cellY
-                    + ") out of screen bounds ( " + countX + "x" + countY + ")");
-            return false;
+        if (item.container == Favorites.CONTAINER_DESKTOP
+                && (item.cellX < 0 || item.cellY < 0
+                    || item.cellX + item.spanX > countX || item.cellY + item.spanY > countY)) {
+            // Anchor: NEVER silently drop a workspace item just because its stored cell is out of
+            // the current grid bounds. Historically this returned false → markDeleted → permanent
+            // data loss. It was the second domino of the rotation-transpose data-loss bug: if a
+            // transpose left DB coordinates in a frame that didn't match the loaded numRows/numColumns
+            // (e.g. a rotation whose DB rewrite was lost to a process kill), every item whose cellY
+            // exceeded numRows — the entire bottom band of a full page — was culled here. Instead we
+            // clamp/re-home the item into a valid cell and persist the correction so it heals the DB.
+            if (rehomeOutOfBoundsItem(item, countX, countY)) {
+                // Fall through: item now has valid cellX/cellY; occupancy check below still applies.
+            } else {
+                Log.e(TAG, "Error loading shortcut " + item
+                        + " into cell (" + containerIndex + "-" + item.screenId + ":"
+                        + item.cellX + "," + item.cellY
+                        + ") out of screen bounds ( " + countX + "x" + countY
+                        + ") and no vacant cell to re-home it");
+                return false;
+            }
         }
 
-        if (!mOccupied.containsKey(item.screenId)) {
-            GridOccupancy screen = new GridOccupancy(countX + 1, countY + 1);
-            if (item.screenId == Workspace.FIRST_SCREEN_ID && PreferenceExtensionsKt.firstBlocking(preferenceManager2.getEnableSmartspace())) {
-                // Mark the first X columns (X is width of the search container) in the first row as
-                // occupied (if the feature is enabled) in order to account for the search
-                // container.
-                int spanX = mIDP.numSearchContainerColumns;
-                int spanY = 1;
-                screen.markCells(0, 0, spanX, spanY, true);
-            }
-            mOccupied.put(item.screenId, screen);
-        }
-        final GridOccupancy occupancy = mOccupied.get(item.screenId);
+        final GridOccupancy occupancy = getOrCreateOccupancy(item.screenId);
 
         // Check if any workspace icons overlap with each other
         if (occupancy.isRegionVacant(item.cellX, item.cellY, item.spanX, item.spanY)) {
@@ -669,6 +670,66 @@ public class LoaderCursor extends CursorWrapper {
                     + ") already occupied");
             return PreferenceExtensionsKt.firstBlocking(preferenceManager2.getAllowWidgetOverlap());
         }
+    }
+
+    /**
+     * Lazily creates (and caches) the {@link GridOccupancy} for a workspace screen, seeding the
+     * search-container reservation on the first screen when Smartspace is enabled — mirrors the
+     * inline logic this replaced so callers share one consistent occupancy per screen.
+     */
+    private GridOccupancy getOrCreateOccupancy(int screenId) {
+        GridOccupancy occupancy = mOccupied.get(screenId);
+        if (occupancy == null) {
+            occupancy = new GridOccupancy(mIDP.numColumns + 1, mIDP.numRows + 1);
+            if (screenId == Workspace.FIRST_SCREEN_ID
+                    && PreferenceExtensionsKt.firstBlocking(preferenceManager2.getEnableSmartspace())) {
+                // Reserve the first row's search-container columns so items don't load under it.
+                occupancy.markCells(0, 0, mIDP.numSearchContainerColumns, 1, true);
+            }
+            mOccupied.put(screenId, occupancy);
+        }
+        return occupancy;
+    }
+
+    /**
+     * Anchor: re-homes a workspace item whose stored cell is out of the current grid bounds into a
+     * valid cell, in place of the historical silent delete. First clamps the top-left so the item's
+     * span fits inside {@code countX x countY}; if that clamped cell is already occupied by an
+     * earlier item, asks the screen occupancy for any vacant cell that fits. On success the item's
+     * {@link ItemInfo#cellX}/{@link ItemInfo#cellY} are updated and the correction is persisted so
+     * the stale coordinate is healed in the DB and never culled again. Returns false only when the
+     * screen has no room at all (genuinely full) — the rare case where discarding is acceptable.
+     */
+    private boolean rehomeOutOfBoundsItem(ItemInfo item, int countX, int countY) {
+        final GridOccupancy occupancy = getOrCreateOccupancy(item.screenId);
+
+        // Snapshot the cells already taken on this screen as (col,row) pairs for the pure placement
+        // decision. Only runs for the rare out-of-bounds item, not on the per-item hot path.
+        java.util.Set<kotlin.Pair<Integer, Integer>> occupied = new java.util.HashSet<>();
+        for (int x = 0; x < countX; x++) {
+            for (int y = 0; y < countY; y++) {
+                if (occupancy.cells[x][y]) {
+                    occupied.add(new kotlin.Pair<>(x, y));
+                }
+            }
+        }
+
+        // Delegate to the pure, unit-tested placement math so production runs exactly the tested code.
+        kotlin.Pair<Integer, Integer> rehomed = GridResizePlacement.INSTANCE.rehomeCell(
+                item.cellX, item.cellY, item.spanX, item.spanY, countX, countY, occupied);
+        if (rehomed == null) {
+            return false;
+        }
+        int newX = rehomed.getFirst();
+        int newY = rehomed.getSecond();
+
+        Log.w(TAG, "Re-homing out-of-bounds item " + item + " from (" + item.cellX + ","
+                + item.cellY + ") to (" + newX + "," + newY + ") within " + countX + "x" + countY);
+        item.cellX = newX;
+        item.cellY = newY;
+        // Persist the healed position so this item is never re-evaluated as out-of-bounds again.
+        updater().put(Favorites.CELLX, newX).put(Favorites.CELLY, newY).commit();
+        return true;
     }
 
     @AssistedFactory

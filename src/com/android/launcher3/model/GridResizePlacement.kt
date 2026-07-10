@@ -63,4 +63,56 @@ object GridResizePlacement {
             (line - dropped.count { it < line }).coerceAtMost(target - 1)
         }
     }
+
+    /**
+     * Pure placement decision for re-homing a workspace item whose stored cell is out of the current
+     * grid bounds — the math behind `LoaderCursor.rehomeOutOfBoundsItem`, extracted so it can be
+     * locked down by JVM unit tests (see [GridResizePlacement] rationale above).
+     *
+     * Backs the fix for the rotation data-loss bug: a transpose could leave DB coordinates in a frame
+     * that didn't match the loaded grid, so an item's cellY exceeded numRows. Instead of silently
+     * deleting it (the old `checkItemPlacement` behaviour), we clamp/re-home it into a valid cell.
+     *
+     * Policy:
+     *  1. If the item's span is larger than the grid itself, it can never be placed → return null.
+     *  2. Clamp the top-left so the span fits: `x in [0, countX - spanX]`, `y in [0, countY - spanY]`.
+     *  3. If that clamped region is vacant, use it.
+     *  4. Otherwise scan row-major for the first vacant region that fits the span (matches
+     *     `GridOccupancy.findVacantCell`). Return null only if the screen is genuinely full.
+     *
+     * @param cellX/cellY the item's stored (possibly out-of-bounds) top-left
+     * @param spanX/spanY the item's size in cells
+     * @param countX/countY the current grid dimensions
+     * @param occupied cells already taken on this screen, as (col, row) pairs
+     * @return the re-homed (col, row) top-left, or null if the item cannot be placed at all
+     */
+    fun rehomeCell(
+        cellX: Int, cellY: Int,
+        spanX: Int, spanY: Int,
+        countX: Int, countY: Int,
+        occupied: Set<Pair<Int, Int>>,
+    ): Pair<Int, Int>? {
+        if (spanX > countX || spanY > countY || spanX < 1 || spanY < 1) return null
+
+        fun regionVacant(x: Int, y: Int): Boolean {
+            for (dx in 0 until spanX) {
+                for (dy in 0 until spanY) {
+                    if ((x + dx) to (y + dy) in occupied) return false
+                }
+            }
+            return true
+        }
+
+        val clampedX = cellX.coerceIn(0, countX - spanX)
+        val clampedY = cellY.coerceIn(0, countY - spanY)
+        if (regionVacant(clampedX, clampedY)) return clampedX to clampedY
+
+        // Row-major scan for the first vacant region that fits.
+        for (y in 0..(countY - spanY)) {
+            for (x in 0..(countX - spanX)) {
+                if (regionVacant(x, y)) return x to y
+            }
+        }
+        return null
+    }
 }
