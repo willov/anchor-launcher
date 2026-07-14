@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import app.lawnchair.LawnchairApp
+import app.anchor.grid.GridSizeCaps
 import app.lawnchair.data.iconoverride.IconOverrideRepository
 import app.lawnchair.nexuslauncher.OverlayCallbackImpl
 import app.lawnchair.preferences.customPreferenceAdapter
@@ -50,6 +51,7 @@ import app.lawnchair.ui.preferences.components.controls.SliderPreference
 import app.lawnchair.ui.preferences.components.controls.SwitchPreference
 import app.lawnchair.ui.preferences.components.layout.PreferenceGroup
 import app.lawnchair.ui.preferences.components.layout.PreferenceLayout
+import app.lawnchair.ui.preferences.navigation.GridWizard
 import app.lawnchair.ui.preferences.navigation.HomeScreenGrid
 import app.lawnchair.util.collectAsStateBlocking
 import com.android.launcher3.LauncherAppState
@@ -66,6 +68,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
+import com.patrykmichalik.opto.core.firstBlocking
 import com.patrykmichalik.opto.core.setBlocking
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -200,6 +203,13 @@ fun HomeScreenPreferences(
                 )
             }
             Item {
+                NavigationActionPreference(
+                    label = stringResource(id = R.string.anchor_run_grid_wizard),
+                    subtitle = stringResource(id = R.string.anchor_run_grid_wizard_desc),
+                    destination = GridWizard,
+                )
+            }
+            Item {
                 SwitchPreference(
                     adapter = lockHomeScreenAdapter,
                     label = stringResource(id = R.string.home_screen_lock),
@@ -258,6 +268,18 @@ fun HomeScreenPreferences(
         var dialogReduceSpacing by remember { mutableStateOf(true) }
 
         if (showLabelsOffDialog) {
+            // Headroom check for "add a column": compute the fit-aware cap for the NEW (labels-off)
+            // state against the spacing that WILL apply (the increase-spacing checkbox raises the
+            // gap, which lowers the column cap). If columns are already at that cap, there is no
+            // room to add one, so grey out the option.
+            val factor = prefs2.homeIconSizeFactor.firstBlocking()
+            val effectiveSpacing =
+                (if (dialogIncreaseSpacing) 12 else prefs2.workspaceSpacingDp.firstBlocking()).toFloat()
+            val addColumnCap = GridSizeCaps.compute(
+                context, effectiveSpacing, factor, showLabels = false,
+            ).maxColumns
+            val canAddColumn = prefs.workspaceColumns.get() < addColumnCap
+            if (!canAddColumn) dialogAddColumn = false
             AlertDialog(
                 onDismissRequest = { showLabelsOffDialog = false },
                 title = { Text(stringResource(id = R.string.labels_off_dialog_title)) },
@@ -266,8 +288,20 @@ fun HomeScreenPreferences(
                         Text(stringResource(id = R.string.labels_off_dialog_body))
                         Spacer(modifier = androidx.compose.ui.Modifier.height(12.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = dialogAddColumn, onCheckedChange = { dialogAddColumn = it })
-                            Text(stringResource(id = R.string.labels_off_dialog_add_column))
+                            Checkbox(
+                                checked = dialogAddColumn,
+                                onCheckedChange = { dialogAddColumn = it },
+                                enabled = canAddColumn,
+                            )
+                            Text(
+                                text = stringResource(id = R.string.labels_off_dialog_add_column),
+                                color = if (canAddColumn) {
+                                    androidx.compose.material3.LocalContentColor.current
+                                } else {
+                                    androidx.compose.material3.MaterialTheme.colorScheme.onSurface
+                                        .copy(alpha = 0.38f)
+                                },
+                            )
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(checked = dialogIncreaseSpacing, onCheckedChange = { dialogIncreaseSpacing = it })
@@ -277,8 +311,21 @@ fun HomeScreenPreferences(
                 },
                 confirmButton = {
                     androidx.compose.material3.TextButton(onClick = {
-                        if (dialogAddColumn) prefs.workspaceColumns.set(prefs.workspaceColumns.get() + 1)
+                        // Apply spacing first so the cap is computed against the spacing the user
+                        // is about to have (a larger gap → smaller S → fewer cells fit).
                         if (dialogIncreaseSpacing) prefs2.workspaceSpacingDp.setBlocking(12)
+                        if (dialogAddColumn) {
+                            // Respect the fit-aware cap for the NEW (labels-off) state so the
+                            // suggestion never pushes columns past where icons would overflow.
+                            val targetSpacing = prefs2.workspaceSpacingDp.firstBlocking().toFloat()
+                            val factor = prefs2.homeIconSizeFactor.firstBlocking()
+                            val cap = GridSizeCaps.compute(
+                                context, targetSpacing, factor, showLabels = false,
+                            ).maxColumns
+                            prefs.workspaceColumns.set(
+                                (prefs.workspaceColumns.get() + 1).coerceAtMost(cap),
+                            )
+                        }
                         showLabelsOffDialog = false
                     }) { Text(stringResource(id = R.string.labels_off_dialog_apply)) }
                 },
@@ -326,9 +373,9 @@ fun HomeScreenPreferences(
         PreferenceGroup(heading = stringResource(id = R.string.icons)) {
             Item {
                 SliderPreference(
-                    label = stringResource(id = R.string.icon_sizes),
+                    label = stringResource(id = R.string.max_icon_size),
                     adapter = prefs2.homeIconSizeFactor.getAdapter(),
-                    step = 0.1f,
+                    step = 0.05f,
                     valueRange = 0.5F..1.5F,
                     showAsPercentage = true,
                 )

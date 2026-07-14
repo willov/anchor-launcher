@@ -312,6 +312,13 @@ android {
             }
         }
 
+        // Anchor: debug-only resource overrides. These source sets use EXPLICIT res.srcDirs, so the
+        // automatic src/debug/res convention does not apply — declare it. Used to badge the debug
+        // launcher icon with "DEBUG" so the testing build is visually distinct from the Play build.
+        debug {
+            res.srcDirs = ['debug/res']
+        }
+
         // Anchor: host-side JVM unit tests for pure (Android-free) logic. Kept in its own dir so it
         // does NOT pull in the heavyweight instrumented tests/multivalentTests tree.
         test {

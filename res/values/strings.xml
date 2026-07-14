@@ -62,6 +62,46 @@
     <string name="anchor_test_wallpaper_label">Debug: test wallpaper</string>
     <string name="anchor_test_wallpaper_description">Show a generated test pattern (gradient + grid) instead of the real wallpaper, to verify rotation and parallax.</string>
 
+    <!-- Grid/icon first-launch setup wizard -->
+    <string name="anchor_grid_onboarding_title">Set up your home grid</string>
+    <string name="anchor_grid_onboarding_icon_size">Maximum icon size: %1$d%%</string>
+    <string name="anchor_grid_onboarding_density">Spacing</string>
+    <string name="anchor_grid_density_spacious">Spacious</string>
+    <string name="anchor_grid_density_balanced">Balanced</string>
+    <string name="anchor_grid_density_dense">Dense</string>
+    <string name="anchor_grid_onboarding_preview">Recommended grid: %1$d × %2$d</string>
+    <string name="anchor_grid_onboarding_apply">Use this grid</string>
+    <string name="anchor_grid_onboarding_skip">Skip</string>
+
+    <!-- Compose grid wizard screen -->
+    <string name="anchor_grid_wizard_title">Quick setup</string>
+    <string name="anchor_grid_wizard_wallpaper_heading">Wallpaper</string>
+    <string name="anchor_grid_wizard_wallpaper_pick">Choose an image</string>
+    <string name="anchor_grid_wizard_wallpaper_desc">Anchor keeps your wallpaper in place when you rotate, with parallax. Pick an image to enable it, or skip to keep the system wallpaper.</string>
+    <string name="anchor_grid_wizard_labels_heading">Labels</string>
+    <string name="anchor_grid_wizard_icon_heading">Icon size</string>
+    <string name="anchor_grid_wizard_icon_size">Icon size</string>
+    <string name="anchor_icon_size_small">Small</string>
+    <string name="anchor_icon_size_large">Large</string>
+    <string name="anchor_grid_wizard_example_label">Anchor</string>
+    <string name="anchor_grid_wizard_back">Back</string>
+    <string name="anchor_grid_wizard_next">Next</string>
+    <!-- First-launch gate dialog -->
+    <string name="anchor_grid_gate_title">Welcome to Anchor</string>
+    <string name="anchor_grid_gate_message">Anchor works a little differently — your icons stay put when you rotate. Want a quick setup to pick your icon size, labels and grid? You can always change it later in Settings.</string>
+    <string name="anchor_grid_gate_yes">Quick setup</string>
+    <string name="anchor_grid_gate_no">No thanks</string>
+    <string name="anchor_run_grid_wizard">Run setup wizard</string>
+    <string name="anchor_run_grid_wizard_desc">Pick icon size, labels and density again, and recompute a grid for this device.</string>
+
+    <!-- Link rows/columns toggle -->
+    <string name="anchor_link_grid_dimensions">Link rows and columns</string>
+    <string name="anchor_link_grid_dimensions_desc">Move one and the other follows your screen\'s proportions.</string>
+
+    <!-- Populate grid preview -->
+    <string name="anchor_populate_grid">Populate grid</string>
+    <string name="anchor_populate_grid_desc">Fill the preview with sample icons to see the layout. Preview only — your apps aren\'t moved.</string>
+
     <!-- Work folder name -->
     <string name="work_folder_name">Work</string>
     <!-- Displayed when user selects a shortcut for an app that was uninstalled [CHAR_LIMIT=none]-->

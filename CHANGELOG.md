@@ -5,6 +5,8 @@ All notable changes to Anchor Launcher will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Grid setup wizard** — a first-launch (and on-demand via Settings → Home Screen → Run setup wizard) guided flow: pick a wallpaper, choose your icon size and whether to show labels, then a density (Spacious / Balanced / Dense). Anchor computes a grid sized to your device and shows a live preview populated with your real app icons. The chosen icon size is **locked** — density only changes how many rows/columns fit and how much space is between them, never the icon size. A larger icon simply means fewer columns; the recommendation never overflows the screen or shrinks your icons to fit.
+- **"Populate grid" preview toggle** in Settings → Home Screen → Grid — fills the grid preview's empty cells with sample app icons so you can judge a layout before applying it (never touches your real layout).
 - **Wallpaper parallax** strength slider (Settings → Home Screen, shown with a custom wallpaper): sets how far the wallpaper drifts per page swipe / row switch, as a percent of the screen's short side (0–25 %, default 15 %; 0 turns parallax off).
 - Rotation animation now has a **Fade duration** slider (50–600 ms) that controls how quickly icons fade back in after a rotation.
 - Dialog when toggling labels off offers to add a column and increase cell spacing; toggling labels back on offers the reverse.
@@ -12,6 +14,7 @@ All notable changes to Anchor Launcher will be documented here.
 - Folder labels can now be shown on the home screen via Settings → Home Screen → Show labels on folders.
 
 ### Changed
+- **Grid row/column sliders are now fit-aware.** Instead of a flat 0–20/30 range, each slider caps at the most rows/columns that actually fit your current icon size without overflowing the screen or shrinking icons — and the caps always allow whatever the setup wizard recommends. The "increase max grid size" toggle still lifts the cap for power users who accept overflow. (Supersedes the earlier flat "raised to 20/30" behaviour.)
 - App drawer **A–Z letter index** now glides to the tapped section with a smooth scroll instead of snapping; dragging down the strip scrolls continuously through the list.
 - App drawer **search bar stays fully drawn while scrolling**. Previously (stock Lawnchair behaviour) its pill background faded out once you scrolled past a threshold, leaving a bare magnifier icon floating over the list. The bar is now pinned and always shown complete; the focus-driven hide when you tap into search is unchanged.
 - Resizing the grid now **keeps icons where they are** instead of compacting them onto the first pages. When the grid shrinks, empty rows/columns are removed from the edges (and an off-edge icon slides just inside the new boundary); when it grows, every icon keeps its exact position and the new space is added at the edge.

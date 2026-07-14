@@ -541,7 +541,11 @@ class LawnchairLauncher : QuickstepLauncher() {
         restartIfPending()
         // Apply any wallpaper source/image change made in Settings without a manual restart.
         wallpaperStabilizationManager.reapplyIfChanged()
-        maybeShowWallpaperOnboarding()
+        // Grid/icon setup takes priority on first launch; the wallpaper prompt waits until the grid
+        // onboarding has been shown so two dialogs never stack.
+        if (!maybeShowGridOnboarding()) {
+            maybeShowWallpaperOnboarding()
+        }
 
         dragLayer.viewTreeObserver.addOnDrawListener(
             object : ViewTreeObserver.OnDrawListener {
@@ -574,6 +578,45 @@ class LawnchairLauncher : QuickstepLauncher() {
      * the NORMAL state so it doesn't interrupt all-apps/overview. "Choose image" opens Anchor's photo
      * picker; "Not now" leaves the system wallpaper. Either way it never shows again.
      */
+    /**
+     * First-launch, one-time gate. Shows a simple "Anchor works a bit differently — quick setup?"
+     * dialog. "Quick setup" deep-links into the Compose grid wizard ([GridWizardScreen]) where the
+     * user picks labels, icon size and density against a live preview; "No thanks" applies the
+     * device-tuned BALANCED grid at the current icon size so the layout still fits this screen.
+     * Either choice marks [app.anchor.AnchorPreferences.gridOnboardingShown] so it never shows again.
+     * Returns true if it showed (or is about to) so the caller defers the wallpaper prompt.
+     */
+    private fun maybeShowGridOnboarding(): Boolean {
+        val anchorPrefs = app.anchor.AnchorPreferences(this)
+        if (anchorPrefs.gridOnboardingShown) return false
+        if (!isInState(com.android.launcher3.LauncherState.NORMAL)) return false
+        anchorPrefs.gridOnboardingShown = true
+        // The grid wizard now includes the wallpaper choice as its first step, so the standalone
+        // wallpaper onboarding prompt is retired — mark it shown too, otherwise it fires on the
+        // next resume after the wizard and the user sees a duplicate wallpaper prompt.
+        anchorPrefs.wallpaperOnboardingShown = true
+        workspace.postDelayed({
+            if (isDestroyed || isFinishing) return@postDelayed
+            android.app.AlertDialog.Builder(this)
+                .setTitle(R.string.anchor_grid_gate_title)
+                .setMessage(R.string.anchor_grid_gate_message)
+                .setPositiveButton(R.string.anchor_grid_gate_yes) { _, _ ->
+                    startActivity(
+                        app.lawnchair.ui.preferences.PreferenceActivity.createIntent(
+                            this,
+                            app.lawnchair.ui.preferences.navigation.GridWizard,
+                        ),
+                    )
+                }
+                .setNegativeButton(R.string.anchor_grid_gate_no) { _, _ ->
+                    // Apply the device-tuned balanced default so even a decline fits the screen.
+                    app.anchor.grid.GridWizardDefaults.applyBalanced(this)
+                }
+                .show()
+        }, 600)
+        return true
+    }
+
     private fun maybeShowWallpaperOnboarding() {
         val anchorPrefs = app.anchor.AnchorPreferences(this)
         if (anchorPrefs.wallpaperOnboardingShown) return

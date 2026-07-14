@@ -46,6 +46,20 @@ class AnchorPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_WALLPAPER_ONBOARDING_SHOWN, false)
         set(value) { prefs.edit().putBoolean(KEY_WALLPAPER_ONBOARDING_SHOWN, value).apply() }
 
+    /** True once the first-launch grid/icon setup wizard has been shown (or skipped). */
+    var gridOnboardingShown: Boolean
+        get() = prefs.getBoolean(KEY_GRID_ONBOARDING_SHOWN, false)
+        set(value) { prefs.edit().putBoolean(KEY_GRID_ONBOARDING_SHOWN, value).apply() }
+
+    /**
+     * True (default) = columns and rows are linked: moving one grid slider moves the other along the
+     * screen's aspect ratio (like linked width/height in a design tool), keeping the sweet-spot
+     * proportions the recommendation engine targets. False = the sliders move independently.
+     */
+    var linkGridDimensions: Boolean
+        get() = prefs.getBoolean(KEY_LINK_GRID_DIMENSIONS, true)
+        set(value) { prefs.edit().putBoolean(KEY_LINK_GRID_DIMENSIONS, value).apply() }
+
     /**
      * True when the counter-rotation stabilization should be active (i.e. a bitmap we can render is
      * available). False ⇒ leave the system wallpaper alone (FLAG_SHOW_WALLPAPER, normal rotation).
@@ -138,6 +152,8 @@ class AnchorPreferences(context: Context) {
         private const val KEY_WALLPAPER_SOURCE = "wallpaper_source"
         private const val KEY_CUSTOM_WALLPAPER_PATH = "custom_wallpaper_path"
         private const val KEY_WALLPAPER_ONBOARDING_SHOWN = "wallpaper_onboarding_shown"
+        private const val KEY_GRID_ONBOARDING_SHOWN = "grid_onboarding_shown"
+        private const val KEY_LINK_GRID_DIMENSIONS = "link_grid_dimensions"
         private const val KEY_USE_TEST_WALLPAPER = "use_test_wallpaper"
         private const val KEY_ROTATION_TRANSITION = "rotation_transition"
         private const val KEY_FADE_DURATION       = "rotation_fade_duration_ms"

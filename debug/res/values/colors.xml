@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Copyright (C) 2026 Anchor Launcher Contributors
+  ~
+  ~ Licensed under the Apache License, Version 2.0.
+  ~ See LICENSE for details.
+  -->
+<resources>
+    <!--
+      Debug-build-only override of the launcher icon's adaptive background colour. The Play build
+      keeps the dark-navy #1A2744; the local testing build uses a warm amber so the two installs are
+      instantly distinguishable on the home screen / app list. Foreground icon is unchanged.
+      This file lives in the `debug` source set, so it only applies to debug builds.
+    -->
+    <color name="ic_launcher_background">#C2410C</color>
+</resources>

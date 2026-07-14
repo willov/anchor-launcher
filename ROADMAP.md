@@ -2,6 +2,60 @@
 
 ## Next Up
 
+### Grid setup wizard — ✅ COMPLETE & VERIFIED ON DEVICE (2026-07-12)
+
+First-launch (and on-demand via Settings → Home Screen → Run setup wizard) 3-page flow
+(`GridWizardScreen.kt`: Wallpaper → Cell → Grid) that recommends a grid sized to the device.
+
+**The sizing model (the hard-won invariant):** the user picks an ICON SIZE first; that size is
+**LOCKED** and is what limits how many columns/rows fit. Density (Spacious / Balanced / Dense)
+changes only the column/row COUNT and the gap — never the icon size. The pure math lives in
+`GridSizeCaps.recommendPure` / `computePure` (Context-free, unit-tested — `GridSizeCapsTest`):
+
+- **Column count** = most columns whose cell still holds the full desired icon at ≥ a minimum gap
+  (`MIN_DENSE_GAP_DP`), minus the density offset. So even Dense never squishes the icon, and a
+  larger icon simply caps columns lower. Distinct by construction (spacious < balanced ≤ dense).
+- **Even gap** = leftover short-side space split into (cols+1) parts, capped at ~½ cell so it never
+  dwarfs the icons. (A gap large enough to shrink the cell below the icon *would* shrink the icon —
+  the cap prevents that.)
+- **Row count** = aspect-matched (`round(cols × screenAspect)`), stepped down until the grid fits
+  the raw long side with `gridH ≤ longRaw − 2 × maxInset` (the top-cutout clearance — the override's
+  Phase-4 compensation subtracts the cutout from the TOP padding, so that is the true no-overflow
+  bound). The manual slider caps (`computePure`) are DERIVED from the Dense recommendation, so they
+  always allow what the wizard suggests and can never overflow (unit-tested).
+- **P (edge padding) MUST equal the launcher override's P** (= landscape short-side inset ≈ bottom
+  nav + 4dp). Using a smaller P here was the root "icon not locked" bug: recommend assumed bigger
+  cells than the launcher produced, so the override's `icon = min(cellFit, desired)` silently shrank
+  the icon. Fixed — icon is now genuinely constant across densities (verified by measuring on device
+  and by `GridSizeCapsTest.iconSizeIsPreservedAcrossDensities`).
+
+**Preview:** the Grid step uses a **faithful custom Compose render** (`GridPreview` in
+`GridWizardScreen.kt`), NOT the full-launcher `LauncherPreviewView`. The launcher preview scaled by
+grid height, which made dense icons look *bigger* than spacious (backwards). The Compose render
+draws the real cols×rows at the fixed icon fraction of the card (`GridSizeCaps.previewMetrics`) using
+the user's REAL installed app icons (`LauncherApps.getActivityList`) — so it matches reality and the
+icon stays constant across densities.
+
+**Also fixed along the way:** ExampleCell `getDeviceProfile` NPE crash; "Use this grid" no-op
+(`popBackStack` → `activity.finish()` fallback); duplicate wallpaper popup (grid gate sets
+`wallpaperOnboardingShown`); and — in the SETTINGS grid preview (`GridOverridesPreview` +
+`AnchorPreviewPopulator`, which still uses the real launcher render) — "Populate grid" overlaying
+real icons (occupancy now read from the child views' `CellLayoutLayoutParams`, because
+`CellLayout.isOccupied()` is NOT populated in the preview renderer) and solid-colour placeholder
+icons (pool now filters to non-low-res bitmaps, upgrading via `IconCache` if needed).
+
+**Open polish (not blockers):**
+
+1. **Link rows/columns: grey out the driven axis.** When "Link rows and columns" is ON, the slider
+   computed from the other should be visually disabled/greyed. `HomeScreenGridPreferences.kt`.
+2. **App-drawer (all-apps) icon size ≠ home-screen icon size.** Home icons use Anchor's square-cell
+   override (`InvariantDeviceProfile.withDimensionsOverride`); all-apps icons use `dp.allAppsIconSizePx`
+   (`allAppsIconSize × drawerIconSizeFactor` in `DeviceProfileOverrides.applyUi`) — a separate path
+   the override doesn't touch, so they diverge. If they should match, set `allAppsIconSizePx` from the
+   same desired-icon basis in the override (which already aligns the drawer COLUMN count there).
+
+## Next Up
+
 ### 0. Grid-resize migration — spatial preservation ✅ DONE & VERIFIED ON DEVICE 2026-06-09
 
 **Goal:** changing the grid (rows/cols) must keep icons in place instead of compacting them all onto
@@ -159,6 +213,8 @@ for manual evaluation; not bundled in-app yet.
 |-------|-------|
 | ~~Wallpaper parallax anisotropic (h vs v)~~ FIXED 2026-06-09 | Equal-drift model: each step (page swipe / row switch) drifts the wallpaper a target `D = 8% × screen short side` glass-px, capped PER AXIS independently at its own pan room (so a portrait-height image still pans horizontally — neither axis zeroes the other). Row spacing is now D-based from the bottom rest (lock match preserved). Pure fns in `WallpaperCropMath` (`worldTravelForGlassDrift`/`horizontalSweepWorld`/`rowWorldOffset`), unit-tested (14 tests). Device-verified. Tune `DRIFT_FRACTION` for strength. |
 | ~~Wallpaper moves in wrong direction on rotation~~ FIXED 2026-06-09 | Was actually the LANDSCAPE vertical parallax inverted (rotation itself was fine). The counter-rotation negates bitmap-X on glass-Y for ROT_90, but row transitions drove worldX with a + sign. Fixed via per-rotation (axis,sign) tables in the new pure `WallpaperCropMath` (`horizontalGlassAxis`/`verticalGlassAxis`); manager routes scroll/row/rest-init through them. Unit-tested (`WallpaperCropMathTest`, 9 tests) + device-verified. |
+| Backup/restore scrambles multi-row layout | **Found 2026-06-13.** Lawnchair's Backup & Restore saves the workspace DB but NOT Anchor's per-row screen assignments (`AnchorPreferences.row_screens_*`). Worse, those assignments reference specific screen IDs, which **change on restore** — so even if backed up verbatim they'd be stale. After restore, `TwoRowNavigationManager` partitions rows against the wrong IDs → pages land in the wrong row (observed: backup P1R0→P0R1, P0R1→P1R0, P1R1→P2R0) and manual drags also place wrong ("launcher thinks the upper row is at a given index"). Fix needs row membership to survive ID remapping or be reconstructed from something ID-stable (e.g. page order/position), AND the row prefs included in the backup set. Also seen: restore sometimes only "takes" on the second attempt (one-time post-restore reload timing). |
+| Custom wallpaper pick doesn't set source (standalone path) | **Found 2026-06-13.** The first-launch wallpaper prompt / standalone picker sometimes leaves `wallpaperSource=System` after picking an image, so stabilization never turns on. `AnchorWallpaperPicker.launch` sets the source on success, so the likely cause is the launcher Activity not being resumed when the result returns (so `reapplyIfChanged` doesn't fire) or a null result URI. **Worked around** by adding the wallpaper choice as a step in the grid wizard (the reliable path); the standalone path still needs a proper fix. |
 | Infinite scroll broken in multi-row mode | Wraps across all rows instead of within the current row. Hidden in settings when `rowCount > 1` as a stopgap. |
 | Notification badge dots missing | Lawnchair 16 regression; upstream fix pending. |
 | Wallpaper stabilization: no landscape parallax | In landscape, left/right parallax requires extra bitmap height (bitmap-Y maps to screen-X after counter-rotation). Standard wallpapers have bmp.height == rawH (no vertical room), so landscape wallpaper is static. Wallpapers with extra height get natural srcTop parallax. A zoom-based workaround was tried but broke spatial stability. |

@@ -52,8 +52,9 @@ fun DummyLauncherBox(
 fun DummyLauncherLayout(
     idp: InvariantDeviceProfile,
     modifier: Modifier = Modifier,
+    populateGrid: Boolean = false,
 ) {
-    val previewView = createPreviewView(idp)
+    val previewView = createPreviewView(idp, populateGrid)
     Crossfade(targetState = previewView, label = "") {
         val view = it
         AndroidView(
@@ -81,14 +82,23 @@ fun invariantDeviceProfile(): InvariantDeviceProfile {
 }
 
 @Composable
-fun createPreviewView(idp: InvariantDeviceProfile = invariantDeviceProfile()): View? {
+fun createPreviewView(
+    idp: InvariantDeviceProfile = invariantDeviceProfile(),
+    populateGrid: Boolean = false,
+): View? {
     val context = LocalContext.current
     val lifecycleState = lifecycleState()
     if (!lifecycleState.isAtLeast(Lifecycle.State.RESUMED)) {
         return null
     }
     val previewManager = remember { LauncherPreviewManager(context) }
-    return remember(idp) { previewManager.createPreviewView(idp) }
+    // Keyed on populateGrid so toggling the "Populate grid" switch rebuilds the preview. The
+    // render-only flag must be set BEFORE the renderer binds (it reads it at bind time); setting it
+    // here, inside the keyed remember, guarantees that ordering.
+    return remember(idp, populateGrid) {
+        app.anchor.grid.AnchorPreviewPopulator.setEnabled(populateGrid)
+        previewManager.createPreviewView(idp)
+    }
 }
 
 /**

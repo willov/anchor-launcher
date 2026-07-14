@@ -339,10 +339,21 @@ public class LauncherPreviewRenderer extends BaseContext
         getAllLayouts().forEach(CellLayout::removeAllViews);
 
         // Separate the items that are on the current screen, and the other remaining items.
-        itemIdMap.stream()
+        java.util.List<ItemInfo> boundOnScreen = itemIdMap.stream()
                 .filter(currentScreenContentFilter(IntSet.wrap(mWorkspaceScreens.keySet())))
-                .forEach(this::inflateAndAdd);
+                .collect(java.util.stream.Collectors.toList());
+        boundOnScreen.forEach(this::inflateAndAdd);
         populateHotseatPredictions(itemIdMap);
+
+        // Anchor: "Populate grid" preview mode. When enabled (render-only, never persisted), fill the
+        // remaining empty cells of each preview screen with sample icons so the user can visually
+        // judge a grid shape before committing. Items are clones of the user's own bound icons (so
+        // their bitmaps are already loaded); the anchor icon is used only if the workspace is empty.
+        // This touches no model and no database — the synthetic ItemInfos exist only for this render.
+        if (app.anchor.grid.AnchorPreviewPopulator.isEnabled()) {
+            app.anchor.grid.AnchorPreviewPopulator.fillEmptyCells(
+                    mWorkspaceScreens, boundOnScreen, this::inflateAndAdd, this);
+        }
 
         // Add first page QSB
         if (PreferenceExtensionsKt.firstBlocking(mPreferenceManager2.getEnableSmartspace())) {

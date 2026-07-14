@@ -283,6 +283,7 @@
     <string name="icon_style_label">Icon style</string>
     <string name="icon_shape_label">Icon shape</string>
     <string name="icon_sizes">Icon size</string>
+    <string name="max_icon_size">Maximum icon size</string>
 
     <string name="show_labels">Show labels</string>
     <string name="show_group_labels">Show group labels</string>

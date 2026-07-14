@@ -136,6 +136,12 @@ data object HomeScreenPopupEditor : PreferenceRoute, PreferenceDeepLink {
     override val deepLink = "$URI/home-screen-popup-editor"
 }
 
+// Anchor: first-launch / on-demand grid & icon setup wizard
+@Serializable
+data object GridWizard : PreferenceRoute, PreferenceDeepLink {
+    override val deepLink = "$URI/grid-wizard"
+}
+
 // Dock section routes
 @Serializable
 data object DockSearchProvider : PreferenceRoute, PreferenceDeepLink {

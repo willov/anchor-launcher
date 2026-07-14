@@ -769,19 +769,30 @@ public class InvariantDeviceProfile {
                     // font makes I < minIconPx, scale the font down so the label fits at
                     // minIconPx. Only hide labels if even an 8dp font doesn't fit.
                     //
-                    // When labels are OFF: fill the cell with the icon so it doesn't look
-                    // tiny with empty space below it.
+                    // DESIRED ("up to") icon size: the user's Home-screen icon-size pref is a
+                    // FACTOR applied to the profile's base icon dp (DeviceProfileOverrides.applyUi
+                    // does idp.iconSize[*] *= homeIconSizeFactor before this lambda). So
+                    // dp.inv.iconSize[INDEX_DEFAULT] already encodes the user's desired size in dp.
+                    // We treat that as the MAXIMUM: the icon may shrink to fit the cell/label
+                    // budget, but never grows past the desired size. This stops a sparse grid
+                    // (e.g. 4×7, labels off) from blowing icons up to fill the whole cell.
+                    int minIconPx = Math.round(24 * density);
+                    int desiredIconPx = ((Math.round(
+                            dp.inv.iconSize[INDEX_DEFAULT] * density)) / 2) * 2;
+                    if (desiredIconPx < minIconPx) desiredIconPx = (minIconPx / 2) * 2;
+
                     boolean showLabels = PreferenceExtensionsKt.firstBlocking(
                             app.lawnchair.preferences2.PreferenceManager2.INSTANCE
                                     .get(context).getShowIconLabelsOnHomeScreen());
-                    int minIconPx = Math.round(24 * density);
 
                     if (showLabels && dp.iconTextSizePx > 0) {
                         float textH = Utilities.calculateTextHeight(dp.iconTextSizePx);
                         int drawablePadPx = Math.round(2 * density);
                         int labelBudgetPx = (int) Math.ceil(textH) + drawablePadPx;
-                        // round to even (Phase 3 parity rule applies to icon size too)
-                        int targetIconPx = ((s - 2 * labelBudgetPx) / 2) * 2;
+                        // Icon may grow up to the cell-minus-label budget, but is capped at the
+                        // user's desired size. round to even (Phase 3 parity rule).
+                        int fitIconPx = (s - 2 * labelBudgetPx);
+                        int targetIconPx = (Math.min(fitIconPx, desiredIconPx) / 2) * 2;
 
                         if (targetIconPx >= minIconPx) {
                             dp.iconSizePx = targetIconPx;
@@ -796,15 +807,21 @@ public class InvariantDeviceProfile {
                                 dp.iconTextSizePx = 0;
                                 dp.iconDrawablePaddingPx = 0;
                                 dp.maxIconTextLineCount = 0;
-                                dp.iconSizePx = Math.max(2, ((s - 2 * safetyPx) / 2) * 2);
+                                int fillPx = (s - 2 * safetyPx);
+                                dp.iconSizePx = Math.max(2,
+                                        (Math.min(fillPx, desiredIconPx) / 2) * 2);
                             }
                         }
                     } else {
-                        // Labels off — fill cell with icon, no label budget wasted.
+                        // Labels off — icon may grow up to the cell (minus safety margin) but
+                        // is still capped at the user's desired size so it doesn't look massive
+                        // on sparse grids.
                         dp.iconTextSizePx = 0;
                         dp.iconDrawablePaddingPx = 0;
                         dp.maxIconTextLineCount = 0;
-                        dp.iconSizePx = Math.max(2, ((s - 2 * safetyPx) / 2) * 2);
+                        int fillPx = (s - 2 * safetyPx);
+                        dp.iconSizePx = Math.max(2,
+                                (Math.min(fillPx, desiredIconPx) / 2) * 2);
                     }
                     dp.iconTopPaddingPx = (s - dp.iconSizePx) / 2;
 
