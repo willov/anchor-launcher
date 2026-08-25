@@ -41,6 +41,20 @@ object GridSizeCaps {
     /** Base home icon size in dp before the user's size factor is applied (matches profile base). */
     private const val ICON_BASE_DP = 48f
 
+    /**
+     * Icon size as a FRACTION of the screen's short side that the desired icon is floored to (before
+     * the user's factor). The plain dp base ([ICON_BASE_DP]) is density-relative, so on a physically
+     * large but low-density screen (e.g. a tablet at density 1.5) a 48dp icon is a tiny fraction of
+     * the display — icons look postage-stamp small and the recommender packs far too many columns.
+     * Flooring the desired icon at `shortSide × this × factor` makes sizing SCREEN-relative on such
+     * screens, matching the visual proportion a normal-density phone already gets from the dp base.
+     *
+     * Tuned to 0.11 so it is a no-op on typical phones (their native dp icon already ≳ 11% of the
+     * short side, so `max(dp, frac)` keeps the dp value — zero change to existing phone grids) but
+     * lifts large low-density tablets from ~6% up to ~11% (icons ≈ 2× larger, ~5 columns not ~9).
+     */
+    private const val ICON_TARGET_FRACTION = 0.11f
+
     /** Label stripe (text + drawable pad) reserved BELOW the icon when labels are on (one-sided). */
     private const val LABEL_BUDGET_DP = 18f
 
@@ -154,7 +168,12 @@ object GridSizeCaps {
         // else a small safety margin). The override would otherwise do icon = min(cellFit, desired)
         // and silently shrink the icon when cells get tight; the wizard avoids ever handing it such
         // a grid by guaranteeing S ≥ minCell here.
-        val desiredIconPx = Math.round(max(MIN_ICON_DP, ICON_BASE_DP * iconSizeFactor) * density2)
+        // Screen-relative floor (see ICON_TARGET_FRACTION): the dp base is density-relative and goes
+        // tiny on big low-density tablets, so floor the desired icon at a fraction of the short side.
+        // On phones the dp value already exceeds this, so max() keeps it → no change to phone grids.
+        val dpIconPx = max(MIN_ICON_DP, ICON_BASE_DP * iconSizeFactor) * density2
+        val fracIconPx = shortRawPx * ICON_TARGET_FRACTION * iconSizeFactor
+        val desiredIconPx = Math.round(max(dpIconPx, fracIconPx))
         val minPadPx = if (showLabels) {
             Math.round((LABEL_BUDGET_DP + SAFETY_DP) * density2)
         } else {
@@ -231,7 +250,10 @@ object GridSizeCaps {
         val density = context.resources.displayMetrics.density
         val (wPx, hPx, _) = realScreenMetrics(context)
         val shortRawPx = min(wPx, hPx).toFloat()
-        val desiredIconPx = max(MIN_ICON_DP, ICON_BASE_DP * iconSizeFactor) * density
+        // Mirror the screen-relative floor from recommendPure so the preview matches the applied grid.
+        val dpIconPx = max(MIN_ICON_DP, ICON_BASE_DP * iconSizeFactor) * density
+        val fracIconPx = shortRawPx * ICON_TARGET_FRACTION * iconSizeFactor
+        val desiredIconPx = max(dpIconPx, fracIconPx)
         return PreviewMetrics(
             aspect = max(wPx, hPx).toFloat() / shortRawPx,
             iconFractionOfShortSide = (desiredIconPx / shortRawPx).coerceIn(0.05f, 0.4f),

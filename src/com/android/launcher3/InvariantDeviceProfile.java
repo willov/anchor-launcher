@@ -777,8 +777,18 @@ public class InvariantDeviceProfile {
                     // budget, but never grows past the desired size. This stops a sparse grid
                     // (e.g. 4×7, labels off) from blowing icons up to fill the whole cell.
                     int minIconPx = Math.round(24 * density);
-                    int desiredIconPx = ((Math.round(
-                            dp.inv.iconSize[INDEX_DEFAULT] * density)) / 2) * 2;
+                    // Density-relative desired icon (dp × density). On a large, low-density tablet
+                    // this is a tiny fraction of the screen, so the icon renders postage-stamp small
+                    // inside an otherwise roomy cell. Floor it at a fraction of the short side
+                    // (SCREEN-relative) — mirrors GridSizeCaps.ICON_TARGET_FRACTION so the wizard's
+                    // recommendation and the actual rendered icon agree. The user's size factor is
+                    // already baked into iconSize[INDEX_DEFAULT] (base 48dp × factor), so recover it
+                    // as iconSize/48 and apply it to the fraction too. On normal-density phones the
+                    // dp value already exceeds this floor, so max() is a no-op there (no change).
+                    int dpIconPx = Math.round(dp.inv.iconSize[INDEX_DEFAULT] * density);
+                    float iconFactor = dp.inv.iconSize[INDEX_DEFAULT] / 48f;
+                    int fracIconPx = Math.round(shortRaw * 0.11f * iconFactor);
+                    int desiredIconPx = ((Math.max(dpIconPx, fracIconPx)) / 2) * 2;
                     if (desiredIconPx < minIconPx) desiredIconPx = (minIconPx / 2) * 2;
 
                     boolean showLabels = PreferenceExtensionsKt.firstBlocking(
