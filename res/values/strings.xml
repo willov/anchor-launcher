@@ -42,6 +42,8 @@
     <string name="anchor_drawer_letter_scroller_description">Show an A–Z strip on the right edge for quick section jumping</string>
     <string name="anchor_drawer_section_headers_label">Alphabetical section dividers</string>
     <string name="anchor_drawer_section_headers_description">Show A, B, C… headings between app groups in the drawer</string>
+    <string name="anchor_wallpaper_use_anchor_label">Use Anchor to set wallpaper</string>
+    <string name="anchor_wallpaper_use_anchor_description">Let Anchor render a chosen image so the background stays pixel-stable when you rotate. Off: the system shows the wallpaper and rotates it normally.</string>
     <string name="anchor_wallpaper_source_label">Wallpaper</string>
     <string name="anchor_wallpaper_source_description">Choose a custom image to keep the background pixel-stable when you rotate. The system wallpaper rotates normally.</string>
     <string name="anchor_wallpaper_source_system">System wallpaper (rotates normally)</string>
@@ -50,17 +52,24 @@
     <string name="anchor_wallpaper_pick_image_set">Image selected</string>
     <string name="anchor_wallpaper_pick_image_none">No image selected</string>
     <string name="anchor_rotation_transition_label">Rotation animation</string>
-    <string name="anchor_rotation_transition_traditional">Traditional</string>
-    <string name="anchor_rotation_transition_instant">Instant</string>
-    <string name="anchor_rotation_transition_fade">Fade</string>
+    <string name="anchor_rotation_transition_description">How the screen transitions while the grid re-anchors on rotation.</string>
+    <string name="anchor_rotation_transition_traditional">Traditional (system default)</string>
+    <string name="anchor_rotation_transition_instant">Instant (no animation)</string>
+    <string name="anchor_rotation_transition_fade">Fade (hide &amp; reveal)</string>
     <string name="anchor_rotation_fade_duration_label">Fade duration</string>
     <string name="anchor_wallpaper_parallax_label">Wallpaper parallax</string>
+    <string name="anchor_wallpaper_parallax_description">How far the background drifts as you scroll pages or switch rows. 0 turns it off.</string>
     <string name="anchor_wallpaper_onboarding_title">Keep your wallpaper in place</string>
     <string name="anchor_wallpaper_onboarding_message">Anchor can anchor your wallpaper so it stays put when you rotate the screen — just like your icons. Choose an image to enable it? You can change this anytime in Settings → Home Screen → Wallpaper.</string>
     <string name="anchor_wallpaper_onboarding_choose">Choose image</string>
     <string name="anchor_wallpaper_onboarding_dismiss">Not now</string>
     <string name="anchor_test_wallpaper_label">Debug: test wallpaper</string>
     <string name="anchor_test_wallpaper_description">Show a generated test pattern (gradient + grid) instead of the real wallpaper, to verify rotation and parallax.</string>
+    <string name="anchor_bottom_edge_swipe_up_label">Allow up drag for app drawer on all rows</string>
+    <string name="anchor_bottom_edge_swipe_up_description">Swipe up from the bottom edge — anywhere outside the system home and back gesture zones — to open the app drawer from any row.</string>
+    <string name="anchor_bottom_edge_swipe_up_zone_label">Bottom grab area height</string>
+    <string name="anchor_rotation_group_label">Rotation</string>
+    <string name="anchor_drawer_access_group_label">App drawer access</string>
 
     <!-- Grid/icon first-launch setup wizard -->
     <string name="anchor_grid_onboarding_title">Set up your home grid</string>

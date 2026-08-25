@@ -34,6 +34,7 @@ import androidx.lifecycle.lifecycleScope
 import app.lawnchair.LawnchairApp.Companion.showQuickstepWarningIfNecessary
 import app.lawnchair.compat.LawnchairQuickstepCompat
 import app.anchor.navigation.SwipeDownStatusBarController
+import app.anchor.navigation.SwipeUpAllAppsController
 import app.anchor.navigation.TwoRowNavigationManager
 import app.anchor.navigation.TwoRowSwipeTouchController
 import app.anchor.rotation.RotationAnimator
@@ -365,11 +366,12 @@ class LawnchairLauncher : QuickstepLauncher() {
     }
 
     override fun createTouchControllers(): Array<TouchController> {
+        val swipeUpAllAppsController = SwipeUpAllAppsController(this)
         val statusBarController = SwipeDownStatusBarController(this, twoRowNavigationManager)
         val twoRowController = TwoRowSwipeTouchController(this, twoRowNavigationManager)
         val verticalSwipeController = VerticalSwipeTouchController(this, gestureController)
         return arrayOf<TouchController>(
-            statusBarController, twoRowController, AllAppsSwipeController(this),
+            swipeUpAllAppsController, statusBarController, twoRowController, AllAppsSwipeController(this),
             verticalSwipeController, getDragController(),
         )
     }

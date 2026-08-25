@@ -109,6 +109,33 @@ class AnchorPreferences(context: Context) {
         set(value) { prefs.edit().putString(KEY_STATUS_BAR_SWIPE, value).apply() }
 
     /**
+     * True (default) = a swipe up starting from the bottom edge of the screen — anywhere outside the
+     * system gesture zones (home pill / back) — opens the standard all-apps drawer, from any row.
+     * A system-Overview-style gesture. False = only the standard row-0 swipe-up opens all-apps.
+     */
+    var bottomEdgeSwipeUpAllApps: Boolean
+        get() = prefs.getBoolean(KEY_BOTTOM_EDGE_SWIPE_UP, true)
+        set(value) { prefs.edit().putBoolean(KEY_BOTTOM_EDGE_SWIPE_UP, value).apply() }
+
+    /**
+     * Height of the bottom-edge grab strip for the swipe-up-to-all-apps gesture, as a PERCENT of the
+     * screen height. A swipe up must start within this bottom band to open the drawer. Range
+     * [BOTTOM_EDGE_ZONE_PERCENT_MIN]..[BOTTOM_EDGE_ZONE_PERCENT_MAX], default
+     * [BOTTOM_EDGE_ZONE_PERCENT_DEFAULT].
+     */
+    var bottomEdgeSwipeUpZonePercent: Int
+        get() = prefs.getInt(KEY_BOTTOM_EDGE_ZONE_PERCENT, BOTTOM_EDGE_ZONE_PERCENT_DEFAULT)
+            .coerceIn(BOTTOM_EDGE_ZONE_PERCENT_MIN, BOTTOM_EDGE_ZONE_PERCENT_MAX)
+        set(value) {
+            prefs.edit()
+                .putInt(
+                    KEY_BOTTOM_EDGE_ZONE_PERCENT,
+                    value.coerceIn(BOTTOM_EDGE_ZONE_PERCENT_MIN, BOTTOM_EDGE_ZONE_PERCENT_MAX),
+                )
+                .apply()
+        }
+
+    /**
      * Wallpaper parallax strength as a PERCENT of the screen's short side that the wallpaper drifts
      * per navigation step (one page swipe or one row switch). 0 disables parallax. Capped per axis at
      * the image's available pan room. Default [PARALLAX_PERCENT_DEFAULT].
@@ -158,6 +185,8 @@ class AnchorPreferences(context: Context) {
         private const val KEY_ROTATION_TRANSITION = "rotation_transition"
         private const val KEY_FADE_DURATION       = "rotation_fade_duration_ms"
         private const val KEY_STATUS_BAR_SWIPE    = "status_bar_swipe_action"
+        private const val KEY_BOTTOM_EDGE_SWIPE_UP = "bottom_edge_swipe_up_all_apps"
+        private const val KEY_BOTTOM_EDGE_ZONE_PERCENT = "bottom_edge_swipe_up_zone_percent"
         private const val KEY_ROW_COUNT           = "row_count"
         private const val KEY_ROW_SCREENS_PREFIX  = "row_screens_"
         private const val KEY_PARALLAX_PERCENT    = "wallpaper_parallax_percent"
@@ -183,6 +212,11 @@ class AnchorPreferences(context: Context) {
         const val WALLPAPER_SOURCE_SYSTEM_STABILIZED = "system_stabilized" // needs MANAGE_EXTERNAL_STORAGE
 
         const val MAX_ROWS = 5
+
+        // Bottom-edge swipe-up grab strip height (percent of screen height).
+        const val BOTTOM_EDGE_ZONE_PERCENT_MIN = 0
+        const val BOTTOM_EDGE_ZONE_PERCENT_MAX = 20
+        const val BOTTOM_EDGE_ZONE_PERCENT_DEFAULT = 10
 
         // Wallpaper parallax strength (percent of screen short side per navigation step).
         const val PARALLAX_PERCENT_MIN = 0
