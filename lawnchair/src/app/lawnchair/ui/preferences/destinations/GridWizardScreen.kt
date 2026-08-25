@@ -37,7 +37,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
@@ -312,13 +315,25 @@ private fun GridPreview(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    // The grid is computed portrait-canonical (columns = short side). Anchor's whole point: on
+    // rotation the grid POSITIONS transpose so each icon stays at the same physical screen spot, but
+    // the icons themselves stay UPRIGHT (system window rotation handles uprightness; we only remap
+    // coordinates). So the landscape preview must be a POSITIONAL transpose with upright icons — NOT
+    // a whole-canvas rotation (that would rotate the icon glyphs too, which is exactly what Anchor
+    // avoids). 90° CW mapping (CLAUDE.md): portrait (c, r) → display (dispCol=r, dispRow=cols−1−c),
+    // i.e. top-left→bottom-left, top-right→top-left. In landscape the on-screen grid is rows wide ×
+    // cols tall (dimensions swapped), icons drawn normally.
+    val isLandscape = LocalConfiguration.current.orientation ==
+        android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val cols = recommendation.columns
     val rows = recommendation.rows
     // Real device metrics: the icon occupies a FIXED fraction of the screen's short side, set by the
     // icon-size factor — it does NOT depend on column count. Drawing the icon at that same fraction
     // of the card width keeps it constant across densities (the whole point). aspect = long/short.
     val metrics = remember { GridSizeCaps.previewMetrics(context, iconFactor) }
-    val aspect = metrics.aspect
+    // Card aspect = long/short in portrait (taller than wide); invert in landscape (wider than tall).
+    val aspect = if (isLandscape) 1f / metrics.aspect else metrics.aspect
+    // Icon is a fixed fraction of the screen's short side (the card's SHORT dimension after aspect).
     val iconFracOfShort = metrics.iconFractionOfShortSide // e.g. 210px / 1080px
 
     // The user's REAL installed app icons, so the preview looks like their actual phone. Loaded
@@ -369,28 +384,63 @@ private fun GridPreview(
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val w = size.width
-                val h = size.height
-                // FIXED icon size (fraction of card width), independent of cols/rows.
-                val iconPx = w * iconFracOfShort
-                // Columns are laid out with even gaps in the leftover width (cols+1 gaps).
-                val hGap = ((w - cols * iconPx) / (cols + 1)).coerceAtLeast(0f)
-                // Rows: same icon size vertically; even vertical gaps, grid centred.
-                val vGap = hGap
-                val gridH = rows * iconPx + (rows + 1) * vGap
-                val topOffset = ((h - gridH) / 2f).coerceAtLeast(0f)
-                var idx = 0
-                for (r in 0 until rows) {
-                    for (c in 0 until cols) {
-                        val left = hGap + c * (iconPx + hGap)
-                        val top = topOffset + vGap + r * (iconPx + vGap)
-                        drawImage(
-                            image = iconBitmaps[idx % iconBitmaps.size],
-                            dstOffset = IntOffset(left.toInt(), top.toInt()),
-                            dstSize = IntSize(iconPx.toInt(), iconPx.toInt()),
-                        )
-                        idx++
+                // Model exactly what the device does on rotation: draw the SAME portrait screen, then
+                // rotate the whole canvas 90° (window rotation), and counter-rotate each icon back to
+                // upright (icons never turn — Anchor's core behaviour). Because landscape is literally
+                // the portrait render rotated, the layout/spacing/fit are identical to portrait — it
+                // cannot overflow differently, and every icon lands at its transposed physical spot.
+                //
+                // Portrait drawing space: pw = short side, ph = long side. In landscape the card is
+                // inverted-aspect, so the portrait space (pw×ph) is the card's (h×w); we rotate it in.
+                val pw = if (isLandscape) size.height else size.width
+                val ph = if (isLandscape) size.width else size.height
+                val iconPx = pw * iconFracOfShort
+                val gap = ((pw - cols * iconPx) / (cols + 1)).coerceAtLeast(0f)
+                val gridH = rows * iconPx + (rows + 1) * gap
+                val topOffset = ((ph - gridH) / 2f).coerceAtLeast(0f)
+                // Portrait-space origin, centred within the actual (possibly rotated) card bounds.
+                val originX = (size.width - pw) / 2f
+                val originY = (size.height - ph) / 2f
+
+                val drawGrid = {
+                    var idx = 0
+                    for (r in 0 until rows) {
+                        for (c in 0 until cols) {
+                            val left = originX + gap + c * (iconPx + gap)
+                            val top = originY + topOffset + gap + r * (iconPx + gap)
+                            val icon = iconBitmaps[idx % iconBitmaps.size]
+                            if (isLandscape) {
+                                // Counter-rotate each icon +90° about its own centre so it stays
+                                // upright after the outer −90° canvas rotation.
+                                rotate(
+                                    degrees = 90f,
+                                    pivot = Offset(left + iconPx / 2f, top + iconPx / 2f),
+                                ) {
+                                    drawImage(
+                                        image = icon,
+                                        dstOffset = IntOffset(left.toInt(), top.toInt()),
+                                        dstSize = IntSize(iconPx.toInt(), iconPx.toInt()),
+                                    )
+                                }
+                            } else {
+                                drawImage(
+                                    image = icon,
+                                    dstOffset = IntOffset(left.toInt(), top.toInt()),
+                                    dstSize = IntSize(iconPx.toInt(), iconPx.toInt()),
+                                )
+                            }
+                            idx++
+                        }
                     }
+                }
+                if (isLandscape) {
+                    // Rotate the whole portrait render −90° about the card centre (the window rotation).
+                    // −90° (CCW) gives the correct transpose: portrait top-left → landscape bottom-left.
+                    rotate(degrees = -90f, pivot = Offset(size.width / 2f, size.height / 2f)) {
+                        drawGrid()
+                    }
+                } else {
+                    drawGrid()
                 }
             }
         }
