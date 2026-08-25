@@ -541,6 +541,13 @@ class LawnchairLauncher : QuickstepLauncher() {
     override fun onResume() {
         super.onResume()
         restartIfPending()
+        // If the display rotated while we were backgrounded (e.g. rotating inside YouTube/camera) and
+        // settled before we resumed, the deferred grid transpose never ran. Reconcile it now that we
+        // are visible so the grid matches the current rotation.
+        app.anchor.rotation.AnchorTransposeHook.reconcileOnResume(this)
+        // If the display rotated while backgrounded, re-render the stabilized wallpaper for the
+        // current rotation up front so the first visible frame isn't a stale-orientation snap.
+        wallpaperStabilizationManager.syncRotationOnResume()
         // Apply any wallpaper source/image change made in Settings without a manual restart.
         wallpaperStabilizationManager.reapplyIfChanged()
         // Grid/icon setup takes priority on first launch; the wallpaper prompt waits until the grid

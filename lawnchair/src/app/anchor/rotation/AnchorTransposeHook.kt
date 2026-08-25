@@ -29,6 +29,17 @@ object AnchorTransposeHook {
     private const val PREFS_NAME        = "anchor_rotation"
     private const val KEY_LAST_ROTATION = "last_rotation"
 
+    // Authoritative portrait-canonical grid dims, captured in [afterInitGrid] from dbGridInfo BEFORE
+    // the landscape swap. [beforeConfigChanged] must NOT derive these by un-swapping idp.numColumns/
+    // numRows: afterInitGrid runs on EVERY onConfigChanged (including rotations while the launcher is
+    // backgrounded by another app, e.g. YouTube/camera), so the live idp dims can be in an
+    // orientation that no longer matches KEY_LAST_ROTATION. Un-swapping against a stale oldRotation
+    // then yields the wrong portrait dims and the DB remap transposes incorrectly — the "screen
+    // sometimes rotated wrong after rotating inside another app" bug. These cached values are always
+    // the true portrait dims regardless of the live swap state.
+    @Volatile private var portraitColsCache = 0
+    @Volatile private var portraitRowsCache = 0
+
     /**
      * Called at the START of [InvariantDeviceProfile.onConfigChanged], before initGrid().
      * At this point numColumns/numRows reflect the *previous* orientation state.
@@ -60,11 +71,21 @@ object AnchorTransposeHook {
         val launcher = Launcher.ACTIVITY_TRACKER.getCreatedContext<Launcher>()
         if (launcher == null || !launcher.isStarted) return
 
-        // Derive portrait-canonical dims from the CURRENT IDP state.
-        // If we were previously in landscape the dims are already swapped — un-swap.
-        val wasLandscape = oldRotation == Surface.ROTATION_90 || oldRotation == Surface.ROTATION_270
-        val portraitCols = if (wasLandscape) idp.numRows    else idp.numColumns
-        val portraitRows = if (wasLandscape) idp.numColumns else idp.numRows
+        // Portrait-canonical dims. Prefer the cache captured in afterInitGrid (always the true
+        // portrait dims from dbGridInfo, independent of the live swap state). Only if the cache is
+        // not yet populated (no initGrid has run this process) fall back to un-swapping the live IDP
+        // dims against oldRotation — correct on a cold start where they haven't drifted yet.
+        val portraitCols: Int
+        val portraitRows: Int
+        if (portraitColsCache > 0 && portraitRowsCache > 0) {
+            portraitCols = portraitColsCache
+            portraitRows = portraitRowsCache
+        } else {
+            val wasLandscape =
+                oldRotation == Surface.ROTATION_90 || oldRotation == Surface.ROTATION_270
+            portraitCols = if (wasLandscape) idp.numRows else idp.numColumns
+            portraitRows = if (wasLandscape) idp.numColumns else idp.numRows
+        }
 
         // Post the DB remap to MODEL_EXECUTOR, then call forceReload() on the main thread.
         // forceReload sets mModelLoaded=false so that subsequent startLoader() calls post a
@@ -91,10 +112,40 @@ object AnchorTransposeHook {
      */
     @JvmStatic
     fun afterInitGrid(idp: InvariantDeviceProfile, rotation: Int) {
+        // At this call site idp.numColumns/numRows are still the portrait-canonical values just read
+        // from dbGridInfo (initGrid sets them immediately before calling us, pre-swap). Capture them
+        // as the authoritative portrait dims for beforeConfigChanged to use — see the cache comment.
+        portraitColsCache = idp.numColumns
+        portraitRowsCache = idp.numRows
         if (rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270) {
             val tmp = idp.numColumns
             idp.numColumns = idp.numRows
             idp.numRows = tmp
+        }
+    }
+
+    /**
+     * Reconcile a rotation that settled while the launcher was backgrounded. Called from
+     * [com.android.launcher3.Launcher.onResume].
+     *
+     * The DisplayController's CHANGE_ROTATION listener fires onConfigChanged for rotations that
+     * happen inside other apps (YouTube/camera going landscape, then back), but beforeConfigChanged
+     * defers the DB coordinate remap while the launcher isn't visible (data-loss safety). The comment
+     * there assumes a later rotation event will trigger the deferred remap once visible — but if the
+     * display is ALREADY at its final rotation when the launcher resumes, no further event fires, so
+     * the remap never runs: the grid keeps the previous orientation's coordinates while the screen is
+     * at a different rotation ("screen sometimes rotated wrong after rotating inside another app").
+     *
+     * This forces the reconciliation: if the persisted last-rotation differs from the current display
+     * rotation now that we ARE visible, run onConfigChanged so beforeConfigChanged performs the
+     * transpose with the correct old→new delta. If they already match, it is a cheap no-op.
+     */
+    @JvmStatic
+    fun reconcileOnResume(context: Context) {
+        val lastRotation = prefs(context).getInt(KEY_LAST_ROTATION, Surface.ROTATION_0)
+        val currentRotation = DisplayController.INSTANCE.get(context).info.rotation
+        if (lastRotation != currentRotation) {
+            LauncherAppState.getIDP(context).onConfigChanged(context)
         }
     }
 

@@ -66,6 +66,17 @@ class WallpaperStabilizationDrawable : Drawable() {
     var displayRotation: Int = Surface.ROTATION_0
         set(value) { if (field == value) return; field = value; invalidateSelf() }
 
+    /**
+     * Portrait-canonical viewport dims (short = width, long = height), from the REAL screen size —
+     * rotation-invariant. The crop MUST use these, not the drawable's [bounds]: bounds are the
+     * window size and can lag behind [displayRotation] when the rotation happened while the launcher
+     * was backgrounded (rotating inside another app, then returning home). Deriving the crop from
+     * stale bounds produced a different crop size/offset → the wallpaper "jumped position/zoom" on
+     * return. Set once by the manager (screen size is fixed for the session). 0 = fall back to bounds.
+     */
+    var rawShort: Int = 0
+    var rawLong: Int = 0
+
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
     private val srcRect = Rect()
     private val dstRect = Rect()
@@ -75,12 +86,19 @@ class WallpaperStabilizationDrawable : Drawable() {
         val b = bounds
         if (b.isEmpty) return
 
-        val landscape = displayRotation == Surface.ROTATION_90 || displayRotation == Surface.ROTATION_270
         // rawW/rawH are always the portrait-canonical viewport dimensions, so the source crop is
-        // identical across rotation for a given (worldX, worldY).
+        // identical across rotation for a given (worldX, worldY). Prefer the rotation-invariant real
+        // screen dims (rawShort/rawLong) set by the manager — these never lag behind displayRotation.
+        // Fall back to deriving from bounds only if they are unset. Using bounds directly is unsafe
+        // when the rotation happened off-launcher: bounds can still be the previous orientation's size
+        // on the first draw after resume, producing a wrong crop (the position/zoom snap on return).
+        val landscape = displayRotation == Surface.ROTATION_90 || displayRotation == Surface.ROTATION_270
         val rawW: Int
         val rawH: Int
-        if (landscape) {
+        if (rawShort > 0 && rawLong > 0) {
+            rawW = rawShort
+            rawH = rawLong
+        } else if (landscape) {
             rawW = b.height()
             rawH = b.width()
         } else {

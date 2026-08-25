@@ -115,7 +115,14 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
 
     private fun activate() {
         val initialRotation = currentRotation()
-        val d = WallpaperStabilizationDrawable().apply { displayRotation = initialRotation }
+        val (sw, sh) = realScreenSize(launcher)
+        val d = WallpaperStabilizationDrawable().apply {
+            displayRotation = initialRotation
+            // Rotation-invariant portrait-canonical viewport dims so the crop never depends on the
+            // (possibly stale) window bounds — see the drawable's rawShort/rawLong doc.
+            rawShort = minOf(sw, sh)
+            rawLong = maxOf(sw, sh)
+        }
         // Rest camera for home (row 0, page-0 left edge). The horizontal-on-glass axis rests at 0
         // (left), the vertical-on-glass axis rests at row 0's canonical offset — assigned to whichever
         // bitmap axis (and sign) the current rotation maps them to. Keeps cold-start-in-landscape right.
@@ -333,6 +340,26 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     fun resetForWorkspaceReady() {
         isRowTransitioning = false
         lastScrollOffset = Float.NaN
+    }
+
+    /**
+     * Called from [LawnchairLauncher.onResume]. If the display rotated while the launcher was
+     * backgrounded (e.g. rotating inside another app), the rotationListener updated the drawable's
+     * displayRotation, but the window was not visible so it may not have re-rendered — the first
+     * composited frame on return can briefly show the wallpaper drawn for the OLD rotation, then
+     * correct on the next frame, which reads as a jarring "snap". Force the drawable to the current
+     * rotation and invalidate it now so the first visible frame is already correct. The camera
+     * position is untouched (rotation is pixel-perfect by construction) — this only refreshes the
+     * counter-rotation transform, so there is no positional jump.
+     */
+    fun syncRotationOnResume() {
+        val d = drawable ?: return
+        val current = currentRotation()
+        if (d.displayRotation != current) {
+            d.displayRotation = current
+        }
+        launcher.window?.setBackgroundDrawable(d)
+        d.invalidateSelf()
     }
 
     fun destroy() {
