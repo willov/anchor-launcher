@@ -41,6 +41,14 @@ public class WallpaperOffsetInterpolator {
     private IBinder mWindowToken;
     private boolean mWallpaperIsLiveWallpaper;
 
+    // Anchor: when Anchor's own live wallpaper (AnchorWallpaperService) is active, it drives parallax
+    // cross-process via WallpaperManager.setWallpaperOffsets from WallpaperStabilizationManager. This
+    // interpolator must then NOT also push offsets — two writers on the same token alternate frame to
+    // frame (flicker/jank) and Launcher3's hardcoded yOffset=0.5 stomps our vertical row parallax.
+    // Gated at the actual send point (setOffsetSafely) so Launcher3's own lock lifecycle, which
+    // toggles mLockedToDefaultPage on layout, cannot re-enable sending. Set by the manager on setup.
+    public static volatile boolean sAnchorSuppressSystemOffsets = false;
+
     private boolean mLockedToDefaultPage;
     private int mNumScreens;
 
@@ -392,6 +400,10 @@ public class WallpaperOffsetInterpolator {
         }
 
         private void setOffsetSafely(IBinder token) {
+            // Anchor: our live wallpaper drives offsets itself; don't double-write the token.
+            if (sAnchorSuppressSystemOffsets) {
+                return;
+            }
             try {
                 mWM.setWallpaperOffsets(token, mCurrentOffset, 0.5f);
             } catch (IllegalArgumentException e) {

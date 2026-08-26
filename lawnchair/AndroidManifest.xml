@@ -144,6 +144,23 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <!-- Anchor: rotation-stable live wallpaper (proof-of-concept). Rendering the background from
+             a WallpaperService puts it on the system wallpaper surface, which the Shell leaves static
+             during the app->home rotation (unlike our window-background, which gets rotated with the
+             home-task screenshot). -->
+        <service
+            android:name="app.anchor.wallpaper.AnchorWallpaperService"
+            android:exported="true"
+            android:label="@string/anchor_wallpaper_service_label"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.wallpaper"
+                android:resource="@xml/anchor_wallpaper" />
+        </service>
+
         <provider
             android:name="app.lawnchair.bugreport.FileProvider"
             android:authorities="${applicationId}.fileprovider"

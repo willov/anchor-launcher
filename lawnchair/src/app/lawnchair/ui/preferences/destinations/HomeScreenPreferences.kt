@@ -200,19 +200,27 @@ fun HomeScreenPreferences(
             // ── Anchor rotation-stable wallpaper ─────────────────────────────────────────────────
             // Master toggle: ON = Anchor renders a picked image with rotation stabilization
             // (source = CUSTOM); OFF = the system shows the wallpaper normally (source = SYSTEM).
+            // Under CUSTOM the image is now rendered by AnchorWallpaperService (our live wallpaper) —
+            // a wallpaper SURFACE that stays pixel-perfect on rotation AND is not swept into the
+            // app→home screenshot-rotate (no snap). The picker sets it via the system confirm dialog.
+            val activity = context as? android.app.Activity
             val anchorWallpaperOn =
                 wallpaperSource == app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
             Item {
                 SwitchPreference(
                     checked = anchorWallpaperOn,
                     onCheckedChange = { enabled ->
-                        val newValue = if (enabled) {
-                            app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
+                        if (enabled) {
+                            // Pick an image → import → set Anchor's live wallpaper (system confirm).
+                            wallpaperSource = app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
+                            anchorPrefs.wallpaperSource =
+                                app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
+                            activity?.let { app.anchor.AnchorWallpaperPicker.launch(it) }
                         } else {
-                            app.anchor.AnchorPreferences.WALLPAPER_SOURCE_SYSTEM
+                            wallpaperSource = app.anchor.AnchorPreferences.WALLPAPER_SOURCE_SYSTEM
+                            anchorPrefs.wallpaperSource =
+                                app.anchor.AnchorPreferences.WALLPAPER_SOURCE_SYSTEM
                         }
-                        wallpaperSource = newValue
-                        anchorPrefs.wallpaperSource = newValue
                     },
                     label = stringResource(id = R.string.anchor_wallpaper_use_anchor_label),
                     description = stringResource(id = R.string.anchor_wallpaper_use_anchor_description),
@@ -228,11 +236,7 @@ fun HomeScreenPreferences(
                             stringResource(id = R.string.anchor_wallpaper_pick_image_none)
                         },
                         onClick = {
-                            pickImage.launch(
-                                androidx.activity.result.PickVisualMediaRequest(
-                                    ActivityResultContracts.PickVisualMedia.ImageOnly,
-                                ),
-                            )
+                            activity?.let { app.anchor.AnchorWallpaperPicker.launch(it) }
                         },
                     )
                 }

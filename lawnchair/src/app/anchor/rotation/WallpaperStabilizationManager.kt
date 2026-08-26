@@ -82,6 +82,49 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     private var lastScrollOffset = Float.NaN
     private var rowAnimator: ValueAnimator? = null
 
+    // --- Live-wallpaper (AnchorWallpaperService) offset bridge ---
+    // When our live wallpaper is the active system wallpaper, parallax is driven cross-process by
+    // pushing normalised glass-space offsets via WallpaperManager.setWallpaperOffsets → the engine's
+    // onOffsetsChanged. This is independent of the in-process `drawable` (which is null in the
+    // wallpaper_source=system passthrough that live-wallpaper mode uses).
+    private var liveWallpaperActiveCached: Boolean? = null
+    private var lastHGlass = 0f          // horizontal-on-glass parallax position [0,1]
+    private var lastVGlass = 1f          // vertical-on-glass parallax position [0,1] (1 = bottom/home row)
+    private var vGlassAnimator: ValueAnimator? = null
+
+    /**
+     * True when AnchorWallpaperService is the current system wallpaper. Cached because it is read on
+     * every scroll frame; [refreshLiveWallpaperState] must be called whenever the wallpaper may have
+     * changed (setup, onResume) so the cache reflects a wallpaper set AFTER launcher startup.
+     */
+    private fun isLiveWallpaperActive(): Boolean {
+        liveWallpaperActiveCached?.let { return it }
+        return refreshLiveWallpaperState()
+    }
+
+    /**
+     * Re-query whether our live wallpaper is active and update the cache + Launcher3 offset
+     * suppression. Called from [setup] and [reapplyIfChanged] (onResume) so setting our wallpaper
+     * after the launcher is already running is picked up. Returns the fresh value.
+     */
+    fun refreshLiveWallpaperState(): Boolean {
+        val active = runCatching {
+            wallpaperManager.wallpaperInfo?.component?.className ==
+                "app.anchor.wallpaper.AnchorWallpaperService"
+        }.getOrDefault(false)
+        liveWallpaperActiveCached = active
+        // When our wallpaper drives parallax, suppress Launcher3's competing offset writes.
+        com.android.launcher3.util.WallpaperOffsetInterpolator.sAnchorSuppressSystemOffsets = active
+        if (active) pushLiveOffsets()
+        return active
+    }
+
+    /** Push the current (h, v) glass offsets to the live wallpaper engine, if the window token is up. */
+    private fun pushLiveOffsets() {
+        val token = launcher.window?.decorView?.windowToken ?: return
+        runCatching { wallpaperManager.setWallpaperOffsets(token, lastHGlass, lastVGlass) }
+    }
+
     private val rotationListener = DisplayController.DisplayInfoChangeListener { _, info, flags ->
         if (flags and DisplayController.CHANGE_ROTATION != 0) {
             launcher.runOnUiThread {
@@ -103,10 +146,16 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     fun setup() {
         val prefs = AnchorPreferences(launcher)
         appliedSignature = configSignature(prefs)
-        // Only stabilize when a bitmap we can render is available (custom image, system-stabilized
-        // power-user mode, or the debug test pattern). In the default System source we leave the
-        // window's FLAG_SHOW_WALLPAPER intact so the real wallpaper shows and rotates normally —
-        // never black, no permission, no custom drawable.
+        // If OUR live wallpaper is the active system wallpaper, parallax is driven cross-process by the
+        // offset bridge (onScrollOffset/onRowTransition → setWallpaperOffsets). Suppress Launcher3's
+        // built-in WallpaperOffsetInterpolator from pushing offsets so it doesn't ALSO write the token
+        // (two writers alternate frame-to-frame → flicker/jank + it stomps our yOffset back to 0.5).
+        // Gated at the actual send point so Launcher3's own lock lifecycle can't re-enable it.
+        refreshLiveWallpaperState()
+        // Only stabilize (window-background drawable) when a bitmap we can render is available (custom
+        // image, system-stabilized power-user mode, or the debug test pattern). In the default System
+        // source we leave the window's FLAG_SHOW_WALLPAPER intact so the real wallpaper shows and
+        // rotates normally — never black, no permission, no custom drawable.
         if (!prefs.wallpaperStabilizationActive) {
             return
         }
@@ -165,6 +214,9 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
      * (back to System) restores FLAG_SHOW_WALLPAPER so the real wallpaper shows again.
      */
     fun reapplyIfChanged() {
+        // Re-check whether our live wallpaper is active every resume — it can be set/unset via the
+        // system wallpaper picker without any change to the launcher's own pref signature below.
+        refreshLiveWallpaperState()
         val prefs = AnchorPreferences(launcher)
         val sig = configSignature(prefs)
         if (sig == appliedSignature) return
@@ -223,6 +275,14 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
      */
     fun onScrollOffset(offset: Float) {
         if (isRowTransitioning) return
+        // Live-wallpaper path: the row-relative offset (0..1 across the active row's pages) IS the
+        // horizontal-on-glass position. Push it straight through; the engine maps it to the correct
+        // bitmap axis for its rotation.
+        if (isLiveWallpaperActive()) {
+            lastHGlass = offset.coerceIn(0f, 1f)
+            pushLiveOffsets()
+            return
+        }
         val d = drawable ?: return
         if (lastScrollOffset.isNaN()) {
             lastScrollOffset = offset
@@ -305,7 +365,31 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
      * ([rowOffsetForRow], expressed in the worldY/portrait sense) is mirrored to `1 − target` when the
      * sign is negative so higher rows always drag the wallpaper the same way on the glass.
      */
-    fun onRowTransition(toRow: Int, @Suppress("UNUSED_PARAMETER") totalRows: Int, durationMs: Long) {
+    fun onRowTransition(toRow: Int, totalRows: Int, durationMs: Long) {
+        // Live-wallpaper path: animate the vertical-on-glass offset to the target row's position over
+        // the same duration as the workspace slide, so the wallpaper glides with the row switch. Row 0
+        // (home) rests at the bottom (vGlass = 1); the top row is at vGlass = 0. Row spacing is uniform
+        // so one row-step moves a comparable fraction to one page-step (equal-feel parallax).
+        if (isLiveWallpaperActive()) {
+            val rows = totalRows.coerceAtLeast(1)
+            val targetV = if (rows <= 1) 1f else (1f - toRow.toFloat() / (rows - 1)).coerceIn(0f, 1f)
+            vGlassAnimator?.cancel()
+            if (kotlin.math.abs(lastVGlass - targetV) < 0.001f) {
+                lastVGlass = targetV
+                pushLiveOffsets()
+                return
+            }
+            vGlassAnimator = ValueAnimator.ofFloat(lastVGlass, targetV).apply {
+                duration = durationMs
+                interpolator = DecelerateInterpolator()
+                addUpdateListener { anim ->
+                    lastVGlass = anim.animatedValue as Float
+                    pushLiveOffsets()
+                }
+                start()
+            }
+            return
+        }
         val d = drawable ?: return
         val m = WallpaperCropMath.verticalGlassAxis(d.displayRotation)
         // Row spacing is now D-based (each row one step-drift above the bottom rest), independent of
@@ -652,6 +736,26 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
          * stabilized background and the real wallpaper stay in sync. We can SET the wallpaper even
          * though we can't READ it back.
          */
+        /**
+         * Imports a BUNDLED wallpaper from a raw resource (mirror of [importCustomWallpaper] for a
+         * URI). Copies the raw bytes to `custom_wallpaper.jpg` and points
+         * [AnchorPreferences.customWallpaperPath] at it, so a bundled pick reuses the exact same
+         * rendering path as a user-picked image. Call on a background thread.
+         */
+        fun importBundledWallpaper(context: Context, rawResId: Int): Boolean {
+            return try {
+                val dest = File(context.filesDir, "custom_wallpaper.jpg")
+                context.resources.openRawResource(rawResId).use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+                AnchorPreferences(context).customWallpaperPath = dest.absolutePath
+                true
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to import bundled wallpaper: ${e.message}")
+                false
+            }
+        }
+
         fun importCustomWallpaper(
             context: Context,
             uri: android.net.Uri,

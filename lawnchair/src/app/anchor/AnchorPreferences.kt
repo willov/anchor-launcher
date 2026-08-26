@@ -61,14 +61,15 @@ class AnchorPreferences(context: Context) {
         set(value) { prefs.edit().putBoolean(KEY_LINK_GRID_DIMENSIONS, value).apply() }
 
     /**
-     * True when the counter-rotation stabilization should be active (i.e. a bitmap we can render is
-     * available). False ⇒ leave the system wallpaper alone (FLAG_SHOW_WALLPAPER, normal rotation).
+     * True when the legacy **window-background** counter-rotation drawable should be active. This is
+     * the OLD rendering path; the CUSTOM source no longer uses it — a picked image is now rendered by
+     * [app.anchor.wallpaper.AnchorWallpaperService] (our live wallpaper), which is a wallpaper SURFACE
+     * and therefore escapes the app→home screenshot-rotate snap. The window-bg path remains only for
+     * the debug test pattern and the power-user SYSTEM_STABILIZED source. CUSTOM runs as passthrough
+     * (FLAG_SHOW_WALLPAPER stays set) so the live wallpaper shows through and drives parallax.
      */
     val wallpaperStabilizationActive: Boolean
         get() = useTestWallpaper ||
-            // Custom source only counts as active once an image has actually been picked, otherwise
-            // there is no bitmap to render and the background would go black.
-            (wallpaperSource == WALLPAPER_SOURCE_CUSTOM && customWallpaperPath != null) ||
             wallpaperSource == WALLPAPER_SOURCE_SYSTEM_STABILIZED
 
     /**

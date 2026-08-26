@@ -51,6 +51,12 @@
     <string name="anchor_wallpaper_pick_image_label">Choose image</string>
     <string name="anchor_wallpaper_pick_image_set">Image selected</string>
     <string name="anchor_wallpaper_pick_image_none">No image selected</string>
+    <!-- Shown on the system live-wallpaper preview screen (com.android.wallpaper.livepicker) as the
+         wallpaper's name/description. Not the app name — this reads as "you are setting a wallpaper". -->
+    <string name="anchor_wallpaper_service_label">Anchor rotation-stable wallpaper</string>
+    <string name="anchor_wallpaper_service_description">Keeps your background pixel-stable when you rotate the screen, with smooth page and row parallax.</string>
+    <!-- Hint shown before the system "Set wallpaper" screen so the user knows which option to pick. -->
+    <string name="anchor_wallpaper_set_hint">On the next screen, tap “Set wallpaper”. Choose “Home screen” (or “Both” to use it on the lock screen too).</string>
     <string name="anchor_rotation_transition_label">Rotation animation</string>
     <string name="anchor_rotation_transition_description">How the screen transitions while the grid re-anchors on rotation.</string>
     <string name="anchor_rotation_transition_traditional">Traditional (system default)</string>
