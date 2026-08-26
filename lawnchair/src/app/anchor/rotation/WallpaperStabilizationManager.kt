@@ -108,15 +108,30 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
      * after the launcher is already running is picked up. Returns the fresh value.
      */
     fun refreshLiveWallpaperState(): Boolean {
+        // Passthrough is gated on the PREF (source == custom), NOT on wallpaperManager.wallpaperInfo:
+        // the pref is set synchronously by the picker, whereas wallpaperInfo lags by a resume or two
+        // after the system commits the wallpaper. If we waited for wallpaperInfo, the first frame on
+        // return-to-home would draw the opaque window background (black) before passthrough kicked in
+        // (the "works only on the 2nd resume / press home twice" symptom). The pref is authoritative
+        // for "the user chose the Anchor wallpaper", so enable passthrough immediately from it.
+        val prefCustom =
+            AnchorPreferences(launcher).wallpaperSource == AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
+        // The offset bridge / Launcher3 suppression is keyed on the system actually running our engine.
         val active = runCatching {
             wallpaperManager.wallpaperInfo?.component?.className ==
                 "app.anchor.wallpaper.AnchorWallpaperService"
         }.getOrDefault(false)
-        liveWallpaperActiveCached = active
-        // When our wallpaper drives parallax, suppress Launcher3's competing offset writes.
-        com.android.launcher3.util.WallpaperOffsetInterpolator.sAnchorSuppressSystemOffsets = active
-        if (active) pushLiveOffsets()
-        return active
+        // The launcher theme (BaseLauncherTheme) already sets windowBackground=transparent +
+        // windowShowWallpaper=true, so the window is a wallpaper passthrough by default — no runtime
+        // flag/background manipulation needed (and toggling FLAG_SHOW_WALLPAPER at runtime actively
+        // broke the wallpaper). We only drive parallax offsets + Launcher3 suppression here.
+        liveWallpaperActiveCached = active || prefCustom
+        com.android.launcher3.util.WallpaperOffsetInterpolator.sAnchorSuppressSystemOffsets =
+            liveWallpaperActiveCached!!
+        if (liveWallpaperActiveCached == true) {
+            pushLiveOffsets()
+        }
+        return liveWallpaperActiveCached!!
     }
 
     /** Push the current (h, v) glass offsets to the live wallpaper engine, if the window token is up. */
@@ -143,6 +158,7 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         }
     }
 
+
     fun setup() {
         val prefs = AnchorPreferences(launcher)
         appliedSignature = configSignature(prefs)
@@ -151,7 +167,12 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // built-in WallpaperOffsetInterpolator from pushing offsets so it doesn't ALSO write the token
         // (two writers alternate frame-to-frame → flicker/jank + it stomps our yOffset back to 0.5).
         // Gated at the actual send point so Launcher3's own lock lifecycle can't re-enable it.
-        refreshLiveWallpaperState()
+        // When our live wallpaper is active the launcher theme already passes the wallpaper through
+        // (transparent windowBackground + windowShowWallpaper), so we only wire up the parallax offset
+        // bridge (in refreshLiveWallpaperState) and skip the legacy window-bg drawable path below.
+        if (refreshLiveWallpaperState()) {
+            return
+        }
         // Only stabilize (window-background drawable) when a bitmap we can render is available (custom
         // image, system-stabilized power-user mode, or the debug test pattern). In the default System
         // source we leave the window's FLAG_SHOW_WALLPAPER intact so the real wallpaper shows and

@@ -65,25 +65,20 @@ object LauncherOptionsPopup {
         val optionOrder = prefs2
             .launcherPopupOrder.firstBlocking().toLauncherOptions()
 
-        // Anchor: when a custom image is the wallpaper source, the system "Wallpaper & style" no
-        // longer drives what the user sees on the home screen — so relabel the entry to "Anchor
-        // wallpaper" and point it at our own picker instead.
-        val anchorCustomWallpaper =
-            app.anchor.AnchorPreferences(launcher).wallpaperSource ==
-                app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
-        val wallpaperResString = when {
-            anchorCustomWallpaper -> R.string.anchor_wallpaper_source_label
-            Utilities.existsStyleWallpapers(launcher) -> R.string.styles_wallpaper_button_text
-            else -> R.string.wallpapers
+        // Anchor: hijack the long-press "Wallpaper" option to open the Anchor wallpaper chooser
+        // (bundled rotation-stable backgrounds + choose-from-photos) instead of the system picker, so
+        // this is a first-class discovery point for the feature. Relabel to "Anchor wallpaper".
+        val wallpaperResString = R.string.anchor_wallpaper_source_label
+        val wallpaperResDrawable = R.drawable.ic_wallpaper
+        val wallpaperAction: (View) -> Boolean = { _ ->
+            launcher.startActivity(
+                app.lawnchair.ui.preferences.PreferenceActivity.createIntent(
+                    launcher,
+                    app.lawnchair.ui.preferences.navigation.AnchorWallpaperChooser,
+                ),
+            )
+            true
         }
-        val wallpaperResDrawable =
-            if (Utilities.existsStyleWallpapers(launcher) && !anchorCustomWallpaper) R.drawable.ic_palette else R.drawable.ic_wallpaper
-        val wallpaperAction: (View) -> Boolean =
-            if (anchorCustomWallpaper) {
-                { v -> app.anchor.AnchorWallpaperPicker.launch(launcher); true }
-            } else {
-                onStartWallpaperPicker
-            }
 
         val optionsList = mapOf(
             "lock" to OptionItem(

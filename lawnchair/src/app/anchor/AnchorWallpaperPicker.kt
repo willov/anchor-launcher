@@ -54,13 +54,11 @@ object AnchorWallpaperPicker {
      */
     fun setAsLiveWallpaper(activity: Activity) {
         val component = serviceComponent(activity)
-        // The system live-wallpaper screen can't be skinned; a brief hint tells the user which
-        // option to pick (Home vs Both) since that choice lives on that system screen.
-        android.widget.Toast.makeText(
-            activity,
-            activity.getString(com.android.launcher3.R.string.anchor_wallpaper_set_hint),
-            android.widget.Toast.LENGTH_LONG,
-        ).show()
+        // Setting the live wallpaper from within our running app leaves Samsung's wallpaper-surface
+        // visibility in a state that blanks to black on the next Home press (a clean cold-start does
+        // not). Mark a one-shot restart so the launcher restarts on its next resume, reproducing that
+        // clean state. Consumed in LawnchairLauncher.onResume.
+        AnchorPreferences(activity).pendingWallpaperRestart = true
         val preview = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
             putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, component)
         }
@@ -86,8 +84,20 @@ object AnchorWallpaperPicker {
             }
             if (!ok) return@launch
             AnchorPreferences(activity).wallpaperSource = AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
-            setAsLiveWallpaper(activity)
+            applyLiveWallpaper(activity)
         }
+    }
+
+    /**
+     * Apply the (already-imported) image as the live wallpaper by ALWAYS going through the system
+     * CHANGE_LIVE_WALLPAPER flow — even when our engine is already the active wallpaper. Going through
+     * the system flow is what makes the platform properly (re-)establish the wallpaper surface's
+     * visibility; skipping it (just overwriting the file) leaves the surface in a half-attached state
+     * that blanks to black on the next Home press. Re-setting the same component via the real intent
+     * is fine (verified on device).
+     */
+    private fun applyLiveWallpaper(activity: Activity) {
+        setAsLiveWallpaper(activity)
     }
 
     /**
@@ -119,7 +129,7 @@ object AnchorWallpaperPicker {
             // the launcher stays passthrough (keeps FLAG_SHOW_WALLPAPER) and the live wallpaper shows
             // through while the offset bridge drives its parallax.
             AnchorPreferences(activity).wallpaperSource = AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
-            setAsLiveWallpaper(activity)
+            applyLiveWallpaper(activity)
         }
     }
 }

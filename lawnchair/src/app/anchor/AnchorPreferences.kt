@@ -52,6 +52,19 @@ class AnchorPreferences(context: Context) {
         set(value) { prefs.edit().putBoolean(KEY_GRID_ONBOARDING_SHOWN, value).apply() }
 
     /**
+     * One-shot flag: the picker set the Anchor live wallpaper and the launcher should restart once on
+     * its next resume. Restarting reproduces the clean cold-start state under which Samsung reliably
+     * shows our live wallpaper — setting it from within the running app otherwise leaves the wallpaper
+     * surface in a state that blanks to black on the next Home press. Consumed (cleared) on read.
+     */
+    var pendingWallpaperRestart: Boolean
+        get() = prefs.getBoolean(KEY_PENDING_WALLPAPER_RESTART, false)
+        // commit() (synchronous) NOT apply(): the launcher restarts (kills the process) immediately
+        // after clearing this flag, so an async apply() would be lost → restart loop. commit() persists
+        // before the process dies.
+        set(value) { prefs.edit().putBoolean(KEY_PENDING_WALLPAPER_RESTART, value).commit() }
+
+    /**
      * True (default) = columns and rows are linked: moving one grid slider moves the other along the
      * screen's aspect ratio (like linked width/height in a design tool), keeping the sweet-spot
      * proportions the recommendation engine targets. False = the sliders move independently.
@@ -181,6 +194,7 @@ class AnchorPreferences(context: Context) {
         private const val KEY_CUSTOM_WALLPAPER_PATH = "custom_wallpaper_path"
         private const val KEY_WALLPAPER_ONBOARDING_SHOWN = "wallpaper_onboarding_shown"
         private const val KEY_GRID_ONBOARDING_SHOWN = "grid_onboarding_shown"
+        private const val KEY_PENDING_WALLPAPER_RESTART = "pending_wallpaper_restart"
         private const val KEY_LINK_GRID_DIMENSIONS = "link_grid_dimensions"
         private const val KEY_USE_TEST_WALLPAPER = "use_test_wallpaper"
         private const val KEY_ROTATION_TRANSITION = "rotation_transition"

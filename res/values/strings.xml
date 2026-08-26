@@ -51,12 +51,26 @@
     <string name="anchor_wallpaper_pick_image_label">Choose image</string>
     <string name="anchor_wallpaper_pick_image_set">Image selected</string>
     <string name="anchor_wallpaper_pick_image_none">No image selected</string>
-    <!-- Shown on the system live-wallpaper preview screen (com.android.wallpaper.livepicker) as the
-         wallpaper's name/description. Not the app name — this reads as "you are setting a wallpaper". -->
-    <string name="anchor_wallpaper_service_label">Anchor rotation-stable wallpaper</string>
-    <string name="anchor_wallpaper_service_description">Keeps your background pixel-stable when you rotate the screen, with smooth page and row parallax.</string>
-    <!-- Hint shown before the system "Set wallpaper" screen so the user knows which option to pick. -->
-    <string name="anchor_wallpaper_set_hint">On the next screen, tap “Set wallpaper”. Choose “Home screen” (or “Both” to use it on the lock screen too).</string>
+    <!-- Wallpaper service label. Kept intentionally EMPTY so the system live-wallpaper preview screen
+         (com.android.wallpaper.livepicker) shows just the "Set wallpaper" button with no name/blurb
+         overlaid on the preview. Still used as a fallback name elsewhere if the system needs one. -->
+    <string name="anchor_wallpaper_service_label"></string>
+    <!-- Wallpaper chooser screen -->
+    <string name="anchor_wallpaper_chooser_title">Anchor wallpaper</string>
+    <string name="anchor_wallpaper_chooser_bundled_heading">Rotation-stable backgrounds</string>
+    <string name="anchor_wallpaper_chooser_bundled_desc">These stay pixel-stable when you rotate, with page and row parallax.</string>
+    <string name="anchor_wallpaper_chooser_own_heading">Your own image</string>
+    <string name="anchor_wallpaper_chooser_choose_photo">Choose from photos…</string>
+    <string name="anchor_wallpaper_chooser_choose_photo_desc">Pick any image; it’s rendered the same rotation-stable way.</string>
+    <string name="anchor_wallpaper_chooser_credits_link">Wallpaper credits</string>
+    <!-- Wallpaper credits / attribution screen -->
+    <string name="anchor_wallpaper_credits_title">Wallpaper credits</string>
+    <string name="anchor_wallpaper_credits_intro">Anchor’s built-in backgrounds are from the GNOME project, used with gratitude.</string>
+    <string name="anchor_wallpaper_credits_by">By %1$s · %2$s</string>
+    <string name="anchor_wallpaper_credits_source">Source</string>
+    <string name="anchor_wallpaper_credits_gnome_thanks">Thank you to the GNOME community. Consider supporting them:</string>
+    <string name="anchor_wallpaper_credits_gnome_donate">Donate to GNOME</string>
+    <string name="anchor_wallpaper_credits_disclaimer">Anchor Launcher is not affiliated with or endorsed by the GNOME Foundation. Background artwork is licensed under Creative Commons Attribution-ShareAlike; the app itself is licensed separately.</string>
     <string name="anchor_rotation_transition_label">Rotation animation</string>
     <string name="anchor_rotation_transition_description">How the screen transitions while the grid re-anchors on rotation.</string>
     <string name="anchor_rotation_transition_traditional">Traditional (system default)</string>

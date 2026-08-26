@@ -138,6 +138,12 @@ fun PreferenceNavigation(
         composable<GridWizard>(
             deepLinks = getDeepLink(GridWizard),
         ) { GridWizardScreen() }
+        composable<AnchorWallpaperChooser>(
+            deepLinks = getDeepLink(AnchorWallpaperChooser),
+        ) { app.lawnchair.ui.preferences.destinations.AnchorWallpaperChooserScreen() }
+        composable<AnchorWallpaperCredits>(
+            deepLinks = getDeepLink(AnchorWallpaperCredits),
+        ) { app.lawnchair.ui.preferences.destinations.AnchorWallpaperCreditsScreen() }
 
         composable<Dock>(
             deepLinks = getDeepLink(Dock),

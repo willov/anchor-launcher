@@ -3,9 +3,9 @@
   Copyright (C) 2025 Anchor Launcher Contributors
   Licensed under the Apache License, Version 2.0. See LICENSE for details.
 
-  Metadata for AnchorWallpaperService (the rotation-stable live wallpaper). The label/description
-  here name the WALLPAPER (not the app) on the system live-wallpaper preview screen.
+  Metadata for AnchorWallpaperService (the rotation-stable live wallpaper). The label is intentionally
+  empty so the system live-wallpaper preview shows just the "Set wallpaper" button (no name/blurb over
+  the preview). No description for the same reason.
 -->
 <wallpaper xmlns:android="http://schemas.android.com/apk/res/android"
-    android:label="@string/anchor_wallpaper_service_label"
-    android:description="@string/anchor_wallpaper_service_description" />
+    android:label="@string/anchor_wallpaper_service_label" />

@@ -90,6 +90,7 @@ fun HomeScreenPreferences(
     val prefs2 = preferenceManager2()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val navController = app.lawnchair.ui.preferences.LocalNavController.current
     PreferenceLayout(
         label = stringResource(id = R.string.home_screen_label),
         backArrowVisible = !LocalIsExpandedScreen.current,
@@ -102,25 +103,20 @@ fun HomeScreenPreferences(
         // the logically-grouped PreferenceGroups below (Wallpaper, Rotation, App drawer access)
         // rather than bundled under a single "Anchor" heading.
         val anchorPrefs = remember { app.anchor.AnchorPreferences(context) }
+        // Re-read the source/path each time this screen resumes: the chooser (a separate screen) or
+        // the system live-wallpaper dialog may have changed them since we composed.
+        val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
         var wallpaperSource by remember { mutableStateOf(anchorPrefs.wallpaperSource) }
         var customPath by remember { mutableStateOf(anchorPrefs.customWallpaperPath) }
-        val pickImage = rememberLauncherForActivityResult(
-            ActivityResultContracts.PickVisualMedia(),
-        ) { uri ->
-            if (uri != null) {
-                scope.launch(Dispatchers.IO) {
-                    val ok = app.anchor.rotation.WallpaperStabilizationManager
-                        .importCustomWallpaper(context, uri)
-                    if (ok) {
-                        anchorPrefs.wallpaperSource =
-                            app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
-                        withContext(Dispatchers.Main) {
-                            wallpaperSource = app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
-                            customPath = anchorPrefs.customWallpaperPath
-                        }
-                    }
+        androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+            val obs = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                    wallpaperSource = anchorPrefs.wallpaperSource
+                    customPath = anchorPrefs.customWallpaperPath
                 }
             }
+            lifecycleOwner.lifecycle.addObserver(obs)
+            onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
         }
 
         if (showDeckLayout) {
@@ -198,12 +194,12 @@ fun HomeScreenPreferences(
         }
         PreferenceGroup(heading = stringResource(id = R.string.wallpaper)) {
             // ── Anchor rotation-stable wallpaper ─────────────────────────────────────────────────
-            // Master toggle: ON = Anchor renders a picked image with rotation stabilization
+            // Master toggle: ON = Anchor renders a chosen image with rotation stabilization
             // (source = CUSTOM); OFF = the system shows the wallpaper normally (source = SYSTEM).
-            // Under CUSTOM the image is now rendered by AnchorWallpaperService (our live wallpaper) —
-            // a wallpaper SURFACE that stays pixel-perfect on rotation AND is not swept into the
-            // app→home screenshot-rotate (no snap). The picker sets it via the system confirm dialog.
-            val activity = context as? android.app.Activity
+            // Under CUSTOM the image is rendered by AnchorWallpaperService (our live wallpaper) — a
+            // wallpaper SURFACE that stays pixel-perfect on rotation AND is not swept into the
+            // app→home screenshot-rotate (no snap). Turning it on opens the Anchor wallpaper chooser
+            // (bundled backgrounds + choose-from-photos), which imports + sets the live wallpaper.
             val anchorWallpaperOn =
                 wallpaperSource == app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
             Item {
@@ -211,11 +207,9 @@ fun HomeScreenPreferences(
                     checked = anchorWallpaperOn,
                     onCheckedChange = { enabled ->
                         if (enabled) {
-                            // Pick an image → import → set Anchor's live wallpaper (system confirm).
-                            wallpaperSource = app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
-                            anchorPrefs.wallpaperSource =
-                                app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
-                            activity?.let { app.anchor.AnchorWallpaperPicker.launch(it) }
+                            navController.navigate(
+                                app.lawnchair.ui.preferences.navigation.AnchorWallpaperChooser,
+                            )
                         } else {
                             wallpaperSource = app.anchor.AnchorPreferences.WALLPAPER_SOURCE_SYSTEM
                             anchorPrefs.wallpaperSource =
@@ -236,7 +230,9 @@ fun HomeScreenPreferences(
                             stringResource(id = R.string.anchor_wallpaper_pick_image_none)
                         },
                         onClick = {
-                            activity?.let { app.anchor.AnchorWallpaperPicker.launch(it) }
+                            navController.navigate(
+                                app.lawnchair.ui.preferences.navigation.AnchorWallpaperChooser,
+                            )
                         },
                     )
                 }

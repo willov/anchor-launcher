@@ -93,27 +93,59 @@ class AnchorWallpaperService : WallpaperService() {
             drawFrame(surfaceHolder, f.width(), f.height())
         }
 
-        /** (Re)decode the picked image if it changed since the last load. Returns true if reloaded. */
-        private fun reloadBitmapIfChanged(): Boolean {
-            val ctx = displayContext ?: this@AnchorWallpaperService
+        /**
+         * (Re)decode the picked image if the file changed since the last load. Decodes SYNCHRONOUSLY:
+         * this is only ever called from lifecycle events (onCreate / onSurfaceCreated /
+         * onVisibilityChanged), never the per-frame parallax path, and only actually decodes when the
+         * file changed (a rare wallpaper switch). Decoding synchronously means the NEXT drawn frame is
+         * already the new image — decoding on a background thread and swapping afterwards showed the
+         * OLD image for a frame first (the "flash the yellow before the blue"). The new bitmap replaces
+         * the old only once fully decoded, so there is never a blank/black frame either.
+         */
+        private fun reloadBitmapIfChanged() {
             val path = AnchorPreferences(this@AnchorWallpaperService).customWallpaperPath
             val mtime = path?.let { runCatching { java.io.File(it).lastModified() }.getOrDefault(0L) } ?: 0L
-            if (bitmap != null && path == loadedPath && mtime == loadedMtime) return false
-            bitmap = path?.let {
-                // Reuse the launcher's decode+downscale so the bitmap is screen-sized with a little
-                // parallax headroom (same sizing the window-background path used).
+            if (bitmap != null && path == loadedPath && mtime == loadedMtime) return
+            val ctx = displayContext ?: this@AnchorWallpaperService
+            val decoded = path?.let {
                 runCatching { WallpaperStabilizationManager.decodeDownscaled(ctx, it) }
                     .onFailure { e -> Log.w(TAG, "wallpaper decode failed: ${e.message}") }
                     .getOrNull()
             }
-            loadedPath = path
-            loadedMtime = mtime
-            if (bitmap == null) Log.w(TAG, "No custom wallpaper bitmap to render (path=$path)")
-            return true
+            // Only replace the shown bitmap once the new one is ready (keep the old one on a decode
+            // failure rather than blanking to black).
+            if (decoded != null) {
+                bitmap = decoded
+                loadedPath = path
+                loadedMtime = mtime
+            } else {
+                Log.w(TAG, "No custom wallpaper bitmap to render (path=$path)")
+            }
+        }
+
+        override fun onSurfaceCreated(holder: SurfaceHolder) {
+            super.onSurfaceCreated(holder)
+            // Each surface (a separate Engine is created for the home AND the lock screen when the
+            // user sets the wallpaper on "Both") must be drawn on creation — otherwise a surface whose
+            // onSurfaceChanged/onVisibilityChanged ordering differs can stay black.
+            reloadBitmapIfChanged()
+            val f = holder.surfaceFrame
+            drawFrame(holder, f.width(), f.height())
+        }
+
+        override fun onSurfaceRedrawNeeded(holder: SurfaceHolder) {
+            super.onSurfaceRedrawNeeded(holder)
+            // The system keeps OLD engine instances alive and cycles visibility between them on a
+            // switch; each holds the image from when it was created. Reload the CURRENT file before
+            // drawing so an old instance never paints its stale bitmap (the blue→yellow→blue flash).
+            reloadBitmapIfChanged()
+            val f = holder.surfaceFrame
+            drawFrame(holder, f.width(), f.height())
         }
 
         override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
             super.onSurfaceChanged(holder, format, width, height)
+            reloadBitmapIfChanged()
             drawFrame(holder, width, height)
         }
 
@@ -125,6 +157,16 @@ class AnchorWallpaperService : WallpaperService() {
                 reloadBitmapIfChanged()
                 val f = surfaceHolder.surfaceFrame
                 drawFrame(surfaceHolder, f.width(), f.height())
+                // If the surface wasn't ready yet (empty frame), the draw above no-op'd and we'd show a
+                // stale/black buffer. Retry on the next frame(s) once the surface has real dimensions.
+                if (f.width() <= 0 || f.height() <= 0) {
+                    surfaceHolder.let { h ->
+                        (displayContext ?: this@AnchorWallpaperService).mainExecutor.execute {
+                            val ff = h.surfaceFrame
+                            drawFrame(h, ff.width(), ff.height())
+                        }
+                    }
+                }
             }
         }
 
@@ -136,13 +178,21 @@ class AnchorWallpaperService : WallpaperService() {
             // Hardware canvas composites the (scaled) bitmap blit on the GPU. The software lockCanvas()
             // path did a CPU bilinear resample of a ~2000px bitmap every frame (~225ms/frame → parallax
             // lag). lockHardwareCanvas() drops that to sub-millisecond.
-            val canvas = holder.lockHardwareCanvas() ?: return
+            // Ensure the bitmap is loaded on EVERY draw path. A fresh Engine instance (the system
+            // creates a new one after the set-wallpaper preview closes) may receive onOffsetsChanged /
+            // onVisibilityChanged before onCreate/onSurfaceCreated ran on it — if we drew then with a
+            // null bitmap we'd paint black over the good frame ("flash then black").
+            if (bitmap == null) reloadBitmapIfChanged()
+            val bmp = bitmap
+            if (bmp == null) {
+                // Genuinely no image to show — leave the previous frame untouched rather than flashing
+                // black. (Only happens if the picked file is missing/undecodable.)
+                Log.w(TAG, "drawFrame: no bitmap, skipping (${width}x$height)")
+                return
+            }
+            val canvas = holder.lockHardwareCanvas()
+            if (canvas == null) { Log.w(TAG, "drawFrame: lockHardwareCanvas null (${width}x$height)"); return }
             try {
-                val bmp = bitmap
-                if (bmp == null) {
-                    canvas.drawColor(Color.BLACK)
-                    return
-                }
                 val rotation = currentRotation()
 
                 // Portrait-canonical viewport (short = width, long = height). The surface dims are the

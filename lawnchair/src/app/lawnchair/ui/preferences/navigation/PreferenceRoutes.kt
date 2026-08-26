@@ -142,6 +142,18 @@ data object GridWizard : PreferenceRoute, PreferenceDeepLink {
     override val deepLink = "$URI/grid-wizard"
 }
 
+// Anchor: rotation-stable wallpaper chooser (bundled backgrounds + choose-from-photos)
+@Serializable
+data object AnchorWallpaperChooser : PreferenceRoute, PreferenceDeepLink {
+    override val deepLink = "$URI/anchor-wallpaper-chooser"
+}
+
+// Anchor: wallpaper credits / attribution (CC-BY-SA for bundled GNOME backgrounds)
+@Serializable
+data object AnchorWallpaperCredits : PreferenceRoute, PreferenceDeepLink {
+    override val deepLink = "$URI/anchor-wallpaper-credits"
+}
+
 // Dock section routes
 @Serializable
 data object DockSearchProvider : PreferenceRoute, PreferenceDeepLink {
