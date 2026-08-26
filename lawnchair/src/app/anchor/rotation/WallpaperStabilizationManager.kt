@@ -84,12 +84,22 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
 
     // --- Live-wallpaper (AnchorWallpaperService) offset bridge ---
     // When our live wallpaper is the active system wallpaper, parallax is driven cross-process by
-    // pushing normalised glass-space offsets via WallpaperManager.setWallpaperOffsets → the engine's
+    // pushing the camera position via WallpaperManager.setWallpaperOffsets → the engine's
     // onOffsetsChanged. This is independent of the in-process `drawable` (which is null in the
     // wallpaper_source=system passthrough that live-wallpaper mode uses).
+    //
+    // IMPORTANT: we push BITMAP-SPACE camera coordinates (liveWorldX/liveWorldY), NOT glass-space
+    // offsets. Bitmap-space is rotation-invariant: a pure device rotation never changes them, and the
+    // engine's crop is computed only from (worldX, worldY) + the rotation-invariant portrait-canonical
+    // viewport, so it selects the identical source pixels in both orientations → pixel-perfect rotation.
+    // (The earlier design pushed glass-space offsets and let the ENGINE map
+    // them to a bitmap axis per-rotation; that made the rest crop differ between portrait/landscape — a
+    // ~192px vertical jump on rotation. The glass→bitmap axis mapping now lives HERE, applied to gesture
+    // deltas at the moment they happen, exactly like the non-live `drawable` path — the pixel-perfect,
+    // unit-tested model.)
     private var liveWallpaperActiveCached: Boolean? = null
-    private var lastHGlass = 0f          // horizontal-on-glass parallax position [0,1]
-    private var lastVGlass = 1f          // vertical-on-glass parallax position [0,1] (1 = bottom/home row)
+    private var liveWorldX = 0f          // bitmap-space camera X [0,1] (page scroll)
+    private var liveWorldY = HOME_REST_WORLD_Y  // bitmap-space camera Y [0,1] (row; bottom/home rest)
     private var vGlassAnimator: ValueAnimator? = null
 
     /**
@@ -134,10 +144,14 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         return liveWallpaperActiveCached!!
     }
 
-    /** Push the current (h, v) glass offsets to the live wallpaper engine, if the window token is up. */
+    /**
+     * Push the current BITMAP-SPACE camera (liveWorldX, liveWorldY) to the live wallpaper engine, if
+     * the window token is up. These are rotation-invariant; the engine uses them directly (no remap),
+     * so a pure rotation is pixel-perfect.
+     */
     private fun pushLiveOffsets() {
         val token = launcher.window?.decorView?.windowToken ?: return
-        runCatching { wallpaperManager.setWallpaperOffsets(token, lastHGlass, lastVGlass) }
+        runCatching { wallpaperManager.setWallpaperOffsets(token, liveWorldX, liveWorldY) }
     }
 
     private val rotationListener = DisplayController.DisplayInfoChangeListener { _, info, flags ->
@@ -296,11 +310,23 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
      */
     fun onScrollOffset(offset: Float) {
         if (isRowTransitioning) return
-        // Live-wallpaper path: the row-relative offset (0..1 across the active row's pages) IS the
-        // horizontal-on-glass position. Push it straight through; the engine maps it to the correct
-        // bitmap axis for its rotation.
+        // Live-wallpaper path: accumulate the horizontal-on-glass gesture as a DELTA into the
+        // bitmap-space camera (liveWorldX/liveWorldY), applying the glass→bitmap axis map for the
+        // CURRENT rotation to the delta only — never re-mapping the absolute position on rotation. This
+        // is the drawable's pixel-perfect model: at rest (no gesture) a rotation produces no delta, so
+        // the camera is unchanged and the crop is identical in both orientations. The engine scales
+        // worldX/worldY (∈[0,1]) into the equal-drift travel budget, so the manager needs no bitmap dims.
         if (isLiveWallpaperActive()) {
-            lastHGlass = offset.coerceIn(0f, 1f)
+            if (lastScrollOffset.isNaN()) {
+                lastScrollOffset = offset
+                return
+            }
+            val delta = offset - lastScrollOffset
+            if (delta == 0f) return
+            lastScrollOffset = offset
+            val step = delta * LIVE_HORIZONTAL_SWEEP_WORLD
+            val m = WallpaperCropMath.horizontalGlassAxis(currentRotation())
+            applyLiveCameraDelta(m, step)
             pushLiveOffsets()
             return
         }
@@ -375,6 +401,24 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         }
     }
 
+    /** [applyCameraDelta] for the live-wallpaper camera (liveWorldX/liveWorldY). */
+    private fun applyLiveCameraDelta(m: WallpaperCropMath.AxisMapping, step: Float) {
+        val s = m.sign * step
+        when (m.axis) {
+            WallpaperCropMath.WorldAxis.X -> liveWorldX = (liveWorldX + s).coerceIn(0f, 1f)
+            WallpaperCropMath.WorldAxis.Y -> liveWorldY = (liveWorldY + s).coerceIn(0f, 1f)
+        }
+    }
+
+    /** Set one axis of the live-wallpaper camera to an absolute value. */
+    private fun setLiveWorldAxis(axis: WallpaperCropMath.WorldAxis, value: Float) {
+        val v = value.coerceIn(0f, 1f)
+        when (axis) {
+            WallpaperCropMath.WorldAxis.X -> liveWorldX = v
+            WallpaperCropMath.WorldAxis.Y -> liveWorldY = v
+        }
+    }
+
     /**
      * Called by [app.anchor.navigation.TwoRowNavigationManager] when a row transition starts.
      * Animates the camera vertically (on the glass) to the target row's canonical world position
@@ -392,19 +436,30 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // (home) rests at the bottom (vGlass = 1); the top row is at vGlass = 0. Row spacing is uniform
         // so one row-step moves a comparable fraction to one page-step (equal-feel parallax).
         if (isLiveWallpaperActive()) {
-            val rows = totalRows.coerceAtLeast(1)
-            val targetV = if (rows <= 1) 1f else (1f - toRow.toFloat() / (rows - 1)).coerceIn(0f, 1f)
+            // Canonical vertical-world target (portrait-Y sense): row 0 rests at HOME_REST_WORLD_Y
+            // (bottom); each row up subtracts one step, clamped to the top. Then map to the CURRENT
+            // rotation's world axis + sign (bitmap-Y in portrait, bitmap-X in landscape; sign-mirrored so
+            // higher rows always drag the wallpaper the same way on glass). We animate ONLY the mapped
+            // axis's absolute value to the target; because the mapping is applied to the target here (not
+            // re-applied on rotation), a pure rotation mid-rest leaves the camera untouched.
+            val canonical = (HOME_REST_WORLD_Y - toRow * LIVE_ROW_STEP_WORLD).coerceIn(0f, HOME_REST_WORLD_Y)
+            val m = WallpaperCropMath.verticalGlassAxis(currentRotation())
+            val target = if (m.sign < 0) 1f - canonical else canonical
+            val current = when (m.axis) {
+                WallpaperCropMath.WorldAxis.X -> liveWorldX
+                WallpaperCropMath.WorldAxis.Y -> liveWorldY
+            }
             vGlassAnimator?.cancel()
-            if (kotlin.math.abs(lastVGlass - targetV) < 0.001f) {
-                lastVGlass = targetV
+            if (kotlin.math.abs(current - target) < 0.001f) {
+                setLiveWorldAxis(m.axis, target)
                 pushLiveOffsets()
                 return
             }
-            vGlassAnimator = ValueAnimator.ofFloat(lastVGlass, targetV).apply {
+            vGlassAnimator = ValueAnimator.ofFloat(current, target).apply {
                 duration = durationMs
                 interpolator = DecelerateInterpolator()
                 addUpdateListener { anim ->
-                    lastVGlass = anim.animatedValue as Float
+                    setLiveWorldAxis(m.axis, anim.animatedValue as Float)
                     pushLiveOffsets()
                 }
                 start()
@@ -662,6 +717,15 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // an axis with no headroom contributes nothing without zeroing the other.
         // Fallback horizontal full-sweep travel if bitmap dims aren't known yet.
         private const val HORIZONTAL_PARALLAX = 1.0f
+
+        // Live-wallpaper camera travel, in bitmap-space world units [0,1] within the engine's shared
+        // equal-drift budget (the engine maps worldX/worldY over travel = min(roomX, roomY), so the
+        // SAME world value moves the wallpaper the SAME glass distance on both axes). Using matching
+        // horizontal/vertical values gives the "same vertical and horizontal movement" the design wants.
+        //   LIVE_HORIZONTAL_SWEEP_WORLD: worldX span for a FULL row page-sweep (offset 0→1).
+        //   LIVE_ROW_STEP_WORLD: worldY step per row switch.
+        private const val LIVE_HORIZONTAL_SWEEP_WORLD = 0.5f
+        private const val LIVE_ROW_STEP_WORLD = 0.5f
 
         // The same bitmap is rendered in BOTH orientations (portrait-canonical), so to cover the
         // screen without stretching it must be at least the screen's LARGER side in both dimensions.

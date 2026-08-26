@@ -17,7 +17,6 @@ import android.util.Log
 import android.view.Surface
 import android.view.SurfaceHolder
 import app.anchor.AnchorPreferences
-import app.anchor.rotation.WallpaperCropMath
 import app.anchor.rotation.WallpaperStabilizationManager
 
 /**
@@ -38,14 +37,19 @@ import app.anchor.rotation.WallpaperStabilizationManager
  * the current orientation and upright** (portrait 1200×1920 at ROTATION_0; landscape 1920×1200 at
  * ROTATION_90), and it gets an `onSurfaceChanged` on every rotation with the new dims + rotation
  * (verified on device). So the engine reproduces the SAME on-glass result the drawable produced: it
- * computes the crop from the **portrait-canonical** viewport (rotation-invariant) via
- * [WallpaperCropMath.computeSrcRect], then applies the SAME counter-rotation canvas transform the
- * drawable uses — because that transform maps the portrait-canonical destination onto the physical
+ * computes the crop from the **portrait-canonical** viewport (rotation-invariant) using the
+ * BITMAP-SPACE camera position (worldX/worldY), then applies the SAME counter-rotation canvas transform
+ * the drawable uses — because that transform maps the portrait-canonical destination onto the physical
  * panel, which for the engine IS the surface. Result: a pure rotation selects the same source pixels
  * and lands them at the same glass position → pixel-perfect by construction.
  *
- * This milestone renders at the HOME REST camera (page-0 left edge, bottom row). Parallax / row
- * transitions (driven cross-process via WallpaperManager.setWallpaperOffsets) come next.
+ * ## Parallax (worldX/worldY pushed cross-process)
+ *
+ * The launcher ([WallpaperStabilizationManager]) pushes the camera position as **bitmap-space**
+ * worldX/worldY via WallpaperManager.setWallpaperOffsets → [onOffsetsChanged]. Bitmap-space is
+ * rotation-invariant, so the engine uses the values directly with NO per-rotation axis remap — the
+ * glass→bitmap mapping lives in the launcher, applied to gesture deltas at input time (the same model
+ * the drawable uses). This is what keeps rotation pixel-perfect at any camera position.
  */
 class AnchorWallpaperService : WallpaperService() {
 
@@ -102,15 +106,19 @@ class AnchorWallpaperService : WallpaperService() {
         private var loadedPath: String? = null
         private var loadedMtime = 0L
 
-        // Glass-space parallax offsets in [0,1], pushed by the launcher via
+        // BITMAP-SPACE camera position in [0,1], pushed by the launcher via
         // WallpaperManager.setWallpaperOffsets and delivered to onOffsetsChanged:
-        //   hGlass = horizontal-on-glass position (page scroll within the active row): 0 = left.
-        //   vGlass = vertical-on-glass position (active row): 0 = top row, 1 = bottom/home row.
-        // These are ORIENTATION-INDEPENDENT intents; the engine maps them to the correct bitmap axis
-        // for its current rotation in drawFrame (the axis-swap lives here because the engine reliably
-        // knows its own rotation). Rest at home: left edge, bottom row.
-        private var hGlass = 0f
-        private var vGlass = 1f
+        //   worldX = crop position along the bitmap X axis (srcLeft): 0 = left edge.
+        //   worldY = crop position along the bitmap Y axis (srcTop):  0 = top, 1 = bottom.
+        // These are ROTATION-INVARIANT: the launcher (WallpaperStabilizationManager) does the
+        // glass→bitmap axis mapping when it applies gesture deltas, and NEVER re-maps on rotation. So a
+        // pure device rotation leaves worldX/worldY unchanged and the crop below selects the identical
+        // source pixels in both orientations → pixel-perfect rotation. The engine must NOT re-map axes
+        // per rotation here (doing so was the old ~192px vertical jump on rotation). The counter-rotation
+        // canvas transform alone handles putting those bitmap pixels upright on the glass.
+        // Rest at home: left edge (worldX=0), bottom row (worldY=HOME_REST_WORLD_Y).
+        private var worldX = 0f
+        private var worldY = HOME_REST_WORLD_Y
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
@@ -126,8 +134,8 @@ class AnchorWallpaperService : WallpaperService() {
             xPixelOffset: Int,
             yPixelOffset: Int,
         ) {
-            hGlass = xOffset.coerceIn(0f, 1f)
-            vGlass = yOffset.coerceIn(0f, 1f)
+            worldX = xOffset.coerceIn(0f, 1f)
+            worldY = yOffset.coerceIn(0f, 1f)
             val f = surfaceHolder.surfaceFrame
             drawFrame(surfaceHolder, f.width(), f.height())
         }
@@ -251,33 +259,18 @@ class AnchorWallpaperService : WallpaperService() {
                 val rawW = minOf(width, height)
                 val rawH = maxOf(width, height)
 
-                // Map the glass-space parallax intents to bitmap-space (worldX/worldY) for the current
-                // rotation. worldX drives the bitmap-X crop (srcLeft), worldY the bitmap-Y crop (srcTop).
-                // In landscape the counter-rotation makes bitmap-Y appear horizontal on glass, so a
-                // horizontal-on-glass intent (hGlass) must move worldY there — hence the axis-swap.
-                val hAxis = WallpaperCropMath.horizontalGlassAxis(rotation)
-                val vAxis = WallpaperCropMath.verticalGlassAxis(rotation)
-                var worldX = 0f
-                var worldY = 0f
-                // A negative sign means the glass direction is inverted relative to the bitmap axis, so
-                // mirror the [0,1] intent to 1−intent for that axis.
-                fun assign(axis: WallpaperCropMath.AxisMapping, intent: Float) {
-                    val v = if (axis.sign < 0) 1f - intent else intent
-                    when (axis.axis) {
-                        WallpaperCropMath.WorldAxis.X -> worldX = v
-                        WallpaperCropMath.WorldAxis.Y -> worldY = v
-                    }
-                }
-                assign(hAxis, hGlass)
-                assign(vAxis, vGlass)
-
-                // Equal-feel parallax: pan BOTH bitmap axes over the SAME glass-pixel budget so a full
-                // horizontal sweep and a full vertical sweep move the wallpaper the same distance. Using
-                // each axis's raw scroll-room instead (as WallpaperCropMath.computeSrcRect does) makes
-                // the imbalanced-aspect bitmap pan much further on one axis (e.g. a 2112² bitmap in a
-                // 1200×1920 viewport → 912px horizontal room vs 192px vertical → vertical felt way
-                // stronger). The shared budget is capped by the smaller axis room so neither axis runs
-                // off the bitmap. The pannable window is centred in each axis's room.
+                // worldX/worldY are already BITMAP-SPACE (rotation-invariant) — the launcher did the
+                // glass→bitmap mapping when applying gesture deltas and never re-maps on rotation. So we
+                // use them DIRECTLY here; there is NO per-rotation axis swap (that swap was the old
+                // ~192px vertical jump on rotation). Because rawW/rawH are the rotation-invariant
+                // portrait-canonical viewport, a pure rotation with fixed worldX/worldY selects the
+                // identical srcRect → pixel-perfect.
+                //
+                // Equal H/V movement: pan BOTH bitmap axes over the SAME glass-pixel budget
+                // (travel = min(roomX, roomY)) so a full horizontal sweep and a full vertical sweep move
+                // the wallpaper the same distance (the bitmap is wider-roomed on X for a portrait
+                // viewport, so without the shared budget X would drift much further). The pannable window
+                // is centred in each axis's room; worldX/worldY ∈ [0,1] slide within that shared budget.
                 val srcW = rawW.coerceAtMost(bmp.width)
                 val srcH = rawH.coerceAtMost(bmp.height)
                 val roomX = (bmp.width - srcW).coerceAtLeast(0)
@@ -335,6 +328,11 @@ class AnchorWallpaperService : WallpaperService() {
 
     private companion object {
         const val TAG = "AnchorWallpaperSvc"
+
+        // worldY at the home rest (bottom row). Mirrors WallpaperStabilizationManager.HOME_REST_WORLD_Y
+        // (1 − ROW_MARGIN) so the engine's rest crop matches the manager's camera and the lock-screen
+        // crop. Used as the initial worldY before the launcher pushes any offset.
+        const val HOME_REST_WORLD_Y = 0.9f
 
         // Process-level decoded-bitmap cache, shared across all Engine instances in this process. The
         // system keeps multiple engine instances alive across a switch; caching here means whichever one
