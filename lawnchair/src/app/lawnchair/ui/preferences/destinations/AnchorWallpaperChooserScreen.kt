@@ -250,14 +250,11 @@ private fun VariantHalf(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val thumb by produceState<Bitmap?>(initialValue = null, entry.id, variant) {
+    val thumb by produceState<Bitmap?>(initialValue = thumbCache["${entry.id}_${variant.suffix}"], entry.id, variant) {
+        // Already cached from a previous open? produceState seeded `value` with it above; skip decode.
+        if (value != null) return@produceState
         value = withContext(Dispatchers.IO) {
-            runCatching {
-                val opts = BitmapFactory.Options().apply { inSampleSize = 8 }
-                context.resources.openRawResource(entry.rawResId(context, variant)).use {
-                    BitmapFactory.decodeStream(it, null, opts)
-                }
-            }.getOrNull()
+            loadThumb(context, entry, variant)
         }
     }
     Box(modifier = modifier) {
@@ -274,6 +271,27 @@ private fun VariantHalf(
             )
         }
     }
+}
+
+// Process-level cache of decoded card thumbnails, keyed by "<id>_<variantSuffix>". The chooser decodes
+// ~10 small thumbnails on open; caching them makes re-opening the chooser instant (no re-decode) and
+// keeps the first open snappy since each decoded bitmap is tiny (~192px). Cleared only on process death.
+private val thumbCache = java.util.concurrent.ConcurrentHashMap<String, Bitmap>()
+
+private fun loadThumb(
+    context: android.content.Context,
+    entry: BundledWallpapers.Entry,
+    variant: BundledWallpapers.Variant,
+): Bitmap? {
+    val key = "${entry.id}_${variant.suffix}"
+    thumbCache[key]?.let { return it }
+    return runCatching {
+        // inSampleSize=16 turns the ~3072px source into ~192px — ample for a small card half.
+        val opts = BitmapFactory.Options().apply { inSampleSize = 16 }
+        context.resources.openRawResource(entry.rawResId(context, variant)).use {
+            BitmapFactory.decodeStream(it, null, opts)
+        }
+    }.getOrNull()?.also { thumbCache[key] = it }
 }
 
 @Composable

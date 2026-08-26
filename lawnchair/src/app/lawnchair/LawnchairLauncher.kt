@@ -289,7 +289,10 @@ class LawnchairLauncher : QuickstepLauncher() {
             anchorPrefs.pendingWallpaperRestart = false
             // Recreate unconditionally: some OEMs (verified: Samsung) don't composite our live
             // wallpaper on the home surface until the launcher window is rebuilt — otherwise home
-            // blanks to black. Done while backgrounded so the rebuild is (mostly) invisible.
+            // blanks to black. Done while backgrounded so the rebuild is (mostly) invisible. The n-1
+            // switch flash that the recreate/engine-swap used to reveal is now prevented at the source:
+            // AnchorWallpaperService pre-decodes the new image into a process-level cache (FileObserver)
+            // so any resurrected engine's first frame is already the new image, not a stale buffer.
             recreate()
         }
     }

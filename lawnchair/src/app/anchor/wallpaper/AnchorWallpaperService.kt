@@ -51,6 +51,45 @@ class AnchorWallpaperService : WallpaperService() {
 
     override fun onCreateEngine(): Engine = AnchorEngine()
 
+    override fun onCreate() {
+        super.onCreate()
+        // Pre-decode the wallpaper into the PROCESS-LEVEL cache as soon as the file changes, BEFORE any
+        // engine needs to draw. This is what kills the switch flash: previously the (single) engine
+        // decoded the new image synchronously inside onVisibilityChanged/drawFrame — a ~300ms main-thread
+        // decode during which the surface still showed the STALE buffer (the n-1 flash). By watching the
+        // file and decoding ahead of time, the next draw (whether from the same engine becoming visible
+        // again, or a system-resurrected engine after CHANGE_LIVE_WALLPAPER) finds the new bitmap ALREADY
+        // decoded in the cache → instant correct frame, no stale window.
+        primeCacheDecode(AnchorPreferences(this).customWallpaperPath, "onCreate")
+        startFileObserver()
+    }
+
+    override fun onDestroy() {
+        fileObserver?.stopWatching()
+        fileObserver = null
+        super.onDestroy()
+    }
+
+    private var fileObserver: android.os.FileObserver? = null
+
+    private fun startFileObserver() {
+        val path = AnchorPreferences(this).customWallpaperPath ?: return
+        val file = java.io.File(path)
+        val dir = file.parentFile ?: return
+        // Watch the directory (watching a file that gets replaced/renamed misses events). Filter to our
+        // file's name. CLOSE_WRITE fires when the launcher finishes writing the new image.
+        fileObserver = object : android.os.FileObserver(
+            dir.absolutePath,
+            CLOSE_WRITE or MOVED_TO or MODIFY,
+        ) {
+            override fun onEvent(event: Int, relPath: String?) {
+                if (relPath == null || relPath != file.name) return
+                // Decode off the main thread into the shared cache; ready before the engine draws.
+                decodeExecutor.execute { primeCacheDecode(path, "fileObserver") }
+            }
+        }.also { it.startWatching() }
+    }
+
     private inner class AnchorEngine : WallpaperService.Engine() {
 
         private var bitmap: Bitmap? = null
@@ -94,30 +133,36 @@ class AnchorWallpaperService : WallpaperService() {
         }
 
         /**
-         * (Re)decode the picked image if the file changed since the last load. Decodes SYNCHRONOUSLY:
-         * this is only ever called from lifecycle events (onCreate / onSurfaceCreated /
-         * onVisibilityChanged), never the per-frame parallax path, and only actually decodes when the
-         * file changed (a rare wallpaper switch). Decoding synchronously means the NEXT drawn frame is
-         * already the new image — decoding on a background thread and swapping afterwards showed the
-         * OLD image for a frame first (the "flash the yellow before the blue"). The new bitmap replaces
-         * the old only once fully decoded, so there is never a blank/black frame either.
+         * Adopt the newest bitmap from the PROCESS-LEVEL cache. The cache is kept current by the
+         * service's FileObserver (which pre-decodes off-thread the instant the launcher overwrites the
+         * image), so this is normally a cheap pointer swap with no decode — that is what removes the
+         * ~300ms decode stall that used to show the stale n-1 frame on the switch.
+         *
+         * Fallback: if the cache is empty at this exact moment (first-ever draw, or the FileObserver
+         * hasn't fired yet), decode synchronously so we never draw black. That synchronous path only
+         * happens on a genuine cold start, not on a switch.
          */
         private fun reloadBitmapIfChanged() {
             val path = AnchorPreferences(this@AnchorWallpaperService).customWallpaperPath
             val mtime = path?.let { runCatching { java.io.File(it).lastModified() }.getOrDefault(0L) } ?: 0L
+            // Already showing the current file? nothing to do.
             if (bitmap != null && path == loadedPath && mtime == loadedMtime) return
-            val ctx = displayContext ?: this@AnchorWallpaperService
-            val decoded = path?.let {
-                runCatching { WallpaperStabilizationManager.decodeDownscaled(ctx, it) }
-                    .onFailure { e -> Log.w(TAG, "wallpaper decode failed: ${e.message}") }
-                    .getOrNull()
-            }
-            // Only replace the shown bitmap once the new one is ready (keep the old one on a decode
-            // failure rather than blanking to black).
-            if (decoded != null) {
-                bitmap = decoded
+            // Prefer the pre-decoded cache when it holds the current file's mtime.
+            val cached = peekCachedBitmap()
+            if (cached != null && cachedMtimeValue() == mtime) {
+                bitmap = cached
                 loadedPath = path
                 loadedMtime = mtime
+                return
+            }
+            // Cache miss (cold start / observer not yet fired): decode now so we never draw black, and
+            // populate the cache so sibling engines skip the decode.
+            primeCacheDecode(path, "engineFallback")
+            val fresh = peekCachedBitmap()
+            if (fresh != null) {
+                bitmap = fresh
+                loadedPath = path
+                loadedMtime = cachedMtimeValue()
             } else {
                 Log.w(TAG, "No custom wallpaper bitmap to render (path=$path)")
             }
@@ -178,11 +223,16 @@ class AnchorWallpaperService : WallpaperService() {
             // Hardware canvas composites the (scaled) bitmap blit on the GPU. The software lockCanvas()
             // path did a CPU bilinear resample of a ~2000px bitmap every frame (~225ms/frame → parallax
             // lag). lockHardwareCanvas() drops that to sub-millisecond.
-            // Ensure the bitmap is loaded on EVERY draw path. A fresh Engine instance (the system
-            // creates a new one after the set-wallpaper preview closes) may receive onOffsetsChanged /
-            // onVisibilityChanged before onCreate/onSurfaceCreated ran on it — if we drew then with a
-            // null bitmap we'd paint black over the good frame ("flash then black").
-            if (bitmap == null) reloadBitmapIfChanged()
+            // Reload the current file on EVERY draw path — not just when bitmap == null.
+            // Root cause of the n-1 switch flash (device logs, 2026-08-26): on a switch the system does
+            // NOT cleanly destroy old engine instances. It keeps an OLD instance (e.g. E2) alive and
+            // later makes it visible again to render home. That instance still holds its previously
+            // decoded bitmap (the n-1/n-2 image). The system fires a spontaneous drawFrame on it BEFORE
+            // onVisibilityChanged(true) runs — and since that engine's `bitmap` is non-null, the old
+            // `if (bitmap == null)` guard skipped the reload and painted the STALE bitmap for one frame
+            // (the flash). reloadBitmapIfChanged() is a cheap mtime stat that only actually decodes when
+            // the file changed, so calling it every draw is safe even on the per-frame parallax path.
+            reloadBitmapIfChanged()
             val bmp = bitmap
             if (bmp == null) {
                 // Genuinely no image to show — leave the previous frame untouched rather than flashing
@@ -257,7 +307,47 @@ class AnchorWallpaperService : WallpaperService() {
         }
     }
 
+    /**
+     * Decode [path] into the process-level cache if it isn't already cached at the file's current mtime.
+     * Thread-safe; may run on the main thread (onCreate) or the decode executor (FileObserver). Only the
+     * newest (path, mtime) wins, so a rapid double-switch settles on the latest image.
+     */
+    private fun primeCacheDecode(path: String?, reason: String) {
+        if (path == null) return
+        val mtime = runCatching { java.io.File(path).lastModified() }.getOrDefault(0L)
+        synchronized(cacheLock) {
+            if (cachedBitmap != null && path == cachedPath && mtime == cachedMtime) return
+        }
+        val decoded = runCatching { WallpaperStabilizationManager.decodeDownscaled(this, path) }
+            .onFailure { e -> Log.w(TAG, "prime decode failed ($reason): ${e.message}") }
+            .getOrNull() ?: return
+        synchronized(cacheLock) {
+            // Guard against a race where a newer decode already landed while we were decoding.
+            val newer = cachedMtime > mtime && cachedPath == path
+            if (!newer) {
+                cachedBitmap = decoded
+                cachedPath = path
+                cachedMtime = mtime
+                Log.i(TAG, "cache primed ($reason) mtime=$mtime")
+            }
+        }
+    }
+
     private companion object {
         const val TAG = "AnchorWallpaperSvc"
+
+        // Process-level decoded-bitmap cache, shared across all Engine instances in this process. The
+        // system keeps multiple engine instances alive across a switch; caching here means whichever one
+        // draws next gets the already-decoded new image with no per-instance re-decode stall.
+        private val cacheLock = Any()
+        @Volatile private var cachedBitmap: Bitmap? = null
+        @Volatile private var cachedPath: String? = null
+        @Volatile private var cachedMtime: Long = 0L
+
+        private val decodeExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+        /** The current cached bitmap, or null if nothing decoded yet. */
+        fun peekCachedBitmap(): Bitmap? = synchronized(cacheLock) { cachedBitmap }
+        fun cachedMtimeValue(): Long = synchronized(cacheLock) { cachedMtime }
     }
 }

@@ -90,11 +90,16 @@ object AnchorWallpaperPicker {
 
     /**
      * Apply the (already-imported) image as the live wallpaper by ALWAYS going through the system
-     * CHANGE_LIVE_WALLPAPER flow — even when our engine is already the active wallpaper. Going through
-     * the system flow is what makes the platform properly (re-)establish the wallpaper surface's
-     * visibility; skipping it (just overwriting the file) leaves the surface in a half-attached state
-     * that blanks to black on the next Home press. Re-setting the same component via the real intent
-     * is fine (verified on device).
+     * CHANGE_LIVE_WALLPAPER flow — even on a switch when our engine is already the active wallpaper.
+     * The system flow is required on some OEMs (verified: Samsung) to (re-)establish the wallpaper
+     * surface's visibility; skipping it (just overwriting the file) leaves the surface half-attached and
+     * home blanks to black on the next resume.
+     *
+     * On a switch the system tears down and resurrects the engine, and the resurrected engine used to
+     * paint a stale/mid-decode buffer for one frame (the n-1 flash). That is now prevented at the source
+     * inside [app.anchor.wallpaper.AnchorWallpaperService]: a FileObserver pre-decodes the new image into
+     * a process-level cache the instant the caller overwrites the file, so the resurrected engine's first
+     * frame is already the new image — no teardown gap, no flash.
      */
     private fun applyLiveWallpaper(activity: Activity) {
         setAsLiveWallpaper(activity)
