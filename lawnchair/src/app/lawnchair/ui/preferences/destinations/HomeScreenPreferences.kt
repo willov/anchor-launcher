@@ -90,7 +90,6 @@ fun HomeScreenPreferences(
     val prefs2 = preferenceManager2()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val navController = app.lawnchair.ui.preferences.LocalNavController.current
     PreferenceLayout(
         label = stringResource(id = R.string.home_screen_label),
         backArrowVisible = !LocalIsExpandedScreen.current,
@@ -207,8 +206,9 @@ fun HomeScreenPreferences(
                     checked = anchorWallpaperOn,
                     onCheckedChange = { enabled ->
                         if (enabled) {
-                            navController.navigate(
-                                app.lawnchair.ui.preferences.navigation.AnchorWallpaperChooser,
+                            context.startActivity(
+                                app.lawnchair.ui.preferences.AnchorWallpaperChooserActivity
+                                    .createIntent(context),
                             )
                         } else {
                             wallpaperSource = app.anchor.AnchorPreferences.WALLPAPER_SOURCE_SYSTEM
@@ -230,8 +230,9 @@ fun HomeScreenPreferences(
                             stringResource(id = R.string.anchor_wallpaper_pick_image_none)
                         },
                         onClick = {
-                            navController.navigate(
-                                app.lawnchair.ui.preferences.navigation.AnchorWallpaperChooser,
+                            context.startActivity(
+                                app.lawnchair.ui.preferences.AnchorWallpaperChooserActivity
+                                    .createIntent(context),
                             )
                         },
                     )

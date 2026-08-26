@@ -681,12 +681,9 @@ class LawnchairLauncher : QuickstepLauncher() {
                 .setMessage(R.string.anchor_wallpaper_onboarding_message)
                 .setPositiveButton(R.string.anchor_wallpaper_onboarding_choose) { _, _ ->
                     // Open the Anchor wallpaper chooser (bundled backgrounds + choose-from-photos),
-                    // the same screen the settings toggle and long-press menu use.
+                    // the same standalone screen the settings toggle and long-press menu use.
                     startActivity(
-                        app.lawnchair.ui.preferences.PreferenceActivity.createIntent(
-                            this,
-                            app.lawnchair.ui.preferences.navigation.AnchorWallpaperChooser,
-                        ),
+                        app.lawnchair.ui.preferences.AnchorWallpaperChooserActivity.createIntent(this),
                     )
                 }
                 .setNegativeButton(R.string.anchor_wallpaper_onboarding_dismiss, null)

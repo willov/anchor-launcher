@@ -72,10 +72,7 @@ object LauncherOptionsPopup {
         val wallpaperResDrawable = R.drawable.ic_wallpaper
         val wallpaperAction: (View) -> Boolean = { _ ->
             launcher.startActivity(
-                app.lawnchair.ui.preferences.PreferenceActivity.createIntent(
-                    launcher,
-                    app.lawnchair.ui.preferences.navigation.AnchorWallpaperChooser,
-                ),
+                app.lawnchair.ui.preferences.AnchorWallpaperChooserActivity.createIntent(launcher),
             )
             true
         }

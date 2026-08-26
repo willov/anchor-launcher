@@ -55,15 +55,25 @@ import kotlinx.coroutines.withContext
  * as a grid — tap one to set it as Anchor's live wallpaper — plus a "choose from photos" entry for a
  * user's own image, and a link to the wallpaper credits. All selections route through
  * [AnchorWallpaperPicker], so bundled and custom picks share the exact same rendering path.
+ *
+ * @param onCreditsClick invoked when the credits row is tapped. Defaults to navigating the preference
+ * NavController to [AnchorWallpaperCredits] (the in-settings path); the standalone
+ * [app.lawnchair.ui.preferences.AnchorWallpaperChooserActivity] passes its own handler so the screen
+ * has no hard dependency on the preference NavController.
  */
 @Composable
 fun AnchorWallpaperChooserScreen(
     modifier: Modifier = Modifier,
+    onCreditsClick: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    val navController = LocalNavController.current
     val activity = context as? android.app.Activity
     val bundled = remember { BundledWallpapers.available(context) }
+    // Read the preference NavController lazily — only when no explicit onCreditsClick was supplied — so
+    // the standalone chooser activity (which has no NavController in its CompositionLocals) doesn't hit
+    // LocalNavController's error() default.
+    val fallbackNavController = if (onCreditsClick == null) LocalNavController.current else null
+    val creditsClick = onCreditsClick ?: { fallbackNavController!!.navigate(AnchorWallpaperCredits) }
 
     PreferenceLayout(
         label = stringResource(R.string.anchor_wallpaper_chooser_title),
@@ -128,7 +138,7 @@ fun AnchorWallpaperChooserScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { navController.navigate(AnchorWallpaperCredits) }
+                    .clickable { creditsClick() }
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
