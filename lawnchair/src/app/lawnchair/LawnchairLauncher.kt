@@ -289,11 +289,7 @@ class LawnchairLauncher : QuickstepLauncher() {
             anchorPrefs.pendingWallpaperRestart = false
             // Recreate unconditionally: some OEMs (verified: Samsung) don't composite our live
             // wallpaper on the home surface until the launcher window is rebuilt — otherwise home
-            // blanks to black. The rebuild has a brief window-gap (settings/old content can flash
-            // through); sShowWallpaperApplyOverlay makes the freshly-recreated launcher cover that gap
-            // with a blank "applying…" scrim until the workspace has settled, so the user never sees
-            // the flash. Static (in-process) so it survives the recreate.
-            sShowWallpaperApplyOverlay = true
+            // blanks to black. Done while backgrounded so the rebuild is (mostly) invisible.
             recreate()
         }
     }
@@ -369,63 +365,6 @@ class LawnchairLauncher : QuickstepLauncher() {
                 twoRowNavigationManager.onDragEnded()
             }
         })
-        if (sShowWallpaperApplyOverlay) {
-            sShowWallpaperApplyOverlay = false
-            showWallpaperApplyOverlay()
-        }
-    }
-
-    private var wallpaperApplyOverlay: android.view.View? = null
-
-    /**
-     * Full-screen blank scrim (with a spinner) shown over the launcher's startup after a
-     * wallpaper-driven recreate(), so the rebuild's window-gap (old content / settings flashing
-     * through) is never visible. It fades out once the workspace has settled and the new wallpaper is
-     * up. The scrim colour is transparent-to-surface so it reads as a brief "applying" moment rather
-     * than a hard black.
-     */
-    private fun showWallpaperApplyOverlay() {
-        if (wallpaperApplyOverlay != null) return
-        val ctx = this
-        val overlay = android.widget.FrameLayout(ctx).apply {
-            setBackgroundColor(com.android.launcher3.util.Themes.getAttrColor(ctx, android.R.attr.colorBackground))
-            isClickable = true // swallow touches while applying
-            addView(
-                android.widget.ProgressBar(ctx),
-                android.widget.FrameLayout.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
-                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
-                ).apply { gravity = android.view.Gravity.CENTER },
-            )
-        }
-        dragLayer.addView(
-            overlay,
-            android.widget.FrameLayout.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-            ),
-        )
-        wallpaperApplyOverlay = overlay
-        // The recreate happens while backgrounded, so DON'T dismiss on a background timer (the user
-        // would never see it and it wouldn't cover the wallpaper-engine swap that flashes when they
-        // arrive home). Instead keep it until the launcher is actually resumed AND the wallpaper swap
-        // has settled — dismissWallpaperApplyOverlayWhenReady() is called from onResume.
-        if (hasBeenResumed()) dismissWallpaperApplyOverlayWhenReady()
-    }
-
-    private fun dismissWallpaperApplyOverlayWhenReady() {
-        if (wallpaperApplyOverlay == null) return
-        // Hold the scrim a beat after resume so it covers the wallpaper engine swap (the n-1→n flash),
-        // then fade out. ~500ms reliably spans the swap without feeling sluggish.
-        dragLayer.postDelayed({ dismissWallpaperApplyOverlay() }, 500)
-    }
-
-    private fun dismissWallpaperApplyOverlay() {
-        val overlay = wallpaperApplyOverlay ?: return
-        wallpaperApplyOverlay = null
-        overlay.animate().alpha(0f).setDuration(200).withEndAction {
-            (overlay.parent as? android.view.ViewGroup)?.removeView(overlay)
-        }.start()
     }
 
     override fun finishBindingItems(pagesBoundFirst: com.android.launcher3.util.IntSet) {
@@ -634,9 +573,6 @@ class LawnchairLauncher : QuickstepLauncher() {
     override fun onResume() {
         super.onResume()
         restartIfPending()
-        // If a wallpaper-apply scrim is up (recreate happened while backgrounded), dismiss it now that
-        // we're visible + settled — it stays until here so it reliably covers the wallpaper engine swap.
-        dismissWallpaperApplyOverlayWhenReady()
         // If the display rotated while we were backgrounded (e.g. rotating inside YouTube/camera) and
         // settled before we resumed, the deferred grid transpose never ran. Reconcile it now that we
         // are visible so the grid matches the current rotation.
@@ -790,11 +726,6 @@ class LawnchairLauncher : QuickstepLauncher() {
         private const val FLAG_RESTART = 1 shl 1
 
         var sRestartFlags = 0
-
-        // Set right before the wallpaper-driven recreate() so the freshly-rebuilt launcher shows a
-        // blank "applying wallpaper" scrim over its startup, hiding the rebuild's window-gap flash.
-        // In-process (survives the recreate); consumed by the new instance in setupViews().
-        var sShowWallpaperApplyOverlay = false
 
         val instance get() = LawnchairApp.launcher
     }
