@@ -79,10 +79,7 @@ fun AnchorWallpaperChooserScreen(
         label = stringResource(R.string.anchor_wallpaper_chooser_title),
         modifier = modifier,
     ) {
-        PreferenceGroup(
-            heading = stringResource(R.string.anchor_wallpaper_chooser_bundled_heading),
-            description = stringResource(R.string.anchor_wallpaper_chooser_bundled_desc),
-        ) {
+        PreferenceGroup {
             // One unified grid of cards. "Pick your own" is the FIRST card so it stays reachable no
             // matter how many bundled backgrounds we ship; the bundled ones follow. Choosing your own
             // image is just another option in the same grid.

@@ -78,21 +78,11 @@ class AnchorPreferences(context: Context) {
      * the OLD rendering path; the CUSTOM source no longer uses it — a picked image is now rendered by
      * [app.anchor.wallpaper.AnchorWallpaperService] (our live wallpaper), which is a wallpaper SURFACE
      * and therefore escapes the app→home screenshot-rotate snap. The window-bg path remains only for
-     * the debug test pattern and the power-user SYSTEM_STABILIZED source. CUSTOM runs as passthrough
-     * (FLAG_SHOW_WALLPAPER stays set) so the live wallpaper shows through and drives parallax.
+     * the power-user SYSTEM_STABILIZED source. CUSTOM runs as passthrough (FLAG_SHOW_WALLPAPER stays
+     * set) so the live wallpaper shows through and drives parallax.
      */
     val wallpaperStabilizationActive: Boolean
-        get() = useTestWallpaper ||
-            wallpaperSource == WALLPAPER_SOURCE_SYSTEM_STABILIZED
-
-    /**
-     * Debug: render a generated test pattern (2D colour gradient + labelled grid) instead of the
-     * real device wallpaper for the stabilized background. Lets the rotation/parallax behaviour be
-     * verified visually. Default off. Takes effect on the next launcher restart.
-     */
-    var useTestWallpaper: Boolean
-        get() = prefs.getBoolean(KEY_USE_TEST_WALLPAPER, false)
-        set(value) { prefs.edit().putBoolean(KEY_USE_TEST_WALLPAPER, value).apply() }
+        get() = wallpaperSource == WALLPAPER_SOURCE_SYSTEM_STABILIZED
 
     /**
      * Which animation to use when the device rotates. One of the TRANSITION_* constants.
@@ -196,7 +186,6 @@ class AnchorPreferences(context: Context) {
         private const val KEY_GRID_ONBOARDING_SHOWN = "grid_onboarding_shown"
         private const val KEY_PENDING_WALLPAPER_RESTART = "pending_wallpaper_restart"
         private const val KEY_LINK_GRID_DIMENSIONS = "link_grid_dimensions"
-        private const val KEY_USE_TEST_WALLPAPER = "use_test_wallpaper"
         private const val KEY_ROTATION_TRANSITION = "rotation_transition"
         private const val KEY_FADE_DURATION       = "rotation_fade_duration_ms"
         private const val KEY_STATUS_BAR_SWIPE    = "status_bar_swipe_action"

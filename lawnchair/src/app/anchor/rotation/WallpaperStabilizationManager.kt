@@ -15,12 +15,7 @@ import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.LinearGradient
-import android.graphics.Paint
 import android.graphics.Rect
-import android.graphics.Shader
-import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.util.Log
 import android.os.Build
@@ -149,9 +144,30 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
      * the window token is up. These are rotation-invariant; the engine uses them directly (no remap),
      * so a pure rotation is pixel-perfect.
      */
+    // Coalesced offset pusher: setWallpaperOffsets is a SYNCHRONOUS cross-process Binder call. Called on
+    // the main thread every scroll frame it stalls the WHOLE home scroll (icons + parallax) — verified on
+    // device: skipping it made scroll smooth, and the jank was UI-thread-bound (GPU ~3ms). Launcher3's own
+    // WallpaperOffsetInterpolator runs this on UI_HELPER_EXECUTOR for the same reason. We post the Binder
+    // round-trip to that helper thread and coalesce to the LATEST offset (removeCallbacks before posting)
+    // so a slow Binder call can't build a backlog of stale offsets.
+    private val uiHelperHandler = com.android.launcher3.util.Executors.UI_HELPER_EXECUTOR.handler
+    @Volatile private var pendingToken: android.os.IBinder? = null
+    private val pushOffsetsRunnable = Runnable {
+        // Runs on the UI-helper thread. Only the Binder call is done here; the window token is captured
+        // on the MAIN thread (decorView access is not thread-safe and throws "Window couldn't find
+        // content container view" when the window is EXITING). Guard the whole body so a torn-down
+        // wallpaper (toggle-off / recreate) can never crash this background thread.
+        runCatching {
+            val token = pendingToken ?: return@runCatching
+            wallpaperManager.setWallpaperOffsets(token, liveWorldX, liveWorldY)
+        }
+    }
+
     private fun pushLiveOffsets() {
-        val token = launcher.window?.decorView?.windowToken ?: return
-        runCatching { wallpaperManager.setWallpaperOffsets(token, liveWorldX, liveWorldY) }
+        // Capture the token on the main thread (safe); skip if the window is gone/exiting.
+        pendingToken = runCatching { launcher.window?.decorView?.windowToken }.getOrNull() ?: return
+        uiHelperHandler.removeCallbacks(pushOffsetsRunnable)
+        uiHelperHandler.post(pushOffsetsRunnable)
     }
 
     private val rotationListener = DisplayController.DisplayInfoChangeListener { _, info, flags ->
@@ -272,7 +288,7 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // different image is detected as a change and reapplyIfChanged() reloads it.
         val customMtime = prefs.customWallpaperPath
             ?.let { runCatching { File(it).lastModified() }.getOrDefault(0L) } ?: 0L
-        return "${prefs.wallpaperSource}|${prefs.customWallpaperPath}|$customMtime|${prefs.useTestWallpaper}"
+        return "${prefs.wallpaperSource}|${prefs.customWallpaperPath}|$customMtime"
     }
 
     /**
@@ -548,12 +564,10 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
 
     private fun loadWallpaperAsync() {
         val prefs = AnchorPreferences(launcher)
-        val useTest = prefs.useTestWallpaper
         val source = prefs.wallpaperSource
         val customPath = prefs.customWallpaperPath
         executor.execute {
             val bitmap = when {
-                useTest -> generateTestWallpaper()
                 source == AnchorPreferences.WALLPAPER_SOURCE_CUSTOM ->
                     customPath?.let { loadImageFile(it) }
                 // Power-user / github-nightly path: read the real system wallpaper (needs
@@ -579,57 +593,6 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         }
     }
 
-
-    /**
-     * Generates a test wallpaper bitmap with a 2D colour gradient and labelled grid lines.
-     * Width = 2160 (2 portrait screens) → 1080px portrait scroll travel across a 2-page row.
-     * Height = 3600 (1.5× a 2400px screen) → 1200px landscape parallax travel.
-     */
-    private fun generateTestWallpaper(): Bitmap {
-        val w = 2160
-        val h = 3600
-        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp)
-
-        // 2D gradient background: hue (H) varies left→right, value (V) varies top→bottom
-        val paint = Paint()
-        for (x in 0 until w) {
-            val hue = 180f + (x.toFloat() / w) * 120f  // cyan(180) → yellow(300)
-            val colTop = Color.HSVToColor(floatArrayOf(hue, 0.85f, 0.85f))
-            val colBot = Color.HSVToColor(floatArrayOf(hue, 0.85f, 0.25f))
-            paint.shader = LinearGradient(x.toFloat(), 0f, x.toFloat(), h.toFloat(),
-                colTop, colBot, Shader.TileMode.CLAMP)
-            canvas.drawLine(x.toFloat(), 0f, x.toFloat(), h.toFloat(), paint)
-        }
-        paint.shader = null
-
-        // Grid lines every 600px (Y) and 540px (X = half screen width)
-        val gridPaint = Paint().apply {
-            color = Color.WHITE; strokeWidth = 3f; alpha = 130; style = Paint.Style.STROKE
-        }
-        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE; textSize = 72f; typeface = Typeface.DEFAULT_BOLD
-            setShadowLayer(6f, 2f, 2f, Color.BLACK)
-        }
-
-        for (y in 0..h step 600) {
-            canvas.drawLine(0f, y.toFloat(), w.toFloat(), y.toFloat(), gridPaint)
-            if (y < h) canvas.drawText("y=$y", 40f, (y + 80).toFloat(), textPaint)
-        }
-        for (x in 0..w step 540) {
-            canvas.drawLine(x.toFloat(), 0f, x.toFloat(), h.toFloat(), gridPaint)
-        }
-
-        // Yellow outline showing one physical screen height (2400px) — the "no-parallax" zone
-        val markerPaint = Paint().apply {
-            color = Color.YELLOW; strokeWidth = 8f; alpha = 200; style = Paint.Style.STROKE
-        }
-        canvas.drawRect(20f, 20f, (w - 20).toFloat(), 2380f, markerPaint)
-        textPaint.apply { color = Color.YELLOW; textSize = 60f }
-        canvas.drawText("▲ one screen height (2400px)", 40f, 2360f, textPaint)
-
-        return bmp
-    }
 
     /**
      * Reads the real system wallpaper bitmap from WallpaperManager. Only used by the
@@ -718,13 +681,14 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // Fallback horizontal full-sweep travel if bitmap dims aren't known yet.
         private const val HORIZONTAL_PARALLAX = 1.0f
 
-        // Live-wallpaper camera travel, in bitmap-space world units [0,1] within the engine's shared
-        // equal-drift budget (the engine maps worldX/worldY over travel = min(roomX, roomY), so the
-        // SAME world value moves the wallpaper the SAME glass distance on both axes). Using matching
-        // horizontal/vertical values gives the "same vertical and horizontal movement" the design wants.
+        // Live-wallpaper camera travel, in bitmap-space world units [0,1]. These are the FULL intent
+        // range the manager pushes; the ENGINE caps the actual pixel drift to the user's parallax
+        // percent (AnchorPreferences.wallpaperParallaxPercent, 0 = off) since only the engine knows the
+        // bitmap's pan room. Matching horizontal/vertical values give "same vertical and horizontal
+        // movement". A full page-sweep (offset 0→1) spans worldX 0→1; each row switch steps worldY.
         //   LIVE_HORIZONTAL_SWEEP_WORLD: worldX span for a FULL row page-sweep (offset 0→1).
         //   LIVE_ROW_STEP_WORLD: worldY step per row switch.
-        private const val LIVE_HORIZONTAL_SWEEP_WORLD = 0.5f
+        private const val LIVE_HORIZONTAL_SWEEP_WORLD = 1.0f
         private const val LIVE_ROW_STEP_WORLD = 0.5f
 
         // The same bitmap is rendered in BOTH orientations (portrait-canonical), so to cover the

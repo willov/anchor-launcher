@@ -206,6 +206,12 @@ fun HomeScreenPreferences(
                     checked = anchorWallpaperOn,
                     onCheckedChange = { enabled ->
                         if (enabled) {
+                            // Flipping the toggle ON is itself the consent — set the source now so the
+                            // chooser skips its consent gate (no double-ask) and the pick starts from the
+                            // correct state.
+                            wallpaperSource = app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
+                            anchorPrefs.wallpaperSource =
+                                app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
                             context.startActivity(
                                 app.lawnchair.ui.preferences.AnchorWallpaperChooserActivity
                                     .createIntent(context),
@@ -214,6 +220,11 @@ fun HomeScreenPreferences(
                             wallpaperSource = app.anchor.AnchorPreferences.WALLPAPER_SOURCE_SYSTEM
                             anchorPrefs.wallpaperSource =
                                 app.anchor.AnchorPreferences.WALLPAPER_SOURCE_SYSTEM
+                            // Actually remove our live wallpaper — flipping the pref alone leaves
+                            // AnchorWallpaperService as the active system wallpaper, which then renders
+                            // black + choppy because the launcher's offset bridge is now off. Clearing
+                            // reverts to a real system wallpaper.
+                            app.anchor.AnchorWallpaperPicker.disableAnchorWallpaper(context)
                         }
                     },
                     label = stringResource(id = R.string.anchor_wallpaper_use_anchor_label),
@@ -238,61 +249,58 @@ fun HomeScreenPreferences(
                     )
                 }
                 // Wallpaper parallax strength — only meaningful with the stabilized custom wallpaper.
+                // Slider + its explanation live in ONE Item (description BELOW the slider) so they read
+                // as a single card unit.
                 Item {
-                    Text(
-                        text = stringResource(id = R.string.anchor_wallpaper_parallax_description),
-                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-                        color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = androidx.compose.ui.Modifier.padding(
-                            horizontal = 16.dp,
-                            vertical = 8.dp,
-                        ),
-                    )
-                }
-                Item {
-                    var parallax by remember { mutableStateOf(anchorPrefs.wallpaperParallaxPercent) }
-                    val parallaxAdapter = customPreferenceAdapter(parallax) { newValue ->
-                        parallax = newValue
-                        anchorPrefs.wallpaperParallaxPercent = newValue
+                    Column {
+                        var parallax by remember { mutableStateOf(anchorPrefs.wallpaperParallaxPercent) }
+                        val parallaxAdapter = customPreferenceAdapter(parallax) { newValue ->
+                            parallax = newValue
+                            anchorPrefs.wallpaperParallaxPercent = newValue
+                        }
+                        SliderPreference(
+                            label = stringResource(id = R.string.anchor_wallpaper_parallax_label),
+                            adapter = parallaxAdapter,
+                            valueRange = app.anchor.AnchorPreferences.PARALLAX_PERCENT_MIN..
+                                app.anchor.AnchorPreferences.PARALLAX_PERCENT_MAX,
+                            step = 1,
+                            showUnit = "%",
+                        )
+                        Text(
+                            text = stringResource(id = R.string.anchor_wallpaper_parallax_description),
+                            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = androidx.compose.ui.Modifier.padding(
+                                start = 16.dp,
+                                end = 16.dp,
+                                bottom = 12.dp,
+                            ),
+                        )
                     }
-                    SliderPreference(
-                        label = stringResource(id = R.string.anchor_wallpaper_parallax_label),
-                        adapter = parallaxAdapter,
-                        valueRange = app.anchor.AnchorPreferences.PARALLAX_PERCENT_MIN..
-                            app.anchor.AnchorPreferences.PARALLAX_PERCENT_MAX,
-                        step = 1,
-                        showUnit = "%",
-                    )
-                }
-                Item {
-                    var useTest by remember { mutableStateOf(anchorPrefs.useTestWallpaper) }
-                    val useTestAdapter = customPreferenceAdapter(useTest) { newValue ->
-                        useTest = newValue
-                        anchorPrefs.useTestWallpaper = newValue
-                    }
-                    SwitchPreference(
-                        adapter = useTestAdapter,
-                        label = stringResource(id = R.string.anchor_test_wallpaper_label),
-                        description = stringResource(id = R.string.anchor_test_wallpaper_description),
-                    )
                 }
             }
             // ── System wallpaper behaviour ───────────────────────────────────────────────────────
-            Item {
-                SwitchPreference(
-                    prefs.wallpaperScrolling.getAdapter(),
-                    label = stringResource(id = R.string.wallpaper_scrolling_label),
-                )
-            }
-            Item(
-                "wallpaper_depth_effect",
-                Utilities.ATLEAST_R,
-            ) {
-                SwitchPreference(
-                    prefs2.wallpaperDepthEffect.getAdapter(),
-                    label = stringResource(id = R.string.wallpaper_depth_effect_label),
-                    description = stringResource(id = R.string.wallpaper_depth_effect_description),
-                )
+            // "Scroll wallpaper" and "Depth effect" act on the SYSTEM wallpaper only. When Anchor is
+            // rendering the wallpaper they don't apply (our own parallax slider above drives scrolling),
+            // so hide them to avoid a dead/confusing toggle. The sys-UI scrim below is a status-bar
+            // readability overlay — wallpaper-agnostic — so it stays visible.
+            if (!anchorWallpaperOn) {
+                Item {
+                    SwitchPreference(
+                        prefs.wallpaperScrolling.getAdapter(),
+                        label = stringResource(id = R.string.wallpaper_scrolling_label),
+                    )
+                }
+                Item(
+                    "wallpaper_depth_effect",
+                    Utilities.ATLEAST_R,
+                ) {
+                    SwitchPreference(
+                        prefs2.wallpaperDepthEffect.getAdapter(),
+                        label = stringResource(id = R.string.wallpaper_depth_effect_label),
+                        description = stringResource(id = R.string.wallpaper_depth_effect_description),
+                    )
+                }
             }
             Item {
                 SwitchPreference(

@@ -56,10 +56,7 @@
          overlaid on the preview. Still used as a fallback name elsewhere if the system needs one. -->
     <string name="anchor_wallpaper_service_label"></string>
     <!-- Wallpaper chooser screen -->
-    <string name="anchor_wallpaper_chooser_title">Anchor wallpaper</string>
-    <string name="anchor_wallpaper_chooser_bundled_heading">Rotation-stable backgrounds</string>
-    <string name="anchor_wallpaper_chooser_bundled_desc">These stay pixel-stable when you rotate, with page and row parallax.</string>
-    <string name="anchor_wallpaper_chooser_own_heading">Your own image</string>
+    <string name="anchor_wallpaper_chooser_title">Anchor pixel-stable wallpapers</string>
     <string name="anchor_wallpaper_chooser_choose_photo">Choose from photos…</string>
     <string name="anchor_wallpaper_chooser_choose_photo_desc">Pick any image; it’s rendered the same rotation-stable way.</string>
     <string name="anchor_wallpaper_chooser_credits_link">Wallpaper credits</string>
@@ -83,8 +80,11 @@
     <string name="anchor_wallpaper_onboarding_message">Anchor can anchor your wallpaper so it stays put when you rotate the screen — just like your icons. Choose an image to enable it? You can change this anytime in Settings → Home Screen → Wallpaper.</string>
     <string name="anchor_wallpaper_onboarding_choose">Choose image</string>
     <string name="anchor_wallpaper_onboarding_dismiss">Not now</string>
-    <string name="anchor_test_wallpaper_label">Debug: test wallpaper</string>
-    <string name="anchor_test_wallpaper_description">Show a generated test pattern (gradient + grid) instead of the real wallpaper, to verify rotation and parallax.</string>
+    <!-- Consent gate in the Anchor wallpaper chooser: pick which engine renders the wallpaper. -->
+    <string name="anchor_wallpaper_gate_title">Choose your wallpaper engine</string>
+    <string name="anchor_wallpaper_gate_message">Anchor can render your wallpaper so it stays put when you rotate the screen — just like your icons. Pick one of our ready-made backgrounds, or use any image of your own. You can change this anytime in Settings → Home Screen → Wallpaper.</string>
+    <string name="anchor_wallpaper_gate_use_anchor">Use Anchor (rotation-stable)</string>
+    <string name="anchor_wallpaper_gate_use_system">Use system (not rotation-stable)</string>
     <string name="anchor_bottom_edge_swipe_up_label">Allow up drag for app drawer on all rows</string>
     <string name="anchor_bottom_edge_swipe_up_description">Swipe up from the bottom edge — anywhere outside the system home and back gesture zones — to open the app drawer from any row.</string>
     <string name="anchor_bottom_edge_swipe_up_zone_label">Bottom grab area height</string>

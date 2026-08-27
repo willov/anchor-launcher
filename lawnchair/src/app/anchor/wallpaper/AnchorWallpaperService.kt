@@ -120,9 +120,18 @@ class AnchorWallpaperService : WallpaperService() {
         private var worldX = 0f
         private var worldY = HOME_REST_WORLD_Y
 
+        // Parallax strength (percent of the screen short side per step), cached so the hot parallax
+        // drawFrame path never constructs AnchorPreferences. Refreshed on lifecycle callbacks
+        // (onCreate / surface / visibility) — enough to pick up a slider change on the next return home.
+        private var parallaxPercent = 0
+        private fun refreshParallaxPercent() {
+            parallaxPercent = AnchorPreferences(this@AnchorWallpaperService).wallpaperParallaxPercent
+        }
+
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
             setTouchEventsEnabled(false)
+            refreshParallaxPercent()
             reloadBitmapIfChanged()
         }
 
@@ -141,14 +150,29 @@ class AnchorWallpaperService : WallpaperService() {
         }
 
         /**
-         * Adopt the newest bitmap from the PROCESS-LEVEL cache. The cache is kept current by the
-         * service's FileObserver (which pre-decodes off-thread the instant the launcher overwrites the
-         * image), so this is normally a cheap pointer swap with no decode — that is what removes the
-         * ~300ms decode stall that used to show the stale n-1 frame on the switch.
-         *
-         * Fallback: if the cache is empty at this exact moment (first-ever draw, or the FileObserver
-         * hasn't fired yet), decode synchronously so we never draw black. That synchronous path only
-         * happens on a genuine cold start, not on a switch.
+         * CHEAP per-frame bitmap refresh for the hot parallax path: adopt the process-level cached
+         * bitmap if it is newer than what we're showing. This is IN-MEMORY ONLY (a volatile read +
+         * pointer compare) — NO file stat, NO AnchorPreferences construction — so it is safe to call on
+         * every drawFrame, including the high-frequency `onOffsetsChanged` scroll path. The cache mtime
+         * is kept current by the service's FileObserver; a stale resurrected engine therefore still picks
+         * up the newest bitmap here without a syscall. (Calling the full [reloadBitmapIfChanged], which
+         * stats the file and builds an AnchorPreferences every frame, made parallax choppy — that work
+         * belongs only on the rare lifecycle callbacks.)
+         */
+        private fun adoptCacheIfNewer() {
+            val cached = peekCachedBitmap() ?: return
+            val cm = cachedMtimeValue()
+            if (bitmap !== cached && cm >= loadedMtime) {
+                bitmap = cached
+                loadedMtime = cm
+            }
+        }
+
+        /**
+         * Full (re)load with a FILE STAT: decode/adopt the newest bitmap from the PROCESS-LEVEL cache,
+         * decoding synchronously if the cache is empty (cold start). Does a `File.lastModified()` stat
+         * and constructs AnchorPreferences, so call it ONLY on lifecycle callbacks (create / surface /
+         * visibility), never per parallax frame — the hot path uses [adoptCacheIfNewer] instead.
          */
         private fun reloadBitmapIfChanged() {
             val path = AnchorPreferences(this@AnchorWallpaperService).customWallpaperPath
@@ -205,6 +229,7 @@ class AnchorWallpaperService : WallpaperService() {
         override fun onVisibilityChanged(visible: Boolean) {
             super.onVisibilityChanged(visible)
             if (visible) {
+                refreshParallaxPercent()  // pick up a slider change made in settings
                 // Picking a new image overwrites the file in place without recreating the engine;
                 // reload it when we next become visible so the change shows.
                 reloadBitmapIfChanged()
@@ -231,16 +256,13 @@ class AnchorWallpaperService : WallpaperService() {
             // Hardware canvas composites the (scaled) bitmap blit on the GPU. The software lockCanvas()
             // path did a CPU bilinear resample of a ~2000px bitmap every frame (~225ms/frame → parallax
             // lag). lockHardwareCanvas() drops that to sub-millisecond.
-            // Reload the current file on EVERY draw path — not just when bitmap == null.
-            // Root cause of the n-1 switch flash (device logs, 2026-08-26): on a switch the system does
-            // NOT cleanly destroy old engine instances. It keeps an OLD instance (e.g. E2) alive and
-            // later makes it visible again to render home. That instance still holds its previously
-            // decoded bitmap (the n-1/n-2 image). The system fires a spontaneous drawFrame on it BEFORE
-            // onVisibilityChanged(true) runs — and since that engine's `bitmap` is non-null, the old
-            // `if (bitmap == null)` guard skipped the reload and painted the STALE bitmap for one frame
-            // (the flash). reloadBitmapIfChanged() is a cheap mtime stat that only actually decodes when
-            // the file changed, so calling it every draw is safe even on the per-frame parallax path.
-            reloadBitmapIfChanged()
+            // Adopt a newer cached bitmap if one appeared (IN-MEMORY only — no file stat, safe on the
+            // per-frame parallax path). This still catches the n-1 switch flash: on a switch the system
+            // keeps an OLD engine instance alive and fires a spontaneous draw on it before
+            // onVisibilityChanged; the FileObserver has already primed the cache with the new image, so
+            // this picks it up here without a syscall. (The full file-stat reload runs only on lifecycle
+            // callbacks; doing it per parallax frame made scrolling choppy.)
+            if (bitmap == null) reloadBitmapIfChanged() else adoptCacheIfNewer()
             val bmp = bitmap
             if (bmp == null) {
                 // Genuinely no image to show — leave the previous frame untouched rather than flashing
@@ -276,10 +298,21 @@ class AnchorWallpaperService : WallpaperService() {
                 val roomX = (bmp.width - srcW).coerceAtLeast(0)
                 val roomY = (bmp.height - srcH).coerceAtLeast(0)
                 val travel = minOf(roomX, roomY)
-                val baseX = (roomX - travel) / 2
-                val baseY = (roomY - travel) / 2
-                val srcLeft = (baseX + (worldX * travel)).toInt().coerceIn(0, roomX)
-                val srcTop = (baseY + (worldY * travel)).toInt().coerceIn(0, roomY)
+                // Parallax strength = user pref (percent of the screen SHORT side per navigation step,
+                // 0 = off). The engine owns this conversion because it alone knows `travel` (bitmap-
+                // dependent). A percent p means a full worldX/worldY sweep [0,1] should pan p% of the
+                // short side per step; we scale the pannable window by parallaxFactor accordingly, so
+                // p = 0 → zero travel (the crop never moves as you scroll) while the REST view is
+                // preserved: worldX/worldY still index into the (shrunken) window centred on the rest
+                // anchor, so at rest the same pixels show regardless of the parallax setting.
+                val shortSide = rawW  // portrait-canonical short side (= screen short side)
+                val maxDriftPx = (parallaxPercent / 100f) * shortSide
+                // Effective travel: never more than the pref allows, never more than the bitmap room.
+                val effTravel = travel.toFloat().coerceAtMost(maxDriftPx).toInt()
+                val baseX = (roomX - effTravel) / 2
+                val baseY = (roomY - effTravel) / 2
+                val srcLeft = (baseX + (worldX * effTravel)).toInt().coerceIn(0, roomX)
+                val srcTop = (baseY + (worldY * effTravel)).toInt().coerceIn(0, roomY)
                 srcRect.set(srcLeft, srcTop, srcLeft + srcW, srcTop + srcH)
                 dstRect.set(0, 0, rawW, rawH)
 

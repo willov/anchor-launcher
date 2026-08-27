@@ -48,6 +48,26 @@ object AnchorWallpaperPicker {
         }.getOrDefault(false)
 
     /**
+     * Turn Anchor's wallpaper OFF: if [AnchorWallpaperService] is the active system wallpaper, clear it
+     * so the system reverts to its default wallpaper. Without this, toggling Anchor off only flips the
+     * pref while OUR live wallpaper stays the active system wallpaper — but now with the launcher's
+     * offset bridge disabled, so it renders black AND leaves the compositor in a degraded (choppy) state.
+     * Clearing restores a real system wallpaper and removes the orphaned live engine.
+     *
+     * WallpaperManager.clear() reverts to the built-in default (we can't restore the user's *previous*
+     * wallpaper — the system doesn't expose it — but a real wallpaper beats a black live-wallpaper).
+     */
+    fun disableAnchorWallpaper(context: Context) {
+        if (!isLiveWallpaperActive(context)) return
+        runCatching { WallpaperManager.getInstance(context).clear() }
+            .onFailure { Log.w(TAG, "Failed to clear Anchor live wallpaper: ${it.message}") }
+        // Same Samsung quirk as setting: clearing the wallpaper from within the running launcher leaves
+        // the wallpaper surface in a half-attached state → home blanks to black. Mark the one-shot
+        // restart so the launcher recreates on its next resume and lands on the clean reverted state.
+        AnchorPreferences(context).pendingWallpaperRestart = true
+    }
+
+    /**
      * Launches the system live-wallpaper confirm dialog pre-targeted at [AnchorWallpaperService].
      * The user taps "Set wallpaper" to apply. Falls back to the generic live-wallpaper chooser if the
      * direct preview isn't available on this device.

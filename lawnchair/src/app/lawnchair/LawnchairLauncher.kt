@@ -680,8 +680,10 @@ class LawnchairLauncher : QuickstepLauncher() {
                 .setTitle(R.string.anchor_wallpaper_onboarding_title)
                 .setMessage(R.string.anchor_wallpaper_onboarding_message)
                 .setPositiveButton(R.string.anchor_wallpaper_onboarding_choose) { _, _ ->
-                    // Open the Anchor wallpaper chooser (bundled backgrounds + choose-from-photos),
-                    // the same standalone screen the settings toggle and long-press menu use.
+                    // This IS the consent step — set the source to CUSTOM (Anchor on) now, so the chooser
+                    // skips its own consent gate (no double-ask) and the pick operates from the correct
+                    // already-established state. Then open the standalone chooser.
+                    anchorPrefs.wallpaperSource = app.anchor.AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
                     startActivity(
                         app.lawnchair.ui.preferences.AnchorWallpaperChooserActivity.createIntent(this),
                     )
