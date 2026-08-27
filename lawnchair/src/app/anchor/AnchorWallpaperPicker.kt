@@ -78,7 +78,12 @@ object AnchorWallpaperPicker {
         // visibility in a state that blanks to black on the next Home press (a clean cold-start does
         // not). Mark a one-shot restart so the launcher restarts on its next resume, reproducing that
         // clean state. Consumed in LawnchairLauncher.onResume.
-        AnchorPreferences(activity).pendingWallpaperRestart = true
+        AnchorPreferences(activity).apply {
+            pendingWallpaperRestart = true
+            // After the restart, re-assert wallpaper visibility once so WM re-dispatches it to the
+            // engine — otherwise home scroll is janky until a real recents→home/unlock transition.
+            pendingWallpaperHeal = true
+        }
         val preview = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
             putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, component)
         }

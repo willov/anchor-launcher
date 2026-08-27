@@ -65,6 +65,19 @@ class AnchorPreferences(context: Context) {
         set(value) { prefs.edit().putBoolean(KEY_PENDING_WALLPAPER_RESTART, value).commit() }
 
     /**
+     * One-shot flag: our live wallpaper was just (re)set from the foreground, so after the launcher
+     * recreates it must re-assert wallpaper visibility once (toggle FLAG_SHOW_WALLPAPER off→on across
+     * a frame) to force WindowManager to re-dispatch wallpaper visibility to the engine. Without this
+     * the engine surface stays out-of-sync with the launcher's compositing group and home scroll is
+     * janky until a real recents→home / unlock transition redispatches it. Survives the recreate (it
+     * is set alongside pendingWallpaperRestart, which triggers the recreate that consumes it), then is
+     * consumed by the heal on the next resume. commit() so it persists across the process rebuild.
+     */
+    var pendingWallpaperHeal: Boolean
+        get() = prefs.getBoolean(KEY_PENDING_WALLPAPER_HEAL, false)
+        set(value) { prefs.edit().putBoolean(KEY_PENDING_WALLPAPER_HEAL, value).commit() }
+
+    /**
      * True (default) = columns and rows are linked: moving one grid slider moves the other along the
      * screen's aspect ratio (like linked width/height in a design tool), keeping the sweet-spot
      * proportions the recommendation engine targets. False = the sliders move independently.
@@ -185,6 +198,7 @@ class AnchorPreferences(context: Context) {
         private const val KEY_WALLPAPER_ONBOARDING_SHOWN = "wallpaper_onboarding_shown"
         private const val KEY_GRID_ONBOARDING_SHOWN = "grid_onboarding_shown"
         private const val KEY_PENDING_WALLPAPER_RESTART = "pending_wallpaper_restart"
+        private const val KEY_PENDING_WALLPAPER_HEAL = "pending_wallpaper_heal"
         private const val KEY_LINK_GRID_DIMENSIONS = "link_grid_dimensions"
         private const val KEY_ROTATION_TRANSITION = "rotation_transition"
         private const val KEY_FADE_DURATION       = "rotation_fade_duration_ms"

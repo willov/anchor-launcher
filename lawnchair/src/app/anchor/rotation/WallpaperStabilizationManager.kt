@@ -538,6 +538,45 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         d.invalidateSelf()
     }
 
+    /**
+     * One-shot heal for the post-set choppy home scroll (Samsung, verified). After our live wallpaper
+     * is (re)set from the foreground and the launcher recreates, the wallpaper engine's surface is left
+     * out-of-sync with the launcher's compositing group: the launcher's RenderThread stalls dequeuing
+     * the wallpaper buffer and the UI thread blocks in postAndWait every scroll frame (~50% janky). A
+     * real recents→home or screen unlock heals it — device traces show both do the SAME thing: WM
+     * re-dispatches wallpaper visibility to the engine (`dispatchHomeVisibilityChanged`) via a
+     * `WALLPAPER_INTRA_OPEN` transition. A plain app→home or an opaque activity does NOT (they don't
+     * change the wallpaper target), which is why the earlier transparent-activity bounce failed.
+     *
+     * We reproduce that redispatch invisibly: toggle the launcher window's FLAG_SHOW_WALLPAPER OFF,
+     * let WM process it for one frame (so it is NOT coalesced back to a no-op — a synchronous off→on in
+     * the same frame does nothing, which is why the prior synchronous attempt failed), then re-add it.
+     * WM sees the wallpaper target drop and re-acquire, recomputes wallpaper visibility, and re-latches
+     * the engine surface — same as the unlock path. Gated by [AnchorPreferences.pendingWallpaperHeal]
+     * so it runs exactly once after a set, never on ordinary resumes.
+     */
+    fun healWallpaperVisibilityIfPending() {
+        val prefs = AnchorPreferences(launcher)
+        if (!prefs.pendingWallpaperHeal) return
+        // Only meaningful when our live wallpaper is the active/target wallpaper (passthrough mode).
+        if (!isLiveWallpaperActive()) { prefs.pendingWallpaperHeal = false; return }
+        prefs.pendingWallpaperHeal = false
+        val window = launcher.window ?: return
+        val decor = window.decorView
+        // Drop the wallpaper target this frame…
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+        // …then re-acquire it after WM has processed the removal (next frame). Two posts to be safe:
+        // the first lets the relayout with the flag cleared reach WM; the second re-adds it so WM runs
+        // the wallpaper-target recompute + engine redispatch.
+        decor.post {
+            decor.post {
+                launcher.window?.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+                // Re-push the current camera so the engine draws its first post-heal frame correctly.
+                pushLiveOffsets()
+            }
+        }
+    }
+
     fun destroy() {
         rowAnimator?.cancel()
         launcher.window?.setBackgroundDrawable(null)

@@ -585,6 +585,10 @@ class LawnchairLauncher : QuickstepLauncher() {
         wallpaperStabilizationManager.syncRotationOnResume()
         // Apply any wallpaper source/image change made in Settings without a manual restart.
         wallpaperStabilizationManager.reapplyIfChanged()
+        // If our live wallpaper was just set from the foreground, re-assert wallpaper visibility once so
+        // WM re-dispatches it to the engine — fixes the post-set choppy home scroll invisibly (no black,
+        // no leak, no visible transition), reproducing what a recents→home/unlock would otherwise heal.
+        wallpaperStabilizationManager.healWallpaperVisibilityIfPending()
         // Grid/icon setup takes priority on first launch; the wallpaper prompt waits until the grid
         // onboarding has been shown so two dialogs never stack.
         if (!maybeShowGridOnboarding()) {
