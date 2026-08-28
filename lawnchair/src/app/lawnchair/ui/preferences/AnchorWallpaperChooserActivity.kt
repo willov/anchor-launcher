@@ -16,10 +16,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,7 +29,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import app.anchor.AnchorPreferences
 import app.lawnchair.ui.preferences.destinations.AnchorWallpaperChooserScreen
 import app.lawnchair.ui.theme.EdgeToEdge
@@ -94,6 +100,12 @@ class AnchorWallpaperChooserActivity : ComponentActivity() {
                     // already-established state. Cancel falls through to the STOCK system wallpaper picker
                     // so the user can still set a wallpaper (just not via Anchor) — encourage, don't force.
                     AlertDialog(
+                        // Widen beyond Material3's ~280dp default so the two full-width action buttons
+                        // ("Use Anchor (rotation-stable)" / "Use system (not rotation-stable)") have room
+                        // to render on one line. usePlatformDefaultWidth=false lets the widthIn modifier
+                        // take effect; capped at 360dp so it doesn't span edge-to-edge on tablets.
+                        modifier = Modifier.widthIn(min = 320.dp, max = 360.dp),
+                        properties = DialogProperties(usePlatformDefaultWidth = false),
                         onDismissRequest = { openStockWallpaperPicker(); finish() },
                         title = { Text(stringResource(R.string.anchor_wallpaper_gate_title)) },
                         text = { Text(stringResource(R.string.anchor_wallpaper_gate_message)) },
@@ -114,13 +126,17 @@ class AnchorWallpaperChooserActivity : ComponentActivity() {
                                         consented = true
                                     },
                                 ) {
-                                    Text(stringResource(R.string.anchor_wallpaper_gate_use_anchor))
+                                    GateButtonLabel(
+                                        stringResource(R.string.anchor_wallpaper_gate_use_anchor),
+                                    )
                                 }
                                 OutlinedButton(
                                     modifier = Modifier.fillMaxWidth(),
                                     onClick = { openStockWallpaperPicker(); finish() },
                                 ) {
-                                    Text(stringResource(R.string.anchor_wallpaper_gate_use_system))
+                                    GateButtonLabel(
+                                        stringResource(R.string.anchor_wallpaper_gate_use_system),
+                                    )
                                 }
                             }
                         },
@@ -147,4 +163,20 @@ class AnchorWallpaperChooserActivity : ComponentActivity() {
         fun createIntent(context: Context): Intent =
             Intent(context, AnchorWallpaperChooserActivity::class.java)
     }
+}
+
+/**
+ * Single-line button label that shrinks to fit rather than wrapping. The gate's two action labels
+ * ("Use Anchor (rotation-stable)" / "Use system (not rotation-stable)") are long enough to wrap to two
+ * lines on narrower screens (seen on Pixel); the widened dialog gives most of the room, and this
+ * autosize (down to 12sp) is the safety net so the full wording always stays on one line.
+ */
+@Composable
+private fun GateButtonLabel(text: String) {
+    Text(
+        text = text,
+        maxLines = 1,
+        overflow = TextOverflow.Visible,
+        autoSize = TextAutoSize.StepBased(minFontSize = 12.sp, maxFontSize = 14.sp),
+    )
 }

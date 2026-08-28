@@ -44,10 +44,8 @@
     <string name="anchor_drawer_section_headers_description">Show A, B, C… headings between app groups in the drawer</string>
     <string name="anchor_wallpaper_use_anchor_label">Use Anchor to set wallpaper</string>
     <string name="anchor_wallpaper_use_anchor_description">Let Anchor render a chosen image so the background stays pixel-stable when you rotate. Off: the system shows the wallpaper and rotates it normally.</string>
+    <!-- Long-press home menu label that opens the Anchor wallpaper chooser (replaces the OS picker). -->
     <string name="anchor_wallpaper_source_label">Wallpaper</string>
-    <string name="anchor_wallpaper_source_description">Choose a custom image to keep the background pixel-stable when you rotate. The system wallpaper rotates normally.</string>
-    <string name="anchor_wallpaper_source_system">System wallpaper (rotates normally)</string>
-    <string name="anchor_wallpaper_source_custom">Custom image (stays fixed on rotation)</string>
     <string name="anchor_wallpaper_pick_image_label">Choose image</string>
     <string name="anchor_wallpaper_pick_image_set">Image selected</string>
     <string name="anchor_wallpaper_pick_image_none">No image selected</string>
