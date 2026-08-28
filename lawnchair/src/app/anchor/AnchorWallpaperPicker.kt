@@ -89,6 +89,19 @@ object AnchorWallpaperPicker {
         }
         try {
             activity.startActivity(preview)
+            // The system live-wallpaper preview now runs in ITS OWN task (com.android.wallpaper /
+            // livepicker), independent of ours, so finishing our activity doesn't affect it. Finish the
+            // standalone chooser now so that when the user taps "Set wallpaper" and the preview dismisses,
+            // they return straight to whatever was under it (home, or Settings if opened from there) — NOT
+            // to the now-stale chooser grid, which otherwise lingers foreground and flashes away on the
+            // next Home press. Gate on the concrete chooser class: the same picker flow is ALSO invoked
+            // from the grid wizard (GridWizardScreen) and other in-settings hosts, where finishing the
+            // caller would tear down onboarding mid-flow. Only the dedicated chooser is safe to auto-close.
+            if (activity.javaClass.name ==
+                "app.lawnchair.ui.preferences.AnchorWallpaperChooserActivity"
+            ) {
+                activity.finish()
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Direct live-wallpaper preview failed (${e.message}); opening chooser")
             runCatching {
