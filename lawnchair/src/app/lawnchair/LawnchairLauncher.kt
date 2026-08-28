@@ -301,6 +301,11 @@ class LawnchairLauncher : QuickstepLauncher() {
         // Set the rotation overlay opaque BEFORE super() triggers the view relayout.
         // This ensures the overlay covers the workspace rebind rather than being one event late.
         rotationAnimator.notifyConfigChanging(newConfig)
+        // Freeze scroll-driven wallpaper-camera updates for the duration of the rebind, BEFORE super()
+        // emits the transient onScrollOffset callbacks that would otherwise diff against the stale
+        // pre-rotation baseline and shift the (supposedly pixel-stable) wallpaper. Lifted in
+        // finishBindingItems → resetForWorkspaceReady once the workspace settles.
+        wallpaperStabilizationManager.beginRotationRebind()
         super.onConfigurationChanged(newConfig)
     }
 

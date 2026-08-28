@@ -73,6 +73,14 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     // Blocks scroll-driven camera updates while a row-switch animation is in progress so the
     // workspace's transient page reports during the slide don't move the horizontal camera.
     private var isRowTransitioning = false
+    // Blocks scroll-driven camera updates during a rotation rebind. On rotation Launcher3 tears down
+    // and rebinds the workspace, emitting transient onScrollOffset callbacks BEFORE the grid settles at
+    // the active row's page. Without this guard, those transient offsets are diffed against the stale
+    // pre-rotation lastScrollOffset baseline and the spurious delta shifts the wallpaper camera — the
+    // wallpaper then isn't pixel-stable across that rotation (seen intermittently on non-page-0 pages;
+    // "correct on retry" because by then the workspace is already settled so the diff is ~0). Set at
+    // the START of the config change; cleared in resetForWorkspaceReady() once the rebind has settled.
+    private var isRotationRebinding = false
     // Last row-relative scroll offset seen, used to compute the per-frame horizontal delta.
     private var lastScrollOffset = Float.NaN
     private var rowAnimator: ValueAnimator? = null
@@ -325,13 +333,22 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
      * Blocked during a row-switch animation.
      */
     fun onScrollOffset(offset: Float) {
-        if (isRowTransitioning) return
-        // Live-wallpaper path: accumulate the horizontal-on-glass gesture as a DELTA into the
-        // bitmap-space camera (liveWorldX/liveWorldY), applying the glass→bitmap axis map for the
-        // CURRENT rotation to the delta only — never re-mapping the absolute position on rotation. This
-        // is the drawable's pixel-perfect model: at rest (no gesture) a rotation produces no delta, so
-        // the camera is unchanged and the crop is identical in both orientations. The engine scales
-        // worldX/worldY (∈[0,1]) into the equal-drift travel budget, so the manager needs no bitmap dims.
+        if (isRowTransitioning || isRotationRebinding) return
+        // Live-wallpaper path: the wallpaper is a fixed WORLD you pan through. The horizontal-on-glass
+        // camera axis ACCUMULATES the swipe as a delta — every right-swipe moves you further right in
+        // the world and they ADD UP across rows (so "up, right, down, right" ends up twice as far right
+        // as a single "right"; rows don't reset your horizontal world position). Up/down (row switches)
+        // move the vertical axis and never touch the horizontal one. You only stop at the true edge of
+        // the world (worldX clamped to [0,1]).
+        //
+        // Each page-step moves worldX by LIVE_HORIZONTAL_SWEEP_WORLD (a SMALL fraction of the world) so
+        // many page-steps across rows accumulate smoothly before reaching the edge — the earlier value
+        // of 1.0 made a single row consume the ENTIRE world, so a second row's worth of right had
+        // nowhere to go (the "dead scroll after switching rows" bug).
+        //
+        // Rotation stays pixel-perfect: at rest (no active swipe) there is no delta, so a pure rotation
+        // leaves worldX/worldY untouched → identical crop. The glass→bitmap axis+sign map is applied to
+        // the DELTA only, for the current rotation, never re-mapping the absolute position on rotation.
         if (isLiveWallpaperActive()) {
             if (lastScrollOffset.isNaN()) {
                 lastScrollOffset = offset
@@ -509,12 +526,26 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     }
 
     /**
+     * Called from [LawnchairLauncher.onConfigurationChanged] at the START of a rotation, before
+     * Launcher3 tears down and rebinds the workspace. Freezes scroll-driven camera updates and clears
+     * the delta baseline so the transient onScrollOffset callbacks emitted during the rebind can't apply
+     * a spurious delta to the camera (which showed up as the wallpaper shifting instead of staying
+     * pixel-stable across rotation on non-page-0 pages). Lifted in [resetForWorkspaceReady] once the
+     * rebind settles.
+     */
+    fun beginRotationRebind() {
+        isRotationRebinding = true
+        lastScrollOffset = Float.NaN
+    }
+
+    /**
      * Called from [LawnchairLauncher.finishBindingItems] after rotation/rebind. Clears transient
      * transition state and resets the scroll delta baseline. The camera position is left untouched
      * — it is already correct (rotation is pixel-perfect by construction).
      */
     fun resetForWorkspaceReady() {
         isRowTransitioning = false
+        isRotationRebinding = false
         lastScrollOffset = Float.NaN
     }
 
@@ -720,14 +751,17 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // Fallback horizontal full-sweep travel if bitmap dims aren't known yet.
         private const val HORIZONTAL_PARALLAX = 1.0f
 
-        // Live-wallpaper camera travel, in bitmap-space world units [0,1]. These are the FULL intent
-        // range the manager pushes; the ENGINE caps the actual pixel drift to the user's parallax
-        // percent (AnchorPreferences.wallpaperParallaxPercent, 0 = off) since only the engine knows the
-        // bitmap's pan room. Matching horizontal/vertical values give "same vertical and horizontal
-        // movement". A full page-sweep (offset 0→1) spans worldX 0→1; each row switch steps worldY.
-        //   LIVE_HORIZONTAL_SWEEP_WORLD: worldX span for a FULL row page-sweep (offset 0→1).
-        //   LIVE_ROW_STEP_WORLD: worldY step per row switch.
-        private const val LIVE_HORIZONTAL_SWEEP_WORLD = 1.0f
+        // Live-wallpaper camera travel, in bitmap-space world units [0,1]. worldX/worldY ∈ [0,1] map to
+        // the FULL parallax budget the engine allows (AnchorPreferences.wallpaperParallaxPercent, 0 =
+        // off). The horizontal axis ACCUMULATES swipe deltas (onScrollOffset), so these constants set
+        // how much of the world one navigation STEP consumes — i.e. how many steps accumulate before you
+        // reach the world edge:
+        //   LIVE_HORIZONTAL_SWEEP_WORLD: worldX added per FULL row page-sweep (offset 0→1 = one page
+        //     step in a 2-page row). At 0.25, ~4 page-steps fill the world, so movement ACCUMULATES
+        //     across rows — "up, right, down, right" lands twice as far right as a single "right" —
+        //     instead of one row saturating the whole world (the old 1.0 → dead-scroll-after-row-switch).
+        //   LIVE_ROW_STEP_WORLD: worldY added per row switch (kept larger; few rows exist).
+        private const val LIVE_HORIZONTAL_SWEEP_WORLD = 0.25f
         private const val LIVE_ROW_STEP_WORLD = 0.5f
 
         // The same bitmap is rendered in BOTH orientations (portrait-canonical), so to cover the
