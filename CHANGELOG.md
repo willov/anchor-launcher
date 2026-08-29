@@ -4,6 +4,27 @@ All notable changes to Anchor Launcher will be documented here.
 
 ## [Unreleased]
 
+## [0.5] - 2026-08-29
+
+### Added
+- **Rotation-stable wallpaper is now rendered by a live wallpaper** (`AnchorWallpaperService`) instead of the launcher's window background. This puts the background on the system wallpaper *surface*, which the system leaves static during the "rotate inside another app → return home" transition — so the wallpaper no longer snaps on that path — while staying pixel-perfect on a normal rotation. Parallax is driven cross-process from the launcher.
+- **Wallpaper chooser** ("Anchor pixel-stable wallpapers") — a fast standalone screen to pick a bundled background or one of your own photos, reached from the long-press "Wallpaper" menu, the Home Screen settings toggle, or first-launch setup.
+- **Wallpaper engine consent gate** — choosing a wallpaper while Anchor isn't yet managing it asks whether to use Anchor (rotation-stable) or the system wallpaper, so the choice is explicit.
+- **Bundled GNOME backgrounds** with an in-app credits screen.
+
+### Changed
+- **Wallpaper parallax is a "camera in a world" model.** The screen is a camera panning a fixed 2D wallpaper world: left/right swipes move it horizontally, up/down row switches move it vertically, and the movements accumulate across rows (scrolling right on one row and then another keeps panning right) until you reach the true edge of the image. Rotation never moves the camera, so a pure rotation is pixel-perfect.
+
+### Fixed
+- **Choppy home scroll right after setting an Anchor wallpaper** (Samsung). Setting the wallpaper from the foreground left the wallpaper engine's surface out of sync with the launcher's compositing, so home scroll stuttered until a recents→home or unlock. The launcher now re-asserts wallpaper visibility once after the set, reproducing that heal invisibly.
+- **The wallpaper chooser flashed away on the next Home press** after setting a wallpaper. The chooser now closes as soon as it hands off to the system "Set wallpaper" dialog, so confirming returns you straight to home.
+- **Wallpaper occasionally shifted a little on rotation** on a non-first page, correcting on a second rotation. Transient scroll callbacks emitted during the rotation rebind were moving the camera against a stale baseline; scroll-driven camera updates are now frozen for the duration of the rebind.
+- **Horizontal wallpaper scroll went dead after scrolling one row to its end and switching rows.** One row of pages was consuming the entire pannable range; the per-swipe step is now sized so movement keeps accumulating across rows before reaching the edge.
+- **Turning the Anchor wallpaper off** now reverts to a real system wallpaper instead of leaving a black (and choppy) orphaned live wallpaper.
+- Consent-gate buttons no longer wrap to two lines on narrower screens.
+
+## [0.4]
+
 ### Added
 - **Swipe up from the bottom edge to open the app drawer** — a system-Overview-style gesture that works from any row, not just row 0. It triggers from anywhere along the bottom edge that isn't reserved by the system gesture-nav zones (home pill / back edges), so those still work. Toggle it in Settings → Home Screen → App drawer access ("Allow up drag for app drawer on all rows", on by default), with a slider for the bottom grab-area height (0–20 % of screen height, default 10 %).
 - **Grid setup wizard** — a first-launch (and on-demand via Settings → Home Screen → Run setup wizard) guided flow: pick a wallpaper, choose your icon size and whether to show labels, then a density (Spacious / Balanced / Dense). Anchor computes a grid sized to your device and shows a live preview populated with your real app icons. The chosen icon size is **locked** — density only changes how many rows/columns fit and how much space is between them, never the icon size. A larger icon simply means fewer columns; the recommendation never overflows the screen or shrinks your icons to fit.

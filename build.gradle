@@ -135,8 +135,8 @@ final def ciRef = System.getenv("GITHUB_REF") ?: ""
 final def ciRunNumber = System.getenv("GITHUB_RUN_NUMBER") ?: ""
 
 // Anchor Launcher versioning (independent of Lawnchair's version scheme)
-final def anchorVersionName = "0.4"
-final def anchorVersionCode = 4
+final def anchorVersionName = "0.5"
+final def anchorVersionCode = 5
 
 final def quickstepMinSdk = "29"
 final def quickstepMaxSdk = "36"
