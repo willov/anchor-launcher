@@ -22,15 +22,13 @@ class AnchorPreferences(context: Context) {
         set(value) { prefs.edit().putBoolean(KEY_DRAWER_SECTION_HEADERS, value).apply() }
 
     /**
-     * Which image the stabilized background renders. One of the WALLPAPER_SOURCE_* constants.
+     * Which image the rotation-stable background renders. One of the WALLPAPER_SOURCE_* constants.
      *
-     * - [WALLPAPER_SOURCE_SYSTEM] (default): no stabilization — the real device wallpaper is shown
-     *   by the system (FLAG_SHOW_WALLPAPER) and rotates normally. Never black, no permission.
-     * - [WALLPAPER_SOURCE_CUSTOM]: a user-picked image (copied to app storage via the photo picker;
-     *   no permission needed) is rendered with the counter-rotation → pixel-perfect rotation.
-     * - [WALLPAPER_SOURCE_SYSTEM_STABILIZED]: render the real system wallpaper with the
-     *   counter-rotation. Requires reading the wallpaper bitmap, which needs MANAGE_EXTERNAL_STORAGE
-     *   — only available in the github/nightly builds; not a Play-safe path (power-user only).
+     * - [WALLPAPER_SOURCE_SYSTEM] (default): Anchor off — the real device wallpaper is shown by the
+     *   system (FLAG_SHOW_WALLPAPER) and rotates normally. Never black, no permission.
+     * - [WALLPAPER_SOURCE_CUSTOM]: Anchor on — a user-picked (or bundled) image, copied to app storage
+     *   via the photo picker (no permission needed), rendered by [app.anchor.wallpaper.AnchorWallpaperService]
+     *   with the counter-rotation → pixel-perfect rotation.
      */
     var wallpaperSource: String
         get() = prefs.getString(KEY_WALLPAPER_SOURCE, WALLPAPER_SOURCE_SYSTEM)!!
@@ -85,17 +83,6 @@ class AnchorPreferences(context: Context) {
     var linkGridDimensions: Boolean
         get() = prefs.getBoolean(KEY_LINK_GRID_DIMENSIONS, true)
         set(value) { prefs.edit().putBoolean(KEY_LINK_GRID_DIMENSIONS, value).apply() }
-
-    /**
-     * True when the legacy **window-background** counter-rotation drawable should be active. This is
-     * the OLD rendering path; the CUSTOM source no longer uses it — a picked image is now rendered by
-     * [app.anchor.wallpaper.AnchorWallpaperService] (our live wallpaper), which is a wallpaper SURFACE
-     * and therefore escapes the app→home screenshot-rotate snap. The window-bg path remains only for
-     * the power-user SYSTEM_STABILIZED source. CUSTOM runs as passthrough (FLAG_SHOW_WALLPAPER stays
-     * set) so the live wallpaper shows through and drives parallax.
-     */
-    val wallpaperStabilizationActive: Boolean
-        get() = wallpaperSource == WALLPAPER_SOURCE_SYSTEM_STABILIZED
 
     /**
      * Which animation to use when the device rotates. One of the TRANSITION_* constants.
@@ -224,10 +211,9 @@ class AnchorPreferences(context: Context) {
         const val FADE_DURATION_MAX = 600
         const val FADE_DURATION_DEFAULT = 150
 
-        // Wallpaper source for the stabilized background.
-        const val WALLPAPER_SOURCE_SYSTEM = "system"                       // default: no stabilization
-        const val WALLPAPER_SOURCE_CUSTOM = "custom"                       // user-picked image
-        const val WALLPAPER_SOURCE_SYSTEM_STABILIZED = "system_stabilized" // needs MANAGE_EXTERNAL_STORAGE
+        // Wallpaper source for the rotation-stable background.
+        const val WALLPAPER_SOURCE_SYSTEM = "system"   // default: Anchor off, system shows the wallpaper
+        const val WALLPAPER_SOURCE_CUSTOM = "custom"   // Anchor on: picked/bundled image via live wallpaper
 
         const val MAX_ROWS = 5
 

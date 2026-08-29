@@ -167,9 +167,8 @@ object AnchorWallpaperPicker {
                 )
             }
             if (!ok) return@launch
-            // CUSTOM = "Anchor wallpaper on". The image is rendered by our live wallpaper (set below),
-            // NOT the window-background drawable — wallpaperStabilizationActive is false for CUSTOM, so
-            // the launcher stays passthrough (keeps FLAG_SHOW_WALLPAPER) and the live wallpaper shows
+            // CUSTOM = "Anchor wallpaper on". The image is rendered by our live wallpaper (set below);
+            // the launcher stays passthrough (keeps FLAG_SHOW_WALLPAPER) so the live wallpaper shows
             // through while the offset bridge drives its parallax.
             AnchorPreferences(activity).wallpaperSource = AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
             applyLiveWallpaper(activity)
