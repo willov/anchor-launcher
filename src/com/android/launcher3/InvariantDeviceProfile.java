@@ -444,7 +444,7 @@ public class InvariantDeviceProfile {
         numRows = dbGridInfo.getNumRows();
         numColumns = dbGridInfo.getNumColumns();
         // Anchor: swap grid dimensions so the workspace is N×M in landscape (spatial transpose).
-        app.anchor.rotation.AnchorTransposeHook.afterInitGrid(this, displayInfo.rotation);
+        app.anchor.rotation.AnchorTransposeHook.afterInitGrid(context, this, displayInfo.rotation);
         numSearchContainerColumns = deviceType == TYPE_MULTI_DISPLAY
                 ? closestProfile.numSearchContainerColumns
                 : dbGridInfo.getNumHotseatColumns();
