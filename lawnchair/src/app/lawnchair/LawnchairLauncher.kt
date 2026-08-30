@@ -298,6 +298,13 @@ class LawnchairLauncher : QuickstepLauncher() {
     }
 
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        // Record the launcher's OWN authoritative orientation and re-drive the transpose from here.
+        // This is the correctly-ordered signal: the DisplayController-driven IDP.onConfigChanged fires
+        // ~75ms earlier with a stale launcher config, so the transpose must be re-run once the launcher
+        // window's real orientation is known. An other-app forced rotation never delivers a landscape
+        // config here, so it never triggers a (corrupting) transpose. Must run BEFORE super() so the
+        // grid is correct as the workspace rebinds.
+        app.anchor.rotation.AnchorTransposeHook.onLauncherConfigurationChanged(this, newConfig)
         // Set the rotation overlay opaque BEFORE super() triggers the view relayout.
         // This ensures the overlay covers the workspace rebind rather than being one event late.
         rotationAnimator.notifyConfigChanging(newConfig)

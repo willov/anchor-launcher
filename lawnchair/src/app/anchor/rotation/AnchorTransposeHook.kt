@@ -2,12 +2,11 @@ package app.anchor.rotation
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.provider.Settings
+import android.content.res.Configuration
 import android.view.Surface
 import com.android.launcher3.InvariantDeviceProfile
 import com.android.launcher3.Launcher
 import com.android.launcher3.LauncherAppState
-import com.android.launcher3.LauncherPrefs
 import com.android.launcher3.util.DisplayController
 import com.android.launcher3.util.Executors.MODEL_EXECUTOR
 
@@ -42,37 +41,74 @@ object AnchorTransposeHook {
     @Volatile private var portraitColsCache = 0
     @Volatile private var portraitRowsCache = 0
 
+    // The launcher window's OWN authoritative orientation, recorded by the launcher itself from its
+    // Activity.onConfigurationChanged (see [onLauncherConfigurationChanged]). This is the ONLY reliable
+    // signal for "did the LAUNCHER window actually rotate", and it is correctly ordered because the
+    // launcher records it before it re-triggers the transpose.
+    //
+    // Why not read launcher.resources.configuration.orientation directly inside beforeConfigChanged:
+    // the transpose is driven by DisplayController.CHANGE_ROTATION, which fires ~75ms BEFORE the
+    // launcher Activity's own onConfigurationChanged updates its config. So a direct read there sees the
+    // STALE (pre-rotation) orientation and wrongly skips a real rotation. And the raw DISPLAY rotation
+    // is wrong the other way: another app (YouTube/Tapo) forcing landscape rotates the DISPLAY while the
+    // portrait-locked launcher window never rotates — transposing then corrupts the layout. The
+    // launcher's own recorded orientation is correct in BOTH cases (auto-rotate, manual rotate-button,
+    // and other-app forced rotation). Initialised to ROTATION_0-equivalent (portrait) as a safe default.
+    @Volatile private var launcherIsLandscape = false
+    @Volatile private var launcherOrientationKnown = false
+
     /**
-     * True only when the LAUNCHER'S OWN WINDOW will actually rotate to follow the device — the only
-     * situation where transposing the workspace makes sense. This mirrors Launcher3's [RotationHelper]:
-     * the home window rotates when the device is a tablet (auto-rotate ignored), OR when the user has
-     * both enabled the ALLOW_ROTATION home-screen pref AND the SYSTEM auto-rotate setting is on. When
-     * neither holds, the home window is orientation-LOCKED (SCREEN_ORIENTATION_NOSENSOR) and never
-     * rotates.
+     * Called from [com.android.launcher3.Launcher.onConfigurationChanged] with the launcher's OWN new
+     * configuration — the authoritative orientation of the home window. Records it, then (if the
+     * orientation actually changed the landscape state) re-drives the transpose via onConfigChanged so
+     * beforeConfigChanged/afterInitGrid run with the correct, up-to-date launcher orientation.
      *
-     * Why this gate is essential: [DisplayController] fires CHANGE_ROTATION for EVERY display rotation,
-     * including ones FORCED BY OTHER APPS (YouTube/Tapo requesting landscape) while the launcher is
-     * backgrounded. If we transpose on those, the workspace DB is rewritten for an orientation the
-     * portrait-LOCKED launcher never actually adopts — the coordinates then fall outside the portrait
-     * grid and the loader compacts/re-homes every out-of-bounds icon and PERSISTS it, silently
-     * destroying the user's layout permanently. A locked launcher must NEVER transpose.
+     * This is what makes a real rotation (auto-rotate OR the manual rotate-suggestion button) transpose
+     * correctly, while an other-app forced rotation — which never delivers a landscape config to the
+     * locked launcher — never triggers a transpose.
+     */
+    @JvmStatic
+    fun onLauncherConfigurationChanged(context: Context, newConfig: Configuration) {
+        val nowLandscape = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val changed = !launcherOrientationKnown || nowLandscape != launcherIsLandscape
+        launcherIsLandscape = nowLandscape
+        launcherOrientationKnown = true
+        if (changed) {
+            // Re-run the config path now that the launcher orientation is authoritative and current.
+            LauncherAppState.getIDP(context).onConfigChanged(context)
+        }
+    }
+
+    /**
+     * True only when the requested display rotation matches the LAUNCHER WINDOW's own actual
+     * orientation — i.e. the launcher really is at that orientation, so transposing to it is valid.
+     * Uses the launcher's recorded orientation ([onLauncherConfigurationChanged]) when available. If it
+     * has not been recorded yet (the launcher hasn't fired its own config change this process), fall
+     * back to READING the launcher activity's current configuration orientation directly — that read is
+     * reliable EXCEPT during the launcher's own onConfigurationChanged (the ~75ms window where it lags),
+     * and in this fallback the launcher is NOT rotating (if it were, onLauncherConfigurationChanged
+     * would have recorded it), so the read is accurate. Only when there is no launcher activity at all
+     * (true cold start, before any window exists) do we allow the transpose — the initial grid is built
+     * correctly from the display and there is no existing layout to corrupt.
+     *
+     * NOTE: the earlier `!known -> return true` fallback was a data-loss hole: when another app (Tapo)
+     * forced the DISPLAY to landscape while the launcher window stayed portrait and had not yet recorded
+     * its orientation, this returned true, afterInitGrid swapped the grid to N×M, and the loader
+     * rehomed every now-out-of-bounds icon — corrupting the layout with no rotation of our own.
      */
     @JvmStatic
     fun launcherWillRotate(context: Context): Boolean {
-        val info = DisplayController.INSTANCE.get(context).info
-        // Tablets ignore the auto-rotate setting and always allow home rotation.
-        if (info.isTablet(info.realBounds)) return true
-        // Phones/foldables: home rotates only if the ALLOW_ROTATION pref is on AND system auto-rotate
-        // is on. (RotationHelper gates mHomeRotationEnabled on the pref; the system only actually
-        // rotates the window when accelerometer_rotation is enabled.)
-        val autoRotateOn = runCatching {
-            Settings.System.getInt(
-                context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0,
-            ) == 1
-        }.getOrDefault(false)
-        if (!autoRotateOn) return false
-        return runCatching { LauncherPrefs.get(context).get(LauncherPrefs.ALLOW_ROTATION) }
-            .getOrDefault(false)
+        val displayRotation = DisplayController.INSTANCE.get(context).info.rotation
+        val displayIsLandscape =
+            displayRotation == Surface.ROTATION_90 || displayRotation == Surface.ROTATION_270
+        val launcherLandscape = if (launcherOrientationKnown) {
+            launcherIsLandscape
+        } else {
+            val launcher = Launcher.ACTIVITY_TRACKER.getCreatedContext<Launcher>()
+                ?: return true // genuine cold start: no window yet, no layout to corrupt
+            launcher.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        }
+        return displayIsLandscape == launcherLandscape
     }
 
     /**
@@ -87,12 +123,17 @@ object AnchorTransposeHook {
 
         if (oldRotation == newRotation) return
 
-        // Never transpose when the launcher window is orientation-locked (auto-rotate off, or the
-        // ALLOW_ROTATION pref off on a phone). In that case CHANGE_ROTATION events come from OTHER apps
-        // forcing landscape (YouTube/Tapo); the home window never adopts the new orientation, so
-        // transposing would rewrite the DB for an orientation the grid never uses → the loader then
-        // compacts every now-out-of-bounds icon and persists it, permanently destroying the layout.
-        // Do NOT advance KEY_LAST_ROTATION here, so the recorded rotation keeps matching the DB.
+        // Only transpose when the requested display rotation matches the LAUNCHER window's own
+        // orientation (see launcherWillRotate). If they disagree, another app forced the display
+        // rotation (YouTube/Tapo landscape) while the launcher window did not follow — transposing then
+        // rewrites the DB for an orientation the grid never uses, and the loader compacts every
+        // now-out-of-bounds icon and persists it, permanently destroying the layout. Do NOT advance
+        // KEY_LAST_ROTATION here, so the recorded rotation keeps matching the (untouched) DB.
+        //
+        // Ordering note: on a genuine rotation this DisplayController-driven path fires ~75ms BEFORE the
+        // launcher records its new orientation, so launcherWillRotate is still false here and we skip —
+        // the transpose is then correctly re-driven from Launcher.onConfigurationChanged
+        // (onLauncherConfigurationChanged) once the launcher orientation is authoritative.
         if (!launcherWillRotate(context)) return
 
         // Only transpose for rotations that occur while the launcher is actually visible.
@@ -161,14 +202,16 @@ object AnchorTransposeHook {
         // (Always cached, regardless of the swap gate below.)
         portraitColsCache = idp.numColumns
         portraitRowsCache = idp.numRows
-        // Only swap to the landscape grid when the LAUNCHER WINDOW will actually be landscape. The
-        // display can be landscape because ANOTHER app forced it (YouTube/Tapo) while our portrait-
-        // LOCKED home window stays portrait; swapping then would build a landscape N×M grid for a
-        // portrait render, and — critically — feed the loader a numRows/numColumns that disagrees with
-        // the stored coordinates, so checkItemPlacement treats the bottom band as out-of-bounds and the
-        // layout gets compacted/persisted. Keep the portrait grid whenever the window is locked.
-        val willRotate = launcherWillRotate(context)
-        if (willRotate && (rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270)) {
+        // Only swap to the landscape grid when the LAUNCHER WINDOW is actually landscape. The display
+        // can be landscape because ANOTHER app forced it (YouTube/Tapo) while our locked home window
+        // stays portrait; swapping then builds a landscape N×M grid for a portrait render and feeds the
+        // loader a numRows/numColumns that disagrees with the stored coordinates, so checkItemPlacement
+        // treats the bottom band as out-of-bounds and the layout gets compacted/persisted. Gate on the
+        // launcher's own recorded orientation (same signal as beforeConfigChanged's transpose) so both
+        // are driven by the identical decision.
+        val willSwap = (rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270) &&
+            launcherWillRotate(context)
+        if (willSwap) {
             val tmp = idp.numColumns
             idp.numColumns = idp.numRows
             idp.numRows = tmp
@@ -193,11 +236,12 @@ object AnchorTransposeHook {
      */
     @JvmStatic
     fun reconcileOnResume(context: Context) {
-        // If the home window is orientation-locked (auto-rotate off, or ALLOW_ROTATION off on a phone),
-        // never reconcile: any rotation mismatch here is another app's forced orientation (e.g.
-        // returning from YouTube/Tapo landscape), NOT a rotation the launcher will follow. Reconciling
-        // would run a transpose for an orientation the portrait-locked grid never adopts, whose
-        // out-of-bounds coordinates the loader then compacts and persists — permanent layout loss.
+        // Only reconcile when the display rotation matches the LAUNCHER window's own orientation (its
+        // recorded config). If they disagree, the mismatch is another app's forced orientation (e.g.
+        // returning from YouTube/Tapo landscape while the launcher window is still portrait) — NOT a
+        // rotation the launcher followed. Reconciling then would transpose for an orientation the grid
+        // never adopts, whose out-of-bounds coordinates the loader compacts and persists (permanent
+        // layout loss).
         if (!launcherWillRotate(context)) return
         val lastRotation = prefs(context).getInt(KEY_LAST_ROTATION, Surface.ROTATION_0)
         val currentRotation = DisplayController.INSTANCE.get(context).info.rotation
