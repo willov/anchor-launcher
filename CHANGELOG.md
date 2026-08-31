@@ -4,6 +4,12 @@ All notable changes to Anchor Launcher will be documented here.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-31
+
+### Fixed
+- **Icons could be permanently scrambled by other apps' rotation.** On a phone with auto-rotate off, opening an app that forces landscape internally (e.g. YouTube fullscreen, or the Tapo camera) and then returning home could silently reflow the home screen — icons compacted toward the top, bottom rows emptied — and it did not recover. The launcher was transposing its grid in response to *another app's* forced rotation, even though the home screen itself never rotates when auto-rotate is off. It now keys the transpose off the launcher window's own orientation, so other apps' rotations never touch your layout. (Rotating the launcher itself still keeps every icon at the same physical spot as before.)
+- **Rotation was slower and flashed the wrong layout briefly.** Fixing the bug above initially made the home screen rebuild twice per rotation (≈0.6s → ≈1.8s) and flash the pre-rotation grid before correcting. Rotation now rebuilds once, and the transition stays hidden until the new layout has fully settled — no flash, even when the rebuild is slow.
+
 ## [0.5] - 2026-08-29
 
 ### Added
