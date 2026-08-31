@@ -200,6 +200,27 @@ object AnchorTransposeHook {
 
         if (oldRotation == newRotation) return
 
+        // PRE-COMPUTED TRANSPOSE: once the DB is portrait-canonical, rotation must not touch it.
+        //
+        // The loader now derives display coordinates from the stored portrait ones on every read, so
+        // the reactive rewrite below is not merely redundant — it is actively WRONG. It would write
+        // display-frame coordinates back into a DB the reader treats as portrait-canonical, and the
+        // next read would transpose those *again*. Measured on the 6×9 test tablet: a DB left in the
+        // landscape frame while marked canonical puts 13 of 35 items out of bounds, and
+        // checkItemPlacement re-homes and PERSISTS every one of them.
+        //
+        // The two mechanisms are mutually exclusive: either the DB tracks the display frame and is
+        // rewritten on rotation (the old reactive path), or it holds one canonical frame and the
+        // reader maps it (the pre-computed path). This is the switch between them.
+        //
+        // Skipping here removes both the DB rewrite AND the forceReload/LoaderTask below — the
+        // ~0.9–1.9s that rotation used to cost. KEY_LAST_ROTATION is still advanced so the recorded
+        // rotation keeps describing reality for the migration and for reconcileOnResume.
+        if (PortraitCanonicalMigration.isLiveDbCanonical()) {
+            prefs.edit().putInt(KEY_LAST_ROTATION, newRotation).apply()
+            return
+        }
+
         // Only transpose when the requested display rotation matches the LAUNCHER window's own
         // orientation (see launcherWillRotate). If they disagree, another app forced the display
         // rotation (YouTube/Tapo landscape) while the launcher window did not follow — transposing then
