@@ -590,8 +590,21 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
             val scale = coverScale
 
             val targetW = (srcW * scale).toInt().coerceAtLeast(1)
+
+            // inSampleSize halves only while the result stays AT OR ABOVE the target, so it lands on
+            // the nearest power-of-2 that is still >= targetW. That alone can leave a very large
+            // intermediate: a 4096 source aimed at 2520 keeps sample=1 (4096/2 = 2048 < 2520), so the
+            // decoder would allocate the FULL 4096² bitmap — 64MB in ARGB_8888 — before we scale it
+            // down. In a wallpaper service, which the system kills first under memory pressure, that
+            // transient spike is the real constraint (far more than APK size or steady-state usage).
+            //
+            // inScaled + inDensity/inTargetDensity makes BitmapFactory apply the remaining fractional
+            // scale DURING decode, so the oversized intermediate is never allocated: peak ≈ the final
+            // bitmap instead of the full source. Combined with inSampleSize for the power-of-2 part,
+            // the decode goes straight to (approximately) the size we want.
             var sample = 1
             while (srcW / (sample * 2) >= targetW) sample *= 2
+            val sampledW = srcW / sample
             // ARGB_8888, NOT RGB_565.
             //
             // 565 was chosen to halve bitmap memory on the assumption that an opaque background needs no
@@ -621,14 +634,23 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
                     inSampleSize = sample
                     inPreferredConfig = Bitmap.Config.ARGB_8888
                     inDither = true
+                    // Fold the leftover fractional scale into the decode itself (see note above).
+                    // Guarded: only when we actually need to shrink further, and never when the
+                    // sampled size already matches, to avoid a pointless resample.
+                    if (sampledW > targetW) {
+                        inScaled = true
+                        inDensity = sampledW
+                        inTargetDensity = targetW
+                    }
                 },
             ) ?: return null
 
-            // Resize whenever the decode landed on a different size than the target — in EITHER
-            // direction. (This used to early-return on `decoded.width <= targetW`, i.e. downscale-only,
-            // which combined with the old floor-only coverTarget test to leave a 3072² source completely
-            // unscaled. inSampleSize is powers-of-2 only, so this exact-scale step is also what lands us
-            // on the target rather than the nearest power of two.)
+            // Final exact-size pass. With inScaled above the decode already lands on (or within a
+            // rounding pixel of) the target, so this is usually a no-op — it remains as the safety net
+            // for that rounding and for the upscale case, which inScaled's density ratio does not
+            // cover. (This used to early-return on `decoded.width <= targetW`, i.e. downscale-only,
+            // which combined with the old floor-only coverTarget test to leave a 3072² source
+            // completely unscaled.)
             if (decoded.width == targetW) return decoded
             val finalScale = targetW.toFloat() / decoded.width
             val out = Bitmap.createScaledBitmap(
