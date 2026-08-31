@@ -298,15 +298,16 @@ class AnchorWallpaperService : WallpaperService() {
                 val roomX = (bmp.width - srcW).coerceAtLeast(0)
                 val roomY = (bmp.height - srcH).coerceAtLeast(0)
                 val travel = minOf(roomX, roomY)
-                // Parallax strength = user pref (percent of the screen SHORT side per navigation step,
-                // 0 = off). The engine owns this conversion because it alone knows `travel` (bitmap-
-                // dependent). A percent p means a full worldX/worldY sweep [0,1] should pan p% of the
-                // short side per step; we scale the pannable window by parallaxFactor accordingly, so
-                // p = 0 → zero travel (the crop never moves as you scroll) while the REST view is
-                // preserved: worldX/worldY still index into the (shrunken) window centred on the rest
-                // anchor, so at rest the same pixels show regardless of the parallax setting.
+                // Parallax strength = user pref, now expressed as PER-SWIPE drift: percent of the screen
+                // SHORT side that the wallpaper moves for ONE navigation sweep (page 0→last, or one row
+                // switch). 0 = off. This is the honest, intuitive number — the slider IS the per-swipe
+                // distance, no hidden division. The FULL camera range [0,1] spans SWEEPS_TO_FILL_WORLD
+                // sweeps, so the total pannable window (effTravel) = perSwipePx × sweeps. The camera then
+                // advances 1/sweeps of effTravel per sweep = exactly perSwipePx. Clamped to bitmap room.
                 val shortSide = rawW  // portrait-canonical short side (= screen short side)
-                val maxDriftPx = (parallaxPercent / 100f) * shortSide
+                val perSwipePx = (parallaxPercent / 100f) * shortSide
+                val maxDriftPx =
+                    perSwipePx * WallpaperStabilizationManager.SWEEPS_TO_FILL_WORLD
                 // Effective travel: never more than the pref allows, never more than the bitmap room.
                 val effTravel = travel.toFloat().coerceAtMost(maxDriftPx).toInt()
                 val baseX = (roomX - effTravel) / 2

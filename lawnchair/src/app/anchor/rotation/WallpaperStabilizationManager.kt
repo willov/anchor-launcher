@@ -222,14 +222,17 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
      * across rows (so "up, right, down, right" ends up twice as far right as a single "right"; rows
      * don't reset your horizontal world position). Up/down (row switches) move the vertical axis and
      * never touch the horizontal one. You only stop at the true edge of the world (worldX clamped to
-     * [0,1]).
+     * [0,1], which maps to the real bitmap pan room — a LARGE world, ~13 swipes/axis at COVER 2.0).
      *
-     * EQUAL horizontal/vertical feel: one PAGE-step moves worldX by the same amount one ROW-step moves
-     * worldY ([LIVE_STEP_WORLD]). The incoming `offset` is row-relative across the WHOLE row's page
-     * range, so one page-step is a delta of 1/(pagesInRow−1); we scale by (pagesInRow−1) to convert that
-     * back into "one step = LIVE_STEP_WORLD" regardless of how many pages the row has. Without this
-     * normalization a page swipe moved the wallpaper far less than a row switch (and less still on
-     * longer rows), which read as "lots of vertical shift, little horizontal".
+     * CONSTANT, UNIFORM motion (no page-count scaling, no ease-out): one full row SWEEP (page 0 → last
+     * page, `offset` 0→1) advances the camera by exactly [LIVE_STEP_PER_SWEEP], REGARDLESS of how many
+     * pages the row has. So the wallpaper moves the same total distance across any row, and — because
+     * `offset` moves linearly with the finger — each swipe within the row contributes an equal share.
+     * A ROW switch ([onRowTransition]) advances the perpendicular axis by the SAME [LIVE_STEP_PER_SWEEP],
+     * so a horizontal sweep and a vertical sweep move the wallpaper an equal distance → equal H/V feel.
+     * (The old model multiplied by (pagesInRow−1) to make ONE PAGE = one step, which front-loaded the
+     * whole budget onto the first swipe on multi-page rows and pegged the camera at the edge; dropping
+     * that multiplier makes it a smooth, constant pan across the entire row instead.)
      *
      * Rotation stays pixel-perfect: at rest (no active swipe) there is no delta, so a pure rotation
      * leaves worldX/worldY untouched → identical crop. The glass→bitmap axis+sign map is applied to
@@ -247,12 +250,10 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         val delta = offset - lastScrollOffset
         if (delta == 0f) return
         lastScrollOffset = offset
-        // pages in the active row; a single page-step is a row-relative delta of 1/(pages-1).
-        val pagesInRow = (launcher.workspace.allowedPageEnd - launcher.workspace.allowedPageStart + 1)
-            .coerceAtLeast(2)
-        // Scale so one page-step (delta = 1/(pages-1)) contributes exactly LIVE_STEP_WORLD to worldX —
-        // matching one row-step's contribution to worldY, for equal horizontal/vertical movement.
-        val step = delta * (pagesInRow - 1) * LIVE_STEP_WORLD
+        // Constant motion: a full row sweep (delta sums to 1.0 across the whole page range) advances the
+        // camera by LIVE_STEP_PER_SWEEP — independent of page count. No (pagesInRow−1) scaling, so every
+        // swipe on a 2- or 4-page row moves the wallpaper the same uniform fraction.
+        val step = delta * LIVE_STEP_PER_SWEEP
         val m = WallpaperCropMath.horizontalGlassAxis(currentRotation())
         applyLiveCameraDelta(m, step)
         pushLiveOffsets()
@@ -279,8 +280,9 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
      * Called by [app.anchor.navigation.TwoRowNavigationManager] when a row transition starts.
      * Animates the vertical-on-glass camera axis to the target row's canonical world position over the
      * same duration as the workspace slide, so the wallpaper glides with the row switch. Row 0 (home)
-     * rests at the bottom; the top row is at the top. Row spacing is uniform so one row-step moves a
-     * comparable fraction to one page-step (equal-feel parallax).
+     * rests at the bottom; the top row is at the top. Each row-step advances the axis by exactly
+     * [LIVE_STEP_PER_SWEEP] — the SAME constant a full horizontal row-sweep uses — so vertical and
+     * horizontal motion are equal (equal-feel parallax), clamped to the world edge.
      *
      * Axis: a vertical-on-glass move maps to a (camera axis, sign) per rotation via
      * [WallpaperCropMath.verticalGlassAxis] — bitmap-Y in portrait, bitmap-X in landscape, sign-mirrored
@@ -293,7 +295,7 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // Canonical vertical-world target (portrait-Y sense): row 0 rests at HOME_REST_WORLD_Y
         // (bottom); each row up subtracts one step, clamped to the top. Then map to the CURRENT
         // rotation's world axis + sign.
-        val canonical = (HOME_REST_WORLD_Y - toRow * LIVE_STEP_WORLD).coerceIn(0f, HOME_REST_WORLD_Y)
+        val canonical = (HOME_REST_WORLD_Y - toRow * LIVE_STEP_PER_SWEEP).coerceIn(0f, HOME_REST_WORLD_Y)
         val m = WallpaperCropMath.verticalGlassAxis(currentRotation())
         val target = if (m.sign < 0) 1f - canonical else canonical
         val current = when (m.axis) {
@@ -396,30 +398,36 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         private const val ROW_MARGIN = 0.1f
         private const val HOME_REST_WORLD_Y = 1f - ROW_MARGIN
 
-        // Live-wallpaper camera travel per navigation STEP, in bitmap-space world units [0,1].
-        // worldX/worldY ∈ [0,1] map to the FULL parallax budget the engine allows
-        // (AnchorPreferences.wallpaperParallaxPercent, 0 = off). ONE step — a single PAGE swipe OR a
-        // single ROW switch — moves its axis by this much, so horizontal and vertical feel EQUAL
-        // (onScrollOffset normalizes by page count so a page-step always equals one step regardless of
-        // how many pages the row has).
+        // How many full navigation SWEEPS fill the world (edge to edge) before the camera caps. A
+        // "sweep" is one full row scroll (page 0 → last page) OR one row switch. This is the SINGLE
+        // SOURCE OF TRUTH shared with the engine: the slider is expressed as per-swipe drift, and the
+        // engine multiplies it by this to get the total world travel (effTravel). At 5, ~5 swipes reach
+        // the edge — the design target of "~5-6 swipes, then a clean clamp". Independent of bitmap size:
+        // COVER_FACTOR only sets how many PIXELS a sweep spans, not how many sweeps there are.
+        const val SWEEPS_TO_FILL_WORLD = 5
+
+        // Live-wallpaper camera advance per full navigation SWEEP, in bitmap-space world units [0,1].
+        // BOTH a horizontal sweep and a row switch advance their axis by this constant, so horizontal
+        // and vertical motion are EQUAL. The camera is clamped to [0,1] (applyLiveCameraDelta /
+        // setLiveWorldAxis), which maps to the real bitmap pan room.
         //
-        // At 1.0, one swipe pans the ENTIRE parallax budget, so the % slider maps directly to
-        // "how far the wallpaper moves per swipe" — the intuitive control. (At the old 0.25 the slider's
-        // effect was quartered and accumulated across ~4 swipes, so the low/high end of the slider both
-        // read as a tiny per-swipe shift and the slider felt inert. The trade-off: drift no longer
-        // ACCUMULATES across rows — you reach the world edge in one swipe — but per-swipe feel is now
-        // clearly controlled by the slider, which is what the setting is for.)
-        private const val LIVE_STEP_WORLD = 1.0f
+        // Motion is CONSTANT and uniform: onScrollOffset accumulates delta*LIVE_STEP_PER_SWEEP with no
+        // page-count scaling, so every swipe on a 2- or 4-page row moves the wallpaper the same fraction,
+        // and the first swipes are essentially equal to the later ones (until the edge clamp). A user who
+        // keeps swiping past the last sweep just stays pinned at the world edge — a clean stop, no jump.
+        private const val LIVE_STEP_PER_SWEEP = 1f / SWEEPS_TO_FILL_WORLD
 
         // The same bitmap is rendered in BOTH orientations (portrait-canonical), so to cover the
         // screen without stretching it must be at least the screen's LARGER side in both dimensions.
-        // COVER_FACTOR adds headroom for parallax to pan into. This is the REAL cap on wallpaper drift:
-        // the engine's effTravel = min(bitmap pan room, parallax%), and the pan room = (bitmap side −
-        // screen side). At 1.1 the room (esp. on the short axis) was near-zero, so the parallax %
-        // slider had almost no effect — the bitmap simply wasn't big enough to slide within. 1.4 gives
-        // ~40% of the long side of headroom so even the max 35% parallax has room to travel. (Larger =
-        // more parallax room but more memory / a bigger per-frame blit; HARD_CAP still bounds it.)
-        private const val COVER_FACTOR = 1.4f
+        // COVER_FACTOR adds headroom for parallax to pan into = the bitmap pan room the engine's
+        // effTravel is capped by. At 1.7 the equal-axis room is ~0.7×screenMax (~1700px on a 1080×2424
+        // phone), which comfortably contains the full parallax% ceiling (max 30% × SWEEPS_TO_FILL_WORLD
+        // × shortSide ≈ 1620px), so the SLIDER — not the bitmap — is the binding cap across its WHOLE
+        // range (no dead zone at the top). The 5-sweep travel budget ([LIVE_STEP_PER_SWEEP]) is
+        // independent of this. Decoded RGB_565 (opaque background, no alpha needed) so this larger world
+        // still costs LESS memory than the old 1.4× ARGB_8888 (~33MB vs ~46MB).
+        // (Larger = more parallax headroom but more memory / a bigger per-frame blit; HARD_CAP bounds it.)
+        private const val COVER_FACTOR = 1.7f
         private const val HARD_CAP_FACTOR = 2
 
         /**
@@ -465,8 +473,15 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
             val targetW = (srcW * scale).toInt().coerceAtLeast(1)
             var sample = 1
             while (srcW / (sample * 2) >= targetW) sample *= 2
+            // RGB_565: the wallpaper is an OPAQUE background (no alpha needed), so 16-bit halves the
+            // bitmap memory vs ARGB_8888 — this is what lets the larger COVER_FACTOR world cost LESS RAM
+            // than before. createScaledBitmap below preserves this config.
             val decoded = BitmapFactory.decodeFile(
-                path, BitmapFactory.Options().apply { inSampleSize = sample },
+                path,
+                BitmapFactory.Options().apply {
+                    inSampleSize = sample
+                    inPreferredConfig = Bitmap.Config.RGB_565
+                },
             ) ?: return null
 
             if (decoded.width <= targetW) return decoded

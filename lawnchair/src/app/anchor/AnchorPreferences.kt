@@ -140,9 +140,11 @@ class AnchorPreferences(context: Context) {
         }
 
     /**
-     * Wallpaper parallax strength as a PERCENT of the screen's short side that the wallpaper drifts
-     * per navigation step (one page swipe or one row switch). 0 disables parallax. Capped per axis at
-     * the image's available pan room. Default [PARALLAX_PERCENT_DEFAULT].
+     * Wallpaper parallax strength as a PERCENT of the screen's short side = the TOTAL distance the
+     * wallpaper drifts across a full navigation sweep of the world. The camera advances in equal,
+     * constant steps and reaches this total after ~5 sweeps (see
+     * WallpaperStabilizationManager.LIVE_STEP_PER_SWEEP), then clamps at the world edge. 0 disables
+     * parallax. Capped at the image's available pan room. Default [PARALLAX_PERCENT_DEFAULT].
      */
     var wallpaperParallaxPercent: Int
         get() = prefs.getInt(KEY_PARALLAX_PERCENT, PARALLAX_PERCENT_DEFAULT)
@@ -222,11 +224,15 @@ class AnchorPreferences(context: Context) {
         const val BOTTOM_EDGE_ZONE_PERCENT_MAX = 20
         const val BOTTOM_EDGE_ZONE_PERCENT_DEFAULT = 10
 
-        // Wallpaper parallax strength (percent of screen short side per navigation step). This caps the
-        // TOTAL pixel drift the wallpaper can travel; the default was raised (15→22) because the drift
-        // felt too subtle, and the max lifted (25→35) to leave headroom above the new default.
+        // Wallpaper parallax strength = PER-SWIPE drift: percent of the screen short side the wallpaper
+        // moves for ONE navigation sweep (one full row scroll, or one row switch). This is the honest
+        // number the slider shows — no hidden division. The engine multiplies it by
+        // SWEEPS_TO_FILL_WORLD (5) for the total pannable window. On a 1080-wide phone: 10% ≈ 108px/swipe
+        // (gentle), 30% ≈ 324px/swipe (dramatic). Default 15 (~162px/swipe) is a strong, clearly-visible
+        // baseline. Bitmap pan room (COVER_FACTOR 1.7 ≈ 1700px) comfortably contains 5×max (~1620px), so
+        // the slider — not the bitmap — is the binding cap across the whole range (no dead top zone).
         const val PARALLAX_PERCENT_MIN = 0
-        const val PARALLAX_PERCENT_MAX = 35
-        const val PARALLAX_PERCENT_DEFAULT = 22
+        const val PARALLAX_PERCENT_MAX = 30
+        const val PARALLAX_PERCENT_DEFAULT = 15
     }
 }
