@@ -687,8 +687,16 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         fun importBundledWallpaper(context: Context, rawResId: Int): Boolean {
             return try {
                 val dest = File(context.filesDir, "custom_wallpaper.jpg")
-                context.resources.openRawResource(rawResId).use { input ->
-                    dest.outputStream().use { output -> input.copyTo(output) }
+                if (isSvgResource(context, rawResId)) {
+                    // Vector source: rasterize at exactly the size THIS device needs instead of
+                    // shipping a fixed-resolution raster that is too small for a large tablet and
+                    // wastefully large for a phone. A vector never upscales, so these wallpapers are
+                    // pixel-exact on any screen at any parallax setting.
+                    if (!rasterizeSvgTo(context, rawResId, dest)) return false
+                } else {
+                    context.resources.openRawResource(rawResId).use { input ->
+                        dest.outputStream().use { output -> input.copyTo(output) }
+                    }
                 }
                 AnchorPreferences(context).customWallpaperPath = dest.absolutePath
                 true
@@ -696,6 +704,58 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
                 Log.w(TAG, "Failed to import bundled wallpaper: ${e.message}")
                 false
             }
+        }
+
+        /** True if the raw resource is an SVG (sniffed from the bytes, not the extension). */
+        private fun isSvgResource(context: Context, rawResId: Int): Boolean = runCatching {
+            context.resources.openRawResource(rawResId).use { input ->
+                val head = ByteArray(512)
+                val n = input.read(head)
+                if (n <= 0) return false
+                val text = String(head, 0, n, Charsets.UTF_8)
+                text.contains("<svg") || text.contains("<?xml")
+            }
+        }.getOrDefault(false)
+
+        /**
+         * Renders an SVG raw resource into [dest] as a PNG at the size this device needs.
+         *
+         * Size comes from the same per-axis requirement [decodeDownscaled] uses (crop + parallax
+         * travel), so the rasterized file is exactly big enough — no upscaling on a large tablet, no
+         * wasted pixels on a phone. Rendered as PNG so the flat-shape artwork stays lossless; the file
+         * is app-private and transient, so its size on disk does not matter.
+         */
+        private fun rasterizeSvgTo(context: Context, rawResId: Int, dest: File): Boolean = runCatching {
+            val (sw, sh) = realScreenSize(context)
+            val screenMin = minOf(sw, sh)
+            val screenMax = maxOf(sw, sh)
+            val parallaxPercent = AnchorPreferences(context).wallpaperParallaxPercent
+            val travelPx = (parallaxPercent / 100f) * screenMin * SWEEPS_TO_FILL_WORLD
+
+            // The SVGs are square; render the larger per-axis requirement so both are satisfied.
+            val target = (maxOf(screenMin, screenMax) + travelPx).toInt().coerceAtLeast(1)
+
+            val svg = context.resources.openRawResource(rawResId).use { input ->
+                com.caverock.androidsvg.SVG.getFromInputStream(input)
+            }
+            svg.documentWidth.let { if (it <= 0f) svg.setDocumentWidth(target.toFloat()) }
+            svg.documentHeight.let { if (it <= 0f) svg.setDocumentHeight(target.toFloat()) }
+
+            val bmp = Bitmap.createBitmap(target, target, Bitmap.Config.ARGB_8888)
+            val canvas = android.graphics.Canvas(bmp)
+            val scale = target / (if (svg.documentWidth > 0f) svg.documentWidth else target.toFloat())
+            canvas.scale(scale, scale)
+            svg.renderToCanvas(canvas)
+
+            dest.outputStream().use { out ->
+                bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+            bmp.recycle()
+            Log.d(TAG, "Rasterized bundled SVG to ${target}x$target")
+            true
+        }.getOrElse {
+            Log.w(TAG, "SVG rasterize failed: ${it.message}")
+            false
         }
 
         /**
