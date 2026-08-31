@@ -297,15 +297,37 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
      * absolute value to the target; because the mapping is applied to the target here (not re-applied on
      * rotation), a pure rotation mid-rest leaves the camera untouched.
      */
-    fun onRowTransition(toRow: Int, totalRows: Int, durationMs: Long) {
+    fun onRowTransition(
+        toRow: Int,
+        totalRows: Int,
+        durationMs: Long,
+        pagesInTargetRow: Int = 2,
+    ) {
         if (!isLiveWallpaperActive()) return
-        // Canonical vertical-world target (portrait-Y sense): row 0 rests at HOME_REST_WORLD_Y
-        // (bottom); each row up subtracts one step, clamped to the top. Then map to the CURRENT
-        // rotation's world axis + sign.
         // Row 0 rests at HOME_REST_WORLD_Y (image bottom); each row up subtracts one step. This is a
-        // property of the ROW role and is now stored as such, so it no longer leaks into page scrolling
-        // when rotation swaps which bitmap axis each role drives.
-        val target = (HOME_REST_WORLD_Y - toRow * LIVE_STEP_PER_SWEEP).coerceIn(0f, HOME_REST_WORLD_Y)
+        // property of the ROW role, stored as such so it can no longer leak into page scrolling when
+        // rotation swaps which bitmap axis each role drives.
+        // Match the row step to what ONE PAGE SWIPE moves on the row being entered.
+        //
+        // Both paths use LIVE_STEP_PER_SWEEP, but they measure a "sweep" differently: a row switch is
+        // one ROW, while a page sweep is the WHOLE row of pages (offset 0→1). So on a 3-page row a
+        // single swipe moves half a step and a row switch moves a full one — the wallpaper visibly
+        // travels twice as far vertically as horizontally. Scaling the row step by the same
+        // 1/(pages−1) a page swipe gets makes one row switch cover the same distance as one swipe.
+        //
+        // Uses min() so the row step is only ever SHRUNK to meet the pages, never stretched: a 2-page
+        // row would otherwise scale to a full step and re-introduce the mismatch in the other
+        // direction on rows that have more pages.
+        val pageStep = LIVE_STEP_PER_SWEEP / (pagesInTargetRow - 1).coerceAtLeast(1)
+        val rowStep = minOf(LIVE_STEP_PER_SWEEP, pageStep)
+        val canonical = (HOME_REST_WORLD_Y - toRow * rowStep).coerceIn(0f, HOME_REST_WORLD_Y)
+
+        // The ROLE owns the axis, but the DIRECTION still depends on rotation: at ROTATION_90 and 180
+        // the counter-rotation mirrors this axis on glass, so the same canonical value would drag the
+        // wallpaper the wrong way and row navigation would feel inverted. Mirror the target for those
+        // rotations. (Dropping this when the state moved to roles is what inverted up/down.)
+        val sign = WallpaperCropMath.verticalGlassAxis(currentRotation()).sign
+        val target = if (sign < 0) 1f - canonical else canonical
         val current = rowWorld
         vGlassAnimator?.cancel()
         if (kotlin.math.abs(current - target) < 0.001f) {
