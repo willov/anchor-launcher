@@ -265,10 +265,9 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // camera by LIVE_STEP_PER_SWEEP — independent of page count. No (pagesInRow−1) scaling, so every
         // swipe on a 2- or 4-page row moves the wallpaper the same uniform fraction.
         val step = delta * LIVE_STEP_PER_SWEEP
-        // Page scroll always moves the PAGE role. Only the SIGN depends on rotation (which glass
-        // direction counts as "forward"); the axis no longer does, because roles own their own state.
-        val sign = WallpaperCropMath.horizontalGlassAxis(currentRotation()).sign
-        pageWorld = (pageWorld + sign * step).coerceIn(0f, 1f)
+        // Page scroll moves the PAGE role in canonical space; direction is applied at push time by
+        // bitmapCamera() along with the axis swap, so this stays rotation-agnostic.
+        pageWorld = (pageWorld + step).coerceIn(0f, 1f)
         pushLiveOffsets()
     }
 
@@ -279,9 +278,17 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
      * the row role drives bitmap-Y; at ROTATION_90/270 the counter-rotation swaps them. Sign handling
      * stays with the callers that move each role, so this is a pure axis swap.
      */
-    private fun bitmapCamera(): Pair<Float, Float> =
-        if (WallpaperCropMath.isLandscape(currentRotation())) Pair(rowWorld, pageWorld)
-        else Pair(pageWorld, rowWorld)
+    private fun bitmapCamera(): Pair<Float, Float> {
+        val rotation = currentRotation()
+        // Mirror each role onto the bitmap axis when the counter-rotation flips that axis on glass,
+        // so "row up" and "swipe forward" always drag the wallpaper the same way whatever the
+        // orientation. Roles stay canonical in storage; this is the only place direction is applied.
+        val pageSign = WallpaperCropMath.horizontalGlassAxis(rotation).sign
+        val rowSign = WallpaperCropMath.verticalGlassAxis(rotation).sign
+        val page = if (pageSign < 0) 1f - pageWorld else pageWorld
+        val row = if (rowSign < 0) 1f - rowWorld else rowWorld
+        return if (WallpaperCropMath.isLandscape(rotation)) Pair(row, page) else Pair(page, row)
+    }
 
     /**
      * Called by [app.anchor.navigation.TwoRowNavigationManager] when a row transition starts.
@@ -322,12 +329,13 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         val rowStep = minOf(LIVE_STEP_PER_SWEEP, pageStep)
         val canonical = (HOME_REST_WORLD_Y - toRow * rowStep).coerceIn(0f, HOME_REST_WORLD_Y)
 
-        // The ROLE owns the axis, but the DIRECTION still depends on rotation: at ROTATION_90 and 180
-        // the counter-rotation mirrors this axis on glass, so the same canonical value would drag the
-        // wallpaper the wrong way and row navigation would feel inverted. Mirror the target for those
-        // rotations. (Dropping this when the state moved to roles is what inverted up/down.)
-        val sign = WallpaperCropMath.verticalGlassAxis(currentRotation()).sign
-        val target = if (sign < 0) 1f - canonical else canonical
+        // rowWorld is ALWAYS stored canonically (row 0 = HOME_REST_WORLD_Y). The rotation mirror is
+        // applied once, at push time in bitmapCamera(), together with the axis swap — mirroring the
+        // target here instead meant the stored value silently changed meaning per rotation: it starts
+        // canonical (0.9) but the first landscape target was mirrored (0.2), so the first row switch
+        // lurched -0.70 instead of -0.10 and every later one was fine. Keeping one representation and
+        // converting only at the boundary removes that whole class of bug.
+        val target = canonical
         val current = rowWorld
         vGlassAnimator?.cancel()
         if (kotlin.math.abs(current - target) < 0.001f) {
