@@ -16,10 +16,12 @@ import android.provider.MediaStore
 import android.util.Log
 import app.anchor.rotation.WallpaperStabilizationManager
 import app.lawnchair.BlankActivity
+import com.android.launcher3.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
 
 /**
  * Drives the "Use Anchor wallpaper" flow: pick an image, import it to app storage, then set Anchor's
@@ -117,6 +119,15 @@ object AnchorWallpaperPicker {
      */
     fun selectBundled(activity: Activity, rawResId: Int) {
         CoroutineScope(Dispatchers.Main).launch {
+            // Our own art gets the same check as a user's photo: the bundled images are 3072², which
+            // is short of what a large tablet needs, so they can be upscaled and lose parallax too.
+            val fit = withContext(Dispatchers.IO) {
+                WallpaperStabilizationManager.measureSourceFit(activity, rawResId)
+            }
+            if (fit != null && (fit.upscaleFactor > UPSCALE_WARN_THRESHOLD || fit.losesParallax)) {
+                if (!confirmSmallImage(activity, fit)) return@launch
+            }
+
             val ok = withContext(Dispatchers.IO) {
                 WallpaperStabilizationManager.importBundledWallpaper(activity, rawResId)
             }
@@ -144,6 +155,47 @@ object AnchorWallpaperPicker {
     }
 
     /**
+     * Above this, the upscale needed just to fill the screen is enough to look soft on a wallpaper.
+     * Below it we stay quiet — a hair of upscaling is not worth interrupting the user for.
+     */
+    private const val UPSCALE_WARN_THRESHOLD = 1.3f
+
+    /**
+     * Asks the user whether to use an image that will be upscaled and/or loses parallax. Returns true
+     * to proceed. Suspends until they answer, so the caller can simply bail on "pick another".
+     */
+    private suspend fun confirmSmallImage(
+        activity: Activity,
+        fit: WallpaperStabilizationManager.Companion.SourceFit,
+    ): Boolean = kotlin.coroutines.suspendCoroutine { cont ->
+        val res = activity.resources
+        val reasons = buildList {
+            if (fit.upscaleFactor > UPSCALE_WARN_THRESHOLD) {
+                add(res.getString(R.string.anchor_wallpaper_small_reason_upscale))
+            }
+            if (fit.losesParallax) {
+                add(res.getString(R.string.anchor_wallpaper_small_reason_parallax))
+            }
+        }
+        var resumed = false
+        fun finish(value: Boolean) {
+            if (!resumed) { resumed = true; cont.resume(value) }
+        }
+        android.app.AlertDialog.Builder(activity)
+            .setTitle(R.string.anchor_wallpaper_small_title)
+            .setMessage(
+                res.getString(
+                    R.string.anchor_wallpaper_small_message,
+                    reasons.joinToString("\n\n• ", prefix = "• "),
+                ),
+            )
+            .setPositiveButton(R.string.anchor_wallpaper_small_use_anyway) { _, _ -> finish(true) }
+            .setNegativeButton(R.string.anchor_wallpaper_small_pick_another) { _, _ -> finish(false) }
+            .setOnCancelListener { finish(false) }
+            .show()
+    }
+
+    /**
      * Full flow: pick an image → import to app storage → set Anchor's live wallpaper. Uses
      * [BlankActivity.startBlankActivityForResult] so it can be triggered from a plain context (e.g.
      * the home-screen long-press menu) without a pre-registered ActivityResultLauncher.
@@ -159,6 +211,18 @@ object AnchorWallpaperPicker {
                 return@launch
             }
             val uri = result.data?.data ?: return@launch
+
+            // Warn before committing to an image that is too small for this screen. We cap upscaling
+            // at "just fills the screen" (see decodeDownscaled), so a small image stays as sharp as it
+            // can be but has no pan room left — parallax goes quiet. Better to say so up front than to
+            // let the user wonder why their wallpaper looks soft or stopped moving.
+            val fit = withContext(Dispatchers.IO) {
+                WallpaperStabilizationManager.measureSourceFit(activity, uri)
+            }
+            if (fit != null && (fit.upscaleFactor > UPSCALE_WARN_THRESHOLD || fit.losesParallax)) {
+                if (!confirmSmallImage(activity, fit)) return@launch
+            }
+
             val ok = withContext(Dispatchers.IO) {
                 // Copy the image to app storage only; the LIVE wallpaper renders it. Don't also push it
                 // via setBitmap — the live wallpaper covers home+lock, so setBitmap would be redundant.

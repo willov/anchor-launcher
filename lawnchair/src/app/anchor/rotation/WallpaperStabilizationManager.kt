@@ -425,6 +425,63 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // slider's full travel, so clamping below it could only produce an uncovered wallpaper.
 
         /**
+         * How a picked image measures up against what this screen needs, so the picker can warn before
+         * committing to it. Uses the same numbers [decodeDownscaled] will apply, so the warning can
+         * never disagree with what actually happens.
+         *
+         * @param upscaleFactor how much the image must be blown up just to FILL the screen. 1 or less
+         *   means it covers natively. Above ~1.3 the softness is usually visible on a wallpaper.
+         * @param losesParallax true when the image is too small to leave any pan room at the current
+         *   parallax setting, so parallax will be inactive.
+         */
+        data class SourceFit(val upscaleFactor: Float, val losesParallax: Boolean)
+
+        /** Measures [uri] against this screen without decoding the pixels (bounds-only decode). */
+        fun measureSourceFit(context: Context, uri: android.net.Uri): SourceFit? {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            runCatching {
+                context.contentResolver.openInputStream(uri)?.use {
+                    BitmapFactory.decodeStream(it, null, bounds)
+                }
+            }.getOrNull()
+            return sourceFitFor(context, bounds.outWidth, bounds.outHeight)
+        }
+
+        /**
+         * [measureSourceFit] for a bundled raw resource. The bundled art is not automatically big
+         * enough either — the 3072² assets fall short of a large tablet's requirement — so the picker
+         * warns about our own images on the same terms as a user's photo.
+         */
+        fun measureSourceFit(context: Context, rawResId: Int): SourceFit? {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            runCatching {
+                context.resources.openRawResource(rawResId).use {
+                    BitmapFactory.decodeStream(it, null, bounds)
+                }
+            }.getOrNull()
+            return sourceFitFor(context, bounds.outWidth, bounds.outHeight)
+        }
+
+        private fun sourceFitFor(context: Context, w: Int, h: Int): SourceFit? {
+            if (w <= 0 || h <= 0) return null
+
+            val (sw, sh) = realScreenSize(context)
+            val screenMin = minOf(sw, sh)
+            val screenMax = maxOf(sw, sh)
+            val fillScale = maxOf(screenMin / w.toFloat(), screenMax / h.toFloat())
+
+            // Pan room left once the image is scaled to fill (mirrors decodeDownscaled's cap).
+            val scale = maxOf(fillScale, 1f)
+            val room = minOf(w * scale - screenMin, h * scale - screenMax)
+            val parallaxPercent = AnchorPreferences(context).wallpaperParallaxPercent
+            val wantsParallax = parallaxPercent > 0
+            return SourceFit(
+                upscaleFactor = fillScale,
+                losesParallax = wantsParallax && room < 1f,
+            )
+        }
+
+        /**
          * What fraction of the wallpaper image is visible on screen at the given [parallaxPercent],
          * as (widthFraction, heightFraction) in (0,1]. Because the engine crops 1:1 (one bitmap pixel
          * per screen pixel), the decoded bitmap size alone decides the framing — and that size is
