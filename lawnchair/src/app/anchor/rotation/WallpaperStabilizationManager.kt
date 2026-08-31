@@ -406,6 +406,16 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // the bitmap sizing only sets how many PIXELS a sweep spans, not how many sweeps there are.
         const val SWEEPS_TO_FILL_WORLD = 5
 
+        /** Extra parallax headroom baked into a rasterized SVG so small slider changes need no re-render. */
+        private const val SVG_HEADROOM = 1.5f
+
+        /**
+         * Ceiling on the rasterized SVG's edge length. Rendering needs a full ARGB buffer of this size
+         * and PNG must hold the whole bitmap to compress, so this bounds the transient spike inside the
+         * wallpaper process: 3072² ≈ 36MB, versus 81MB if a 30% slider were honoured literally.
+         */
+        private const val SVG_MAX_RENDER_PX = 3072
+
         // Live-wallpaper camera advance per full navigation SWEEP, in bitmap-space world units [0,1].
         // BOTH a horizontal sweep and a row switch advance their axis by this constant, so horizontal
         // and vertical motion are EQUAL. The camera is clamped to [0,1] (applyLiveCameraDelta /
@@ -729,11 +739,28 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
             val (sw, sh) = realScreenSize(context)
             val screenMin = minOf(sw, sh)
             val screenMax = maxOf(sw, sh)
-            val parallaxPercent = AnchorPreferences(context).wallpaperParallaxPercent
-            val travelPx = (parallaxPercent / 100f) * screenMin * SWEEPS_TO_FILL_WORLD
 
-            // The SVGs are square; render the larger per-axis requirement so both are satisfied.
-            val target = (maxOf(screenMin, screenMax) + travelPx).toInt().coerceAtLeast(1)
+            // Size for the CURRENT parallax setting, plus headroom for a moderate increase.
+            //
+            // Sizing to PARALLAX_PERCENT_MAX would make one render valid for every setting, but it is
+            // not free: rendering needs a full ARGB buffer of the target size, and PNG has to hold the
+            // whole bitmap to compress it. At max on this tablet that is 3720² = 53MB transient, inside
+            // the wallpaper process — the first one the system kills under memory pressure. (Measured:
+            // native heap spiked to 59MB during the render, settling back to 29MB.)
+            //
+            // A vector re-renders cheaply, so the better trade is to size for the current setting with
+            // some slack and re-render if the user moves the slider well beyond it. SVG_HEADROOM covers
+            // ordinary slider nudges without a re-render.
+            val parallaxPercent = AnchorPreferences(context).wallpaperParallaxPercent
+            val travelPx =
+                (parallaxPercent * SVG_HEADROOM / 100f) * screenMin * SWEEPS_TO_FILL_WORLD
+
+            // The SVGs are square; render the larger per-axis requirement so both are satisfied. Capped
+            // so the transient render buffer stays bounded no matter how high the slider goes — at the
+            // cap the wallpaper simply pans over slightly fewer source pixels, which is invisible,
+            // whereas an unbounded buffer risks the wallpaper process being killed mid-render.
+            val target = (maxOf(screenMin, screenMax) + travelPx).toInt()
+                .coerceIn(1, SVG_MAX_RENDER_PX)
 
             val svg = context.resources.openRawResource(rawResId).use { input ->
                 com.caverock.androidsvg.SVG.getFromInputStream(input)
