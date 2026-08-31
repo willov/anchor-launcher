@@ -76,6 +76,7 @@ import com.patrykmichalik.opto.core.setBlocking
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 object HomeScreenRoutes {
     const val GRID = "grid"
@@ -266,6 +267,26 @@ fun HomeScreenPreferences(
                             step = 1,
                             showUnit = "%",
                         )
+                        // Show the zoom cost of the current setting, live. Parallax needs pan room and
+                        // the engine crops 1:1, so more parallax = a more zoomed-in wallpaper. That
+                        // trade used to be invisible: a user who disliked the zoom had no way to know
+                        // this slider was the control for it.
+                        val visible = remember(parallax) {
+                            app.anchor.rotation.WallpaperStabilizationManager
+                                .visibleFractionFor(context, parallax)
+                        }
+                        Text(
+                            text = stringResource(
+                                id = R.string.anchor_wallpaper_parallax_zoom_readout,
+                                (visible.second * 100).roundToInt(),
+                            ),
+                            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = androidx.compose.ui.Modifier.padding(
+                                start = 16.dp,
+                                end = 16.dp,
+                            ),
+                        )
                         Text(
                             text = stringResource(id = R.string.anchor_wallpaper_parallax_description),
                             style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
@@ -273,6 +294,7 @@ fun HomeScreenPreferences(
                             modifier = androidx.compose.ui.Modifier.padding(
                                 start = 16.dp,
                                 end = 16.dp,
+                                top = 4.dp,
                                 bottom = 12.dp,
                             ),
                         )

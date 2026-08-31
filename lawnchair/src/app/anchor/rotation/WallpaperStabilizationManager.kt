@@ -425,6 +425,24 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // slider's full travel, so clamping below it could only produce an uncovered wallpaper.
 
         /**
+         * What fraction of the wallpaper image is visible on screen at the given [parallaxPercent],
+         * as (widthFraction, heightFraction) in (0,1]. Because the engine crops 1:1 (one bitmap pixel
+         * per screen pixel), the decoded bitmap size alone decides the framing — and that size is
+         * (crop + parallax travel) per axis, exactly as [decodeDownscaled] computes it. So more
+         * parallax literally means a more zoomed-in wallpaper.
+         *
+         * Exposed so the settings slider can show the user that trade live instead of hiding it; it
+         * shares this one formula with the decoder so the two can never disagree.
+         */
+        fun visibleFractionFor(context: Context, parallaxPercent: Int): Pair<Float, Float> {
+            val (sw, sh) = realScreenSize(context)
+            val screenMin = minOf(sw, sh)
+            val screenMax = maxOf(sw, sh)
+            val travelPx = (parallaxPercent / 100f) * screenMin * SWEEPS_TO_FILL_WORLD
+            return (screenMin / (screenMin + travelPx)) to (screenMax / (screenMax + travelPx))
+        }
+
+        /**
          * The FULL display size (including the status/nav bar areas) — this is what the wallpaper crop
          * is computed against. `resources.displayMetrics` excludes the system bars on modern Android,
          * which would make the system-set wallpaper ~1–2 % off and read as a slight lock-screen zoom.
