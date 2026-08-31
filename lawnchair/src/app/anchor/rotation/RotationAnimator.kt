@@ -166,10 +166,14 @@ class RotationAnimator(private val launcher: LawnchairLauncher) {
         // Polling interval for isPageScrollSettled checks after rebind.
         private const val POLL_MS = 50L
         // Consecutive "settled" polls required before revealing. The workspace is hidden the whole
-        // time, so this only needs to bridge Launcher3's first rebind and its deferred second rebind
-        // (~200 ms). Each rebind restarts the poll, so 5×50ms = 250ms of stability is ample.
+        // time; each onWorkspaceRebound restarts the poll, so 5×50ms = 250ms of stability is ample.
         private const val STABLE_POLLS_NEEDED = 5
-        // Ultimate fallback if rebind never completes.
-        private const val SAFETY_REVEAL_TIMEOUT_MS = 1500L
+        // Ultimate fallback if the rebind never completes — the settle-poll (event-driven, reveals as
+        // soon as onWorkspaceRebound + isPageScrollSettled report done) is the NORMAL reveal path. This
+        // timer must comfortably OUTLAST even a slow model rebind: measured on device, Launcher3's own
+        // rebindCallbacks on rotation varies 600ms–2200ms (GC/IO/thread contention). The old 1500ms
+        // value fired MID-rebind on the slow rotations, dropping the mask so the still-rebinding grid
+        // flashed. 4000ms is a true last resort that never pre-empts a legitimate rebind.
+        private const val SAFETY_REVEAL_TIMEOUT_MS = 4000L
     }
 }

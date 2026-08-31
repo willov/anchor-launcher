@@ -308,6 +308,23 @@ public class InvariantDeviceProfile {
 
         dc.setPriorityListener(
                 (displayContext, info, flags) -> {
+                    // Anchor: a pure rotation is driven ONCE from the launcher's own
+                    // onConfigurationChanged (AnchorTransposeHook.onLauncherConfigurationChanged) with
+                    // the authoritative, correctly-ordered orientation. Running onConfigChanged HERE too
+                    // (from DisplayController, which fires ~75ms earlier with a stale launcher
+                    // orientation) caused a redundant second grid rebind — the rotation did the full
+                    // ~0.5s reload TWICE (0.5s→1.8s) and flashed the pre-transpose grid between them. So
+                    // when a rotation is involved, skip it here and let the launcher drive the single
+                    // rebind. Other (non-rotation) display changes still go through normally.
+                    boolean rotationOnly = (flags & CHANGE_ROTATION) != 0
+                            && (flags & (CHANGE_DENSITY | CHANGE_SUPPORTED_BOUNDS
+                                | CHANGE_NAVIGATION_MODE | CHANGE_TASKBAR_PINNING
+                                | CHANGE_DESKTOP_MODE)) == 0;
+                    if (rotationOnly
+                            && app.anchor.rotation.AnchorTransposeHook
+                                .launcherDrivesRotation(displayContext)) {
+                        return;
+                    }
                     if ((flags & (CHANGE_DENSITY | CHANGE_SUPPORTED_BOUNDS
                             | CHANGE_NAVIGATION_MODE | CHANGE_TASKBAR_PINNING
                             | CHANGE_DESKTOP_MODE | CHANGE_ROTATION)) != 0) {

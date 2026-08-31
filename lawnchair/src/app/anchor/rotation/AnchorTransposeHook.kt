@@ -112,6 +112,26 @@ object AnchorTransposeHook {
     }
 
     /**
+     * True when a rotation should be driven by the LAUNCHER's own onConfigurationChanged rather than by
+     * the DisplayController's CHANGE_ROTATION callback — which is whenever a launcher activity exists.
+     * The DisplayController path fires ~75ms earlier with a stale launcher orientation; letting it also
+     * run onConfigChanged produced a redundant SECOND full grid rebind per rotation (the ~0.5s reload
+     * ran twice → ~1.8s + a flash of the pre-transpose grid). Suppressing it there and letting the
+     * launcher drive the single rebind restores the fast, single-reload rotation.
+     *
+     * - Genuine rotation (auto / manual button): the launcher gets its own config change and drives the
+     *   one correct transpose+rebind. Skipping the DisplayController path avoids the wasted first rebind.
+     * - Other-app forced rotation (Tapo/YouTube, launcher backgrounded): the launcher window does not
+     *   rotate, so there is nothing to rebuild now; onResume/reconcileOnResume handles any real delta on
+     *   return. Skipping here is correct (and avoids the data-loss transpose entirely).
+     * - No launcher activity at all (cold start / headless): return false so the original
+     *   DisplayController-driven path still runs and builds the initial grid.
+     */
+    @JvmStatic
+    fun launcherDrivesRotation(context: Context): Boolean =
+        Launcher.ACTIVITY_TRACKER.getCreatedContext<Launcher>() is app.lawnchair.LawnchairLauncher
+
+    /**
      * Called at the START of [InvariantDeviceProfile.onConfigChanged], before initGrid().
      * At this point numColumns/numRows reflect the *previous* orientation state.
      */
