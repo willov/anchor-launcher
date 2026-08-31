@@ -6,6 +6,9 @@ All notable changes to Anchor Launcher will be documented here.
 
 ## [0.5.1] - 2026-08-31
 
+### Changed
+- **Wallpaper parallax reworked for a constant, even feel.** The background now moves the same distance on every swipe (no more jumping the whole way on the first swipe of a multi-page row), and a left/right swipe moves it the same amount as switching rows up/down. The strength slider is now an honest "how far the wallpaper moves per swipe" control (0–30%, default 15%), and about five swipes pan the full background before it eases to a stop. Uses less memory than before despite the larger pannable area.
+
 ### Fixed
 - **Icons could be permanently scrambled by other apps' rotation.** On a phone with auto-rotate off, opening an app that forces landscape internally (e.g. YouTube fullscreen, or the Tapo camera) and then returning home could silently reflow the home screen — icons compacted toward the top, bottom rows emptied — and it did not recover. The launcher was transposing its grid in response to *another app's* forced rotation, even though the home screen itself never rotates when auto-rotate is off. It now keys the transpose off the launcher window's own orientation, so other apps' rotations never touch your layout. (Rotating the launcher itself still keeps every icon at the same physical spot as before.)
 - **Rotation was slower and flashed the wrong layout briefly.** Fixing the bug above initially made the home screen rebuild twice per rotation (≈0.6s → ≈1.8s) and flash the pre-rotation grid before correcting. Rotation now rebuilds once, and the transition stays hidden until the new layout has fully settled — no flash, even when the rebuild is slow.
