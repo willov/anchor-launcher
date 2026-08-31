@@ -292,14 +292,48 @@ private fun loadThumb(
 ): Bitmap? {
     val key = "${entry.id}_${variant.suffix}"
     thumbCache[key]?.let { return it }
+    val resId = entry.rawResId(context, variant)
     return runCatching {
-        // inSampleSize=16 turns the ~3072px source into ~192px — ample for a small card half.
-        val opts = BitmapFactory.Options().apply { inSampleSize = 16 }
-        context.resources.openRawResource(entry.rawResId(context, variant)).use {
-            BitmapFactory.decodeStream(it, null, opts)
+        // The vector wallpapers (blobs, drool) ship as SVG, which BitmapFactory cannot decode — it
+        // returns null and the card renders blank. Render those to a small bitmap instead.
+        if (isSvgRaw(context, resId)) {
+            renderSvgThumb(context, resId, THUMB_PX)
+        } else {
+            // inSampleSize=16 turns the ~3072px source into ~192px — ample for a small card half.
+            val opts = BitmapFactory.Options().apply { inSampleSize = 16 }
+            context.resources.openRawResource(resId).use {
+                BitmapFactory.decodeStream(it, null, opts)
+            }
         }
     }.getOrNull()?.also { thumbCache[key] = it }
 }
+
+/** Roughly what inSampleSize=16 yields for the raster assets, so both kinds match visually. */
+private const val THUMB_PX = 192
+
+private fun isSvgRaw(context: android.content.Context, resId: Int): Boolean = runCatching {
+    context.resources.openRawResource(resId).use { input ->
+        val head = ByteArray(512)
+        val n = input.read(head)
+        if (n <= 0) return false
+        val text = String(head, 0, n, Charsets.UTF_8)
+        text.contains("<svg") || text.contains("<?xml")
+    }
+}.getOrDefault(false)
+
+private fun renderSvgThumb(context: android.content.Context, resId: Int, px: Int): Bitmap? =
+    runCatching {
+        val svg = context.resources.openRawResource(resId).use {
+            com.caverock.androidsvg.SVG.getFromInputStream(it)
+        }
+        val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bmp)
+        val docW = if (svg.documentWidth > 0f) svg.documentWidth else px.toFloat()
+        val scale = px / docW
+        canvas.scale(scale, scale)
+        svg.renderToCanvas(canvas)
+        bmp
+    }.getOrNull()
 
 @Composable
 private fun PickYourOwnThumbnail(modifier: Modifier = Modifier) {

@@ -414,6 +414,9 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
             toRow = toRow,
             totalRows = rowScreenIds.size,
             durationMs = PHASE_MS * 2,
+            // Pages in the row we are moving TO, so the wallpaper can size a row step to match what a
+            // page swipe on that row moves (see WallpaperStabilizationManager.onRowTransition).
+            pagesInTargetRow = pagesInRow(toRow),
         )
         workspace.animate()
             .translationY(exitTranslation)
@@ -484,6 +487,16 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
      * Called after a drag ends (Launcher3 may have committed a new empty screen) and when
      * [onWorkspacePageSettled] encounters an unrecognized screen ID.
      */
+    /**
+     * How many pages the given row has. Row 0 implicitly owns every screen not claimed by a higher
+     * row, so it is counted by subtraction rather than from [rowScreenIds].
+     */
+    fun pagesInRow(rowIndex: Int): Int {
+        if (rowIndex in 1 until rowScreenIds.size) return rowScreenIds[rowIndex].size
+        val claimed = (1 until rowScreenIds.size).sumOf { rowScreenIds[it].size }
+        return (launcher.workspace.pageCount - claimed).coerceAtLeast(1)
+    }
+
     private fun adoptNewScreens() {
         val workspace   = launcher.workspace
         val screenOrder = workspace.screenOrder

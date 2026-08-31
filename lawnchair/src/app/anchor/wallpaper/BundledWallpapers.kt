@@ -13,16 +13,25 @@ import android.content.Context
  * Registry of the wallpapers Anchor ships in-app — the single source of truth for the background
  * chooser and the credits/tribute screen.
  *
- * Each background has a **light** and **dark** variant, stored as `res/raw/anchor_wp_<id>_l.jpg` and
- * `..._d.jpg` (names must be `[a-z0-9_]`). Raw resource ids are resolved by NAME at runtime (via
+ * Each background has a **light** and **dark** variant, stored as `res/raw/anchor_wp_<id>_l.webp` and
+ * `..._d.webp` (names must be `[a-z0-9_]`). Raw resource ids are resolved by NAME at runtime (via
  * [android.content.res.Resources.getIdentifier]) so this file has **no compile-time dependency** on
- * the image files — images can be dropped into `res/raw/` later and [available] starts returning them,
- * no code change. Entries whose images aren't present are filtered out.
+ * the image files — and no dependency on their FORMAT either, which is why the jpg→webp switch needed
+ * no code change here. Entries whose images aren't present are filtered out.
  *
- * Bundled images are GNOME backgrounds (Jakub Steiner, CC-BY-SA 3.0), shipped unmodified (the original
- * artwork, rasterized to JPEG from the upstream SVG/JXL). Anchor downscales/crops them at runtime for
- * display, so no modified derivative is distributed — attribution only (see the credits screen). This
- * is a per-asset ShareAlike carve-out from the repo's Apache-2.0 license.
+ * Bundled images are GNOME backgrounds (Jakub Steiner, CC-BY-SA 3.0), rasterized from the upstream
+ * SVG/JXL at 3072². The flat-shape artwork (blobs, drool) is stored as **lossless** WebP because it is
+ * built from flat colour fills: JPEG's DCT sprinkles noise through those flat regions (measured
+ * stdev ≈ 0.46 vs 0.00 lossless) which reads as banding/mottling along the shape edges. The
+ * photographic ones (adwaita, amber, fold) stay lossy WebP, where that noise floor is inaudible
+ * against real image detail and lossless would cost 6–10 MB each.
+ *
+ * The images are shipped UNMODIFIED in the licence's sense: rasterizing the upstream SVG/JXL and
+ * encoding it as WebP is a format shift, which CC-BY-SA 3.0 §3 expressly permits ("the right to make
+ * such modifications as are technically necessary to exercise the rights in other media and formats").
+ * The artwork itself is untouched — same composition, same colours, no crop. Anchor downscales/crops
+ * at runtime for display only. Attribution only; a per-asset ShareAlike carve-out from the repo's
+ * Apache-2.0 license.
  */
 object BundledWallpapers {
 

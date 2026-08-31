@@ -191,6 +191,11 @@ class LawnchairApp : LauncherApplication() {
         // isPageScrollsInitialized() is still false for that page when the user first
         // navigates to it, causing scrollTo() to bail silently and both rows to appear
         // linked to the same page.
+        // Parallax is paid for in zoom (the bitmap is sized to crop + travel and the engine crops
+        // 1:1), so an over-large value renders the wallpaper heavily cropped — 15 left a 1200×1920
+        // tablet showing only 68% of it. Re-assert the sane band on launch; no migration flag, since
+        // there are no shipped users to migrate.
+        AnchorPreferences(this).clampParallaxToSaneRange()
         if (!migrations.getBoolean("v2_row_screens_init", false)) {
             val anchorPrefs = AnchorPreferences(this)
             for (r in 1 until anchorPrefs.rowCount) {

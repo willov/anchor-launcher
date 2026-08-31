@@ -76,6 +76,7 @@ import com.patrykmichalik.opto.core.setBlocking
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 object HomeScreenRoutes {
     const val GRID = "grid"
@@ -266,8 +267,19 @@ fun HomeScreenPreferences(
                             step = 1,
                             showUnit = "%",
                         )
+                        // The description carries the live zoom figure inline. Parallax needs pan room
+                        // and the engine crops 1:1, so more parallax = a more zoomed-in wallpaper —
+                        // a trade that used to be invisible, leaving a user who disliked the zoom no
+                        // way to know this slider was the control for it.
+                        val visible = remember(parallax) {
+                            app.anchor.rotation.WallpaperStabilizationManager
+                                .visibleFractionFor(context, parallax)
+                        }
                         Text(
-                            text = stringResource(id = R.string.anchor_wallpaper_parallax_description),
+                            text = stringResource(
+                                id = R.string.anchor_wallpaper_parallax_description,
+                                (visible.second * 100).roundToInt(),
+                            ),
                             style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                             color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = androidx.compose.ui.Modifier.padding(

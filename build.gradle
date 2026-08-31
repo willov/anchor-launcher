@@ -497,6 +497,11 @@ dependencies {
     implementation libs.material.motion.compose
     implementation libs.kdrag0n.colorkt
     implementation libs.coil.compose
+    // SVG decoding for the vector bundled wallpapers (see WallpaperStabilizationManager
+    // .rasterizeSvgTo). androidsvg is declared explicitly because we call it directly rather than
+    // only through Coil's decoder — a transitive dep is on the runtime, not the compile, classpath.
+    implementation libs.coil.svg
+    implementation libs.androidsvg
     implementation libs.xdrop.fuzzywuzzy
 
     implementation libs.bundles.opto
