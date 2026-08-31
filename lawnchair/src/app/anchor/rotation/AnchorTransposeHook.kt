@@ -334,6 +334,25 @@ object AnchorTransposeHook {
     fun getLastRotation(context: Context): Int =
         prefs(context).getInt(KEY_LAST_ROTATION, Surface.ROTATION_0)
 
+    /**
+     * Portrait-canonical grid dimensions as (columns, rows), or null if no initGrid has run yet this
+     * process.
+     *
+     * Callers that need the TRUE portrait grid must use this rather than reading
+     * `idp.numColumns`/`idp.numRows`: those are swapped to N×M by [afterInitGrid] whenever the
+     * launcher is in landscape, so a caller reading them in landscape gets the transposed pair. Any
+     * coordinate math done against the swapped dims produces a wrong mapping — for the
+     * portrait-canonical migration that would mean reverse-mapping the whole workspace through the
+     * wrong grid and scrambling every position.
+     */
+    @JvmStatic
+    fun getPortraitGrid(): Pair<Int, Int>? =
+        if (portraitColsCache > 0 && portraitRowsCache > 0) {
+            Pair(portraitColsCache, portraitRowsCache)
+        } else {
+            null
+        }
+
     private fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 }

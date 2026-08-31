@@ -164,6 +164,31 @@ public class ModelDbController {
         databaseHelper.mHotseatRestoreTableExists = tableExists(
                 databaseHelper.getReadableDatabase(), Favorites.HYBRID_HOTSEAT_BACKUP_TABLE);
 
+        // Anchor: flip the workspace to portrait-canonical coordinates exactly once. Historically
+        // the DB stored *display* coordinates and was rewritten on every rotation; the pre-computed
+        // transpose stores one canonical frame and derives display coordinates at read time. This
+        // runs before any read of the table, is marker-gated (so it is a cheap no-op on every later
+        // open), and is atomic with its own marker so it can never leave coordinates in one frame
+        // while the marker claims another. Skipped entirely for migration helper instances, which
+        // operate on a scratch copy rather than the live workspace.
+        if (!forMigration) {
+            // MUST use the portrait-canonical dims, never mIdp.numColumns/numRows: those are swapped
+            // to N×M while the launcher is in landscape, and reverse-mapping the workspace through a
+            // transposed grid would scramble every position. getPortraitGrid() returns null before
+            // the first initGrid, in which case the migration is deferred to the next open rather
+            // than run against a guess.
+            kotlin.Pair<Integer, Integer> portraitGrid =
+                    app.anchor.rotation.AnchorTransposeHook.getPortraitGrid();
+            if (portraitGrid != null) {
+                app.anchor.rotation.PortraitCanonicalMigration.migrateIfNeeded(
+                        mContext,
+                        databaseHelper.getWritableDatabase(),
+                        app.anchor.rotation.AnchorTransposeHook.getLastRotation(mContext),
+                        portraitGrid.getFirst(),
+                        portraitGrid.getSecond());
+            }
+        }
+
         databaseHelper.initIds();
         return databaseHelper;
     }
