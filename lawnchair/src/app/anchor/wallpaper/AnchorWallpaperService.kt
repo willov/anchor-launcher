@@ -11,6 +11,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.service.wallpaper.WallpaperService
 import android.util.Log
@@ -97,7 +98,12 @@ class AnchorWallpaperService : WallpaperService() {
     private inner class AnchorEngine : WallpaperService.Engine() {
 
         private var bitmap: Bitmap? = null
-        private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+        // DITHER_FLAG as well as FILTER_BITMAP_FLAG: if the wallpaper surface itself is a 16-bit
+        // format (some devices, notably the Samsung/Mali tablet, do not dither on their own), this
+        // smooths the quantisation of these smooth-gradient backgrounds into the surface instead of
+        // letting it band. Harmless when the surface is already 32-bit. See the decode-config note in
+        // WallpaperStabilizationManager.decodeDownscaled.
+        private val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
         private val srcRect = Rect()
         private val dstRect = Rect()
 
@@ -131,6 +137,12 @@ class AnchorWallpaperService : WallpaperService() {
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
             setTouchEventsEnabled(false)
+            // Ask for a 32-bit surface explicitly. A wallpaper engine otherwise inherits whatever the
+            // device defaults to, and a 16-bit (565) surface would re-quantise these smooth-gradient
+            // backgrounds into visible bands no matter how good the source bitmap is — which is the
+            // most likely reason the Samsung/Mali tablet banded while the Pixel (same code, same file)
+            // did not. Requesting RGBA_8888 makes the whole path 8-bit-per-channel end to end.
+            surfaceHolder.setFormat(PixelFormat.RGBA_8888)
             refreshParallaxPercent()
             reloadBitmapIfChanged()
         }

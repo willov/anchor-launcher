@@ -403,7 +403,7 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // SOURCE OF TRUTH shared with the engine: the slider is expressed as per-swipe drift, and the
         // engine multiplies it by this to get the total world travel (effTravel). At 5, ~5 swipes reach
         // the edge — the design target of "~5-6 swipes, then a clean clamp". Independent of bitmap size:
-        // COVER_FACTOR only sets how many PIXELS a sweep spans, not how many sweeps there are.
+        // the bitmap sizing only sets how many PIXELS a sweep spans, not how many sweeps there are.
         const val SWEEPS_TO_FILL_WORLD = 5
 
         // Live-wallpaper camera advance per full navigation SWEEP, in bitmap-space world units [0,1].
@@ -417,18 +417,12 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // keeps swiping past the last sweep just stays pinned at the world edge — a clean stop, no jump.
         private const val LIVE_STEP_PER_SWEEP = 1f / SWEEPS_TO_FILL_WORLD
 
-        // The same bitmap is rendered in BOTH orientations (portrait-canonical), so to cover the
-        // screen without stretching it must be at least the screen's LARGER side in both dimensions.
-        // COVER_FACTOR adds headroom for parallax to pan into = the bitmap pan room the engine's
-        // effTravel is capped by. At 1.7 the equal-axis room is ~0.7×screenMax (~1700px on a 1080×2424
-        // phone), which comfortably contains the full parallax% ceiling (max 30% × SWEEPS_TO_FILL_WORLD
-        // × shortSide ≈ 1620px), so the SLIDER — not the bitmap — is the binding cap across its WHOLE
-        // range (no dead zone at the top). The 5-sweep travel budget ([LIVE_STEP_PER_SWEEP]) is
-        // independent of this. Decoded RGB_565 (opaque background, no alpha needed) so this larger world
-        // still costs LESS memory than the old 1.4× ARGB_8888 (~33MB vs ~46MB).
-        // (Larger = more parallax headroom but more memory / a bigger per-frame blit; HARD_CAP bounds it.)
-        private const val COVER_FACTOR = 1.7f
-        private const val HARD_CAP_FACTOR = 2
+        // The same bitmap is rendered in BOTH orientations (portrait-canonical), so to cover the screen
+        // without stretching it must be at least the screen's LARGER side in both dimensions. The
+        // bitmap target is now derived per-device in [decodeDownscaled] as (crop + parallax travel)
+        // per axis rather than a fixed multiple of screenMax — see the long note there. There is no
+        // separate memory cap: the target is already the minimum that covers the screen and the
+        // slider's full travel, so clamping below it could only produce an uncovered wallpaper.
 
         /**
          * The FULL display size (including the status/nav bar areas) — this is what the wallpaper crop
@@ -455,36 +449,100 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         fun decodeDownscaled(context: Context, path: String): Bitmap? {
             val (sw, sh) = realScreenSize(context)
             val screenMax = maxOf(sw, sh)
-            val coverTarget = (screenMax * COVER_FACTOR).toInt()   // smaller side should reach this
-            val hardCap = screenMax * HARD_CAP_FACTOR              // larger side at most this
-
+            val screenMin = minOf(sw, sh)
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(path, bounds)
             val srcW = bounds.outWidth
             val srcH = bounds.outHeight
             if (srcW <= 0 || srcH <= 0) return BitmapFactory.decodeFile(path)
 
-            val srcMin = minOf(srcW, srcH)
-            val srcMax = maxOf(srcW, srcH)
-            // Downscale toward coverage (only if it wouldn't upscale), then clamp the long side.
-            var scale = if (srcMin > coverTarget) coverTarget.toFloat() / srcMin else 1f
-            if (srcMax * scale > hardCap) scale = hardCap.toFloat() / srcMax
+            // How big does the bitmap actually need to be?
+            //
+            // The engine crops srcW=rawW, srcH=rawH — ONE BITMAP PIXEL PER SCREEN PIXEL, blitted to a
+            // dest of the same size, so there is NO scaling at draw time. That means the decoded bitmap
+            // size ALONE decides how much of the artwork you see: a 3072² bitmap on a 1200×1920 tablet
+            // shows only 39%×62% of the image. That is the "too zoomed" report.
+            //
+            // The crop is ALWAYS portrait-canonical: the engine takes rawW×rawH = (screenMin×screenMax)
+            // of the bitmap and counter-ROTATES it onto the panel. It never selects a landscape-shaped
+            // region — see AnchorWallpaperService.drawFrame, where rawW=min(w,h) and rawH=max(w,h)
+            // regardless of rotation. So the bitmap does NOT need to be square; it needs to contain a
+            // screenMin×screenMax rect plus pan room on each axis. (Sizing it square was an earlier
+            // mistake here that threw away ~26% of the horizontal framing and ~8MB for nothing.)
+            //
+            // This mirrors what AOSP does in InvariantDeviceProfile.setWallpaperDimension: it walks
+            // every supported bounds and takes a PER-AXIS max, arriving at a landscape wallpaper
+            // (2880×1920 on this tablet) rather than a square one. Same principle, different crop model:
+            // AOSP adds parallax room on X only because stock launchers pan only horizontally, whereas
+            // Anchor's 2D navigation pans both axes, so we add the (equal) travel budget to each.
+            //
+            // The old code multiplied screenMax by a fixed COVER_FACTOR and then only ever downscaled
+            // when srcMin EXCEEDED it (`if (srcMin > coverTarget)`). A 3072² source sits under that
+            // threshold on both test devices (3072 < 3264 and < 4120), so it was never scaled at all
+            // and the full 3072² got cropped 1:1 — that is the "too zoomed" bug. We now scale TOWARD
+            // the target, so framing is a property of the DEVICE and the parallax setting, not an
+            // accident of how big the source file happens to be.
+            val parallaxPercent = AnchorPreferences(context).wallpaperParallaxPercent
+            val travelPx = (parallaxPercent / 100f) * screenMin * SWEEPS_TO_FILL_WORLD
+
+            // Required bitmap extent per axis: the crop plus that axis's pan room. Equal travel on both
+            // axes keeps horizontal and vertical parallax symmetric (the engine's `travel = min(roomX,
+            // roomY)` budget assumes this).
+            val requiredW = screenMin + travelPx
+            val requiredH = screenMax + travelPx
+
+            // COVER both requirements: scale so BOTH axes reach their target, i.e. the larger of the two
+            // per-axis ratios. Upscaling a small source is intentional — it keeps framing consistent
+            // across devices rather than depending on the source file's resolution.
+            val coverScale = maxOf(requiredW / srcW.toFloat(), requiredH / srcH.toFloat())
+
+            // Coverage always wins over the memory cap: an uncovered wallpaper (visible gap / stretch)
+            // is worse than the memory it saves. So the cap is applied only to the extent that it does
+            // not pull either axis under its requirement — for a very elongated source (a 9:20 photo)
+            // that means the long side is allowed past the cap rather than starving the short one.
+            val scale = coverScale
 
             val targetW = (srcW * scale).toInt().coerceAtLeast(1)
             var sample = 1
             while (srcW / (sample * 2) >= targetW) sample *= 2
-            // RGB_565: the wallpaper is an OPAQUE background (no alpha needed), so 16-bit halves the
-            // bitmap memory vs ARGB_8888 — this is what lets the larger COVER_FACTOR world cost LESS RAM
-            // than before. createScaledBitmap below preserves this config.
+            // ARGB_8888, NOT RGB_565.
+            //
+            // 565 was chosen to halve bitmap memory on the assumption that an opaque background needs no
+            // alpha and 16 bits is "enough" for a wallpaper. It is not: these GNOME backgrounds are broad
+            // SMOOTH GRADIENTS, which is the single worst case for 16-bit colour. 565 gives green only 64
+            // levels and red/blue only 32, so a gradient that ramps over hundreds of screen pixels gets
+            // quantised into a handful of visibly stepped bands — "the shading is incorrect".
+            //
+            // Why this was previously mis-ruled-out: 565→888 expansion does NOT truncate (which would
+            // leave R/B on multiples of 8). Android/the GPU BIT-REPLICATE the high bits into the low bits
+            // (r8 = r5<<3 | r5>>2), producing values like 41 and 57 that are not multiples of 8 — so a
+            // "R%8" test on a screenshot looks clean even for a genuinely 565 source. The surviving
+            // fingerprint is GREEN: g8 = g6<<2 | g6>>4 is always ≡0 (mod 4). Measured on-device in
+            // wallpaper-only regions: G%4 ≈ 0.72 vs 0.02 in the source — a 33× enrichment.
+            //
+            // The tablet shows it far worse than the Pixel because its Mali GPU composites the 565 buffer
+            // without dithering, while the Pixel dithers and smears the steps. Same code, same file, and
+            // the tablet's squarer viewport also crops tighter, magnifying each band.
+            //
+            // Cost: 18MB → 36MB for the 3072² world. That is the correct trade for the app's single
+            // most visible surface, and is what the system's own ImageWallpaper holds anyway.
+            // inDither additionally smooths any residual quantisation on the decode path.
+            // createScaledBitmap below preserves this config.
             val decoded = BitmapFactory.decodeFile(
                 path,
                 BitmapFactory.Options().apply {
                     inSampleSize = sample
-                    inPreferredConfig = Bitmap.Config.RGB_565
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                    inDither = true
                 },
             ) ?: return null
 
-            if (decoded.width <= targetW) return decoded
+            // Resize whenever the decode landed on a different size than the target — in EITHER
+            // direction. (This used to early-return on `decoded.width <= targetW`, i.e. downscale-only,
+            // which combined with the old floor-only coverTarget test to leave a 3072² source completely
+            // unscaled. inSampleSize is powers-of-2 only, so this exact-scale step is also what lands us
+            // on the target rather than the nearest power of two.)
+            if (decoded.width == targetW) return decoded
             val finalScale = targetW.toFloat() / decoded.width
             val out = Bitmap.createScaledBitmap(
                 decoded, targetW, (decoded.height * finalScale).toInt().coerceAtLeast(1), true,

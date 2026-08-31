@@ -229,8 +229,8 @@ class AnchorPreferences(context: Context) {
         // number the slider shows — no hidden division. The engine multiplies it by
         // SWEEPS_TO_FILL_WORLD (5) for the total pannable window. On a 1080-wide phone: 10% ≈ 108px/swipe
         // (gentle), 30% ≈ 324px/swipe (dramatic). Default 15 (~162px/swipe) is a strong, clearly-visible
-        // baseline. Bitmap pan room (COVER_FACTOR 1.7 ≈ 1700px) comfortably contains 5×max (~1620px), so
-        // the slider — not the bitmap — is the binding cap across the whole range (no dead top zone).
+        // baseline. The bitmap is now sized to exactly (screen long side + this slider's travel), so the
+        // slider is always the binding cap and no bitmap pixels are wasted on unreachable headroom.
         const val PARALLAX_PERCENT_MIN = 0
         const val PARALLAX_PERCENT_MAX = 30
         const val PARALLAX_PERCENT_DEFAULT = 15
