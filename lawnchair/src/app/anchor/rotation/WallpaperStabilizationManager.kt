@@ -224,8 +224,12 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
      * never touch the horizontal one. You only stop at the true edge of the world (worldX clamped to
      * [0,1]).
      *
-     * Each page-step moves worldX by [LIVE_HORIZONTAL_SWEEP_WORLD] (a SMALL fraction of the world) so
-     * many page-steps across rows accumulate smoothly before reaching the edge.
+     * EQUAL horizontal/vertical feel: one PAGE-step moves worldX by the same amount one ROW-step moves
+     * worldY ([LIVE_STEP_WORLD]). The incoming `offset` is row-relative across the WHOLE row's page
+     * range, so one page-step is a delta of 1/(pagesInRow−1); we scale by (pagesInRow−1) to convert that
+     * back into "one step = LIVE_STEP_WORLD" regardless of how many pages the row has. Without this
+     * normalization a page swipe moved the wallpaper far less than a row switch (and less still on
+     * longer rows), which read as "lots of vertical shift, little horizontal".
      *
      * Rotation stays pixel-perfect: at rest (no active swipe) there is no delta, so a pure rotation
      * leaves worldX/worldY untouched → identical crop. The glass→bitmap axis+sign map is applied to
@@ -243,7 +247,12 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         val delta = offset - lastScrollOffset
         if (delta == 0f) return
         lastScrollOffset = offset
-        val step = delta * LIVE_HORIZONTAL_SWEEP_WORLD
+        // pages in the active row; a single page-step is a row-relative delta of 1/(pages-1).
+        val pagesInRow = (launcher.workspace.allowedPageEnd - launcher.workspace.allowedPageStart + 1)
+            .coerceAtLeast(2)
+        // Scale so one page-step (delta = 1/(pages-1)) contributes exactly LIVE_STEP_WORLD to worldX —
+        // matching one row-step's contribution to worldY, for equal horizontal/vertical movement.
+        val step = delta * (pagesInRow - 1) * LIVE_STEP_WORLD
         val m = WallpaperCropMath.horizontalGlassAxis(currentRotation())
         applyLiveCameraDelta(m, step)
         pushLiveOffsets()
@@ -284,7 +293,7 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // Canonical vertical-world target (portrait-Y sense): row 0 rests at HOME_REST_WORLD_Y
         // (bottom); each row up subtracts one step, clamped to the top. Then map to the CURRENT
         // rotation's world axis + sign.
-        val canonical = (HOME_REST_WORLD_Y - toRow * LIVE_ROW_STEP_WORLD).coerceIn(0f, HOME_REST_WORLD_Y)
+        val canonical = (HOME_REST_WORLD_Y - toRow * LIVE_STEP_WORLD).coerceIn(0f, HOME_REST_WORLD_Y)
         val m = WallpaperCropMath.verticalGlassAxis(currentRotation())
         val target = if (m.sign < 0) 1f - canonical else canonical
         val current = when (m.axis) {
@@ -387,23 +396,30 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         private const val ROW_MARGIN = 0.1f
         private const val HOME_REST_WORLD_Y = 1f - ROW_MARGIN
 
-        // Live-wallpaper camera travel, in bitmap-space world units [0,1]. worldX/worldY ∈ [0,1] map to
-        // the FULL parallax budget the engine allows (AnchorPreferences.wallpaperParallaxPercent, 0 =
-        // off). The horizontal axis ACCUMULATES swipe deltas (onScrollOffset), so these constants set
-        // how much of the world one navigation STEP consumes — i.e. how many steps accumulate before you
-        // reach the world edge:
-        //   LIVE_HORIZONTAL_SWEEP_WORLD: worldX added per FULL row page-sweep (offset 0→1 = one page
-        //     step in a 2-page row). At 0.25, ~4 page-steps fill the world, so movement ACCUMULATES
-        //     across rows — "up, right, down, right" lands twice as far right as a single "right".
-        //   LIVE_ROW_STEP_WORLD: worldY added per row switch (kept larger; few rows exist).
-        private const val LIVE_HORIZONTAL_SWEEP_WORLD = 0.25f
-        private const val LIVE_ROW_STEP_WORLD = 0.5f
+        // Live-wallpaper camera travel per navigation STEP, in bitmap-space world units [0,1].
+        // worldX/worldY ∈ [0,1] map to the FULL parallax budget the engine allows
+        // (AnchorPreferences.wallpaperParallaxPercent, 0 = off). ONE step — a single PAGE swipe OR a
+        // single ROW switch — moves its axis by this much, so horizontal and vertical feel EQUAL
+        // (onScrollOffset normalizes by page count so a page-step always equals one step regardless of
+        // how many pages the row has).
+        //
+        // At 1.0, one swipe pans the ENTIRE parallax budget, so the % slider maps directly to
+        // "how far the wallpaper moves per swipe" — the intuitive control. (At the old 0.25 the slider's
+        // effect was quartered and accumulated across ~4 swipes, so the low/high end of the slider both
+        // read as a tiny per-swipe shift and the slider felt inert. The trade-off: drift no longer
+        // ACCUMULATES across rows — you reach the world edge in one swipe — but per-swipe feel is now
+        // clearly controlled by the slider, which is what the setting is for.)
+        private const val LIVE_STEP_WORLD = 1.0f
 
         // The same bitmap is rendered in BOTH orientations (portrait-canonical), so to cover the
         // screen without stretching it must be at least the screen's LARGER side in both dimensions.
-        // COVER_FACTOR adds a little headroom for parallax; HARD_CAP bounds memory on big sources.
-        // (Larger = more parallax room but more memory → swipe lag; ~1.1×screen is a good balance.)
-        private const val COVER_FACTOR = 1.1f
+        // COVER_FACTOR adds headroom for parallax to pan into. This is the REAL cap on wallpaper drift:
+        // the engine's effTravel = min(bitmap pan room, parallax%), and the pan room = (bitmap side −
+        // screen side). At 1.1 the room (esp. on the short axis) was near-zero, so the parallax %
+        // slider had almost no effect — the bitmap simply wasn't big enough to slide within. 1.4 gives
+        // ~40% of the long side of headroom so even the max 35% parallax has room to travel. (Larger =
+        // more parallax room but more memory / a bigger per-frame blit; HARD_CAP still bounds it.)
+        private const val COVER_FACTOR = 1.4f
         private const val HARD_CAP_FACTOR = 2
 
         /**

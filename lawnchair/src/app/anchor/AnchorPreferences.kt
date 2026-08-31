@@ -222,9 +222,11 @@ class AnchorPreferences(context: Context) {
         const val BOTTOM_EDGE_ZONE_PERCENT_MAX = 20
         const val BOTTOM_EDGE_ZONE_PERCENT_DEFAULT = 10
 
-        // Wallpaper parallax strength (percent of screen short side per navigation step).
+        // Wallpaper parallax strength (percent of screen short side per navigation step). This caps the
+        // TOTAL pixel drift the wallpaper can travel; the default was raised (15→22) because the drift
+        // felt too subtle, and the max lifted (25→35) to leave headroom above the new default.
         const val PARALLAX_PERCENT_MIN = 0
-        const val PARALLAX_PERCENT_MAX = 25
-        const val PARALLAX_PERCENT_DEFAULT = 15
+        const val PARALLAX_PERCENT_MAX = 35
+        const val PARALLAX_PERCENT_DEFAULT = 22
     }
 }
