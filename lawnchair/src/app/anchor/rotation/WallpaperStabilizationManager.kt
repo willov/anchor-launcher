@@ -510,9 +510,21 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
             val requiredH = screenMax + travelPx
 
             // COVER both requirements: scale so BOTH axes reach their target, i.e. the larger of the two
-            // per-axis ratios. Upscaling a small source is intentional — it keeps framing consistent
-            // across devices rather than depending on the source file's resolution.
-            val coverScale = maxOf(requiredW / srcW.toFloat(), requiredH / srcH.toFloat())
+            // per-axis ratios.
+            val idealScale = maxOf(requiredW / srcW.toFloat(), requiredH / srcH.toFloat())
+
+            // ...but NEVER upscale past what it takes to fill the screen. Parallax headroom is a
+            // nice-to-have; sharpness is not. Blowing a 640×480 photo up 5.25× to manufacture pan room
+            // would produce a blurry 32MB bitmap — worse on both axes than simply having less parallax.
+            //
+            // So the ceiling is `fillScale`: the scale that just covers the crop. Above that we are
+            // inventing pixels purely for parallax, which is never worth it. A small image therefore
+            // keeps its native detail and the engine's `travel = min(roomX, roomY)` naturally shrinks
+            // the pan range to whatever room is left — down to zero (parallax silently off) for an
+            // image at or below screen size. An image smaller than the screen still gets upscaled by
+            // fillScale, because not filling the screen is not an option.
+            val fillScale = maxOf(screenMin / srcW.toFloat(), screenMax / srcH.toFloat())
+            val coverScale = minOf(idealScale, maxOf(fillScale, 1f))
 
             // Coverage always wins over the memory cap: an uncovered wallpaper (visible gap / stretch)
             // is worse than the memory it saves. So the cap is applied only to the extent that it does
