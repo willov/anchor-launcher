@@ -4,6 +4,16 @@ All notable changes to Anchor Launcher will be documented here.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-08-31
+
+### Fixed
+- **Rotating the home screen no longer rewrites your layout on disk.** Icon positions are now stored once, in a single fixed orientation, and the correct positions for the current orientation are worked out as the screen is drawn. Previously every rotation rewrote almost every icon's saved position (59 of 60 on a typical home screen), which is what made a rotation able to damage the layout if it was interrupted at the wrong moment. A rotation now leaves the saved layout byte-for-byte identical, so that whole class of problem — icons compacting, bottom rows emptying, positions "healing" to the wrong place — can no longer happen.
+- **Icons are never silently relocated when the saved layout and the on-screen grid disagree.** The one-time conversion to the new storage format runs only while the home screen is upright, where the saved positions and the live grid are guaranteed to match; if you update while holding the device sideways it simply waits until the next time you are upright. Without this guard the conversion could have pushed items outside the grid and permanently moved them.
+- The conversion is done once, keeps a rollback copy of your previous layout, and is safe to interrupt — it either completes fully or not at all.
+
+### Note
+- This release does not yet make rotation *faster* — it still takes about a second while the home screen rebuilds. That work is a separate change; this release is the groundwork for it, plus the durability fixes above.
+
 ## [0.5.1] - 2026-08-31
 
 ### Changed
