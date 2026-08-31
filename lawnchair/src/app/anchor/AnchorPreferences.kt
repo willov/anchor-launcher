@@ -146,6 +146,24 @@ class AnchorPreferences(context: Context) {
      * WallpaperStabilizationManager.LIVE_STEP_PER_SWEEP), then clamps at the world edge. 0 disables
      * parallax. Capped at the image's available pan room. Default [PARALLAX_PERCENT_DEFAULT].
      */
+    /**
+     * Pulls a stored parallax value that is above [PARALLAX_PERCENT_SANE_MAX] back down to
+     * [PARALLAX_PERCENT_DEFAULT]. Parallax is paid for in zoom (the bitmap is sized to crop + travel
+     * and the engine crops 1:1), and the old 15 default left a 1200×1920 tablet showing only 68% of
+     * the wallpaper. Values already within the sane band are left exactly as chosen.
+     *
+     * No migration flag: the app has no shipped users, so this just re-asserts the range on every
+     * launch rather than carrying one-shot bookkeeping forever. That does mean a deliberate choice
+     * above the band does not stick — acceptable while the band is the whole point, and the slider
+     * still reaches 30 for anyone who wants to re-pick it within a session.
+     */
+    fun clampParallaxToSaneRange(): Boolean {
+        val current = prefs.getInt(KEY_PARALLAX_PERCENT, PARALLAX_PERCENT_DEFAULT)
+        if (current <= PARALLAX_PERCENT_SANE_MAX) return false
+        prefs.edit().putInt(KEY_PARALLAX_PERCENT, PARALLAX_PERCENT_DEFAULT).apply()
+        return true
+    }
+
     var wallpaperParallaxPercent: Int
         get() = prefs.getInt(KEY_PARALLAX_PERCENT, PARALLAX_PERCENT_DEFAULT)
             .coerceIn(PARALLAX_PERCENT_MIN, PARALLAX_PERCENT_MAX)
@@ -227,12 +245,22 @@ class AnchorPreferences(context: Context) {
         // Wallpaper parallax strength = PER-SWIPE drift: percent of the screen short side the wallpaper
         // moves for ONE navigation sweep (one full row scroll, or one row switch). This is the honest
         // number the slider shows — no hidden division. The engine multiplies it by
-        // SWEEPS_TO_FILL_WORLD (5) for the total pannable window. On a 1080-wide phone: 10% ≈ 108px/swipe
-        // (gentle), 30% ≈ 324px/swipe (dramatic). Default 15 (~162px/swipe) is a strong, clearly-visible
-        // baseline. The bitmap is now sized to exactly (screen long side + this slider's travel), so the
-        // slider is always the binding cap and no bitmap pixels are wasted on unreachable headroom.
+        // SWEEPS_TO_FILL_WORLD (5) for the total pannable window.
+        //
+        // Default 10, NOT 15. The bitmap is sized to (crop + travel) per axis and the engine crops 1:1,
+        // so parallax is paid for in ZOOM: every pixel of pan room is a pixel of the image you no longer
+        // see. At 15 a 1200×1920 tablet showed only 68% of the wallpaper, which read as "too zoomed";
+        // at 10 it shows 76% while still drifting ~120px per swipe — clearly visible motion. For
+        // reference this is ~2.5× the pan budget AOSP allocates (it sizes for horizontal parallax only,
+        // where we pan in 2D), whereas 15 was ~4×. The slider now shows the visible-fraction figure
+        // live (see WallpaperStabilizationManager.visibleFractionFor) so users can trade either way.
         const val PARALLAX_PERCENT_MIN = 0
         const val PARALLAX_PERCENT_MAX = 30
-        const val PARALLAX_PERCENT_DEFAULT = 15
+        const val PARALLAX_PERCENT_DEFAULT = 10
+
+        // Above this, the zoom cost stops being worth the extra drift: at 15 a 1200×1920 tablet shows
+        // only 68% of the wallpaper. The slider still goes to PARALLAX_PERCENT_MAX; this is only the
+        // band [clampParallaxToSaneRange] re-asserts on launch.
+        const val PARALLAX_PERCENT_SANE_MAX = 10
     }
 }
