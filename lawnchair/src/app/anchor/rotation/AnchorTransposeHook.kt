@@ -111,6 +111,63 @@ object AnchorTransposeHook {
         return displayIsLandscape == launcherLandscape
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // Active display frame — the ONE rotation decision per config change.
+    // ---------------------------------------------------------------------------------------------
+    //
+    // [launcherWillRotate] reads LIVE state (DisplayController's current rotation plus the launcher's
+    // recorded orientation), so two calls a few milliseconds apart can legitimately disagree — a
+    // rotation settling in between flips the answer. That is tolerable today because the only
+    // consumer that matters is the grid-dimension swap in [afterInitGrid]. It stops being tolerable
+    // once the LOADER also depends on the decision: if the read side picks portrait coordinates while
+    // afterInitGrid swapped the grid to landscape N×M (or vice versa), every item whose cell exceeds
+    // the active bounds is fed to LoaderCursor.checkItemPlacement, which re-homes it AND PERSISTS the
+    // correction — the same permanent layout loss as the v2 data-loss bug, reached through a new door.
+    //
+    // So the decision is made exactly ONCE per config change, here, and every consumer reads the
+    // stored value instead of re-evaluating the predicate. One decision, many consumers.
+    //
+    // [activeRotation] is the Surface rotation constant whose coordinate frame the workspace is
+    // currently laid out in. It is ROTATION_0 whenever the launcher window is not itself rotated,
+    // regardless of what the display is doing — an other-app forced landscape leaves this at the
+    // launcher's own frame, which is precisely the gate that stops a foreign rotation from
+    // reinterpreting our coordinates.
+    @Volatile private var activeRotation = Surface.ROTATION_0
+
+    /**
+     * Recomputes and stores the active display frame. Called at the single point in
+     * [InvariantDeviceProfile.initGrid] where the grid is (re)built, immediately before the
+     * dimension swap, so the stored value and the swapped dims are decided together and cannot drift.
+     *
+     * Returns the frame that was stored.
+     */
+    private fun updateActiveRotation(context: Context, rotation: Int): Int {
+        // Only adopt a rotated frame when the LAUNCHER WINDOW itself is at that rotation. When the
+        // display is rotated by another app while our window stays put, the workspace is still laid
+        // out in the launcher's own frame, so the coordinate frame must not move with the display.
+        activeRotation = if (launcherWillRotate(context)) rotation else Surface.ROTATION_0
+        return activeRotation
+    }
+
+    /**
+     * The Surface rotation constant whose coordinate frame the workspace is currently laid out in.
+     *
+     * This is the authority for "which display frame are we in" for every consumer — the grid
+     * dimension swap and (from Phase 2 onward) the loader's portrait→display coordinate mapping.
+     * Consumers MUST read this rather than calling [launcherWillRotate] themselves, so they cannot
+     * disagree with each other. See the comment on [activeRotation].
+     */
+    @JvmStatic
+    fun getActiveRotation(): Int = activeRotation
+
+    /**
+     * True when the workspace is currently laid out in a landscape (transposed N×M) frame.
+     * Convenience wrapper over [getActiveRotation] for the dimension-swap consumers.
+     */
+    @JvmStatic
+    fun isLandscapeFrame(): Boolean =
+        activeRotation == Surface.ROTATION_90 || activeRotation == Surface.ROTATION_270
+
     /**
      * True when a rotation should be driven by the LAUNCHER's own onConfigurationChanged rather than by
      * the DisplayController's CHANGE_ROTATION callback — which is whenever a launcher activity exists.
@@ -142,6 +199,27 @@ object AnchorTransposeHook {
         val newRotation = DisplayController.INSTANCE.get(context).info.rotation
 
         if (oldRotation == newRotation) return
+
+        // PRE-COMPUTED TRANSPOSE: once the DB is portrait-canonical, rotation must not touch it.
+        //
+        // The loader now derives display coordinates from the stored portrait ones on every read, so
+        // the reactive rewrite below is not merely redundant — it is actively WRONG. It would write
+        // display-frame coordinates back into a DB the reader treats as portrait-canonical, and the
+        // next read would transpose those *again*. Measured on the 6×9 test tablet: a DB left in the
+        // landscape frame while marked canonical puts 13 of 35 items out of bounds, and
+        // checkItemPlacement re-homes and PERSISTS every one of them.
+        //
+        // The two mechanisms are mutually exclusive: either the DB tracks the display frame and is
+        // rewritten on rotation (the old reactive path), or it holds one canonical frame and the
+        // reader maps it (the pre-computed path). This is the switch between them.
+        //
+        // Skipping here removes both the DB rewrite AND the forceReload/LoaderTask below — the
+        // ~0.9–1.9s that rotation used to cost. KEY_LAST_ROTATION is still advanced so the recorded
+        // rotation keeps describing reality for the migration and for reconcileOnResume.
+        if (PortraitCanonicalMigration.isLiveDbCanonical()) {
+            prefs.edit().putInt(KEY_LAST_ROTATION, newRotation).apply()
+            return
+        }
 
         // Only transpose when the requested display rotation matches the LAUNCHER window's own
         // orientation (see launcherWillRotate). If they disagree, another app forced the display
@@ -222,16 +300,18 @@ object AnchorTransposeHook {
         // (Always cached, regardless of the swap gate below.)
         portraitColsCache = idp.numColumns
         portraitRowsCache = idp.numRows
+        // Decide the active coordinate frame ONCE, here, and store it. Every other consumer (the swap
+        // below, and from Phase 2 the loader's coordinate mapping) reads the stored value via
+        // [getActiveRotation] rather than re-evaluating launcherWillRotate, so they cannot disagree.
+        //
         // Only swap to the landscape grid when the LAUNCHER WINDOW is actually landscape. The display
         // can be landscape because ANOTHER app forced it (YouTube/Tapo) while our locked home window
         // stays portrait; swapping then builds a landscape N×M grid for a portrait render and feeds the
         // loader a numRows/numColumns that disagrees with the stored coordinates, so checkItemPlacement
-        // treats the bottom band as out-of-bounds and the layout gets compacted/persisted. Gate on the
-        // launcher's own recorded orientation (same signal as beforeConfigChanged's transpose) so both
-        // are driven by the identical decision.
-        val willSwap = (rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270) &&
-            launcherWillRotate(context)
-        if (willSwap) {
+        // treats the bottom band as out-of-bounds and the layout gets compacted/persisted.
+        // updateActiveRotation applies exactly that gate, collapsing a foreign rotation to ROTATION_0.
+        updateActiveRotation(context, rotation)
+        if (isLandscapeFrame()) {
             val tmp = idp.numColumns
             idp.numColumns = idp.numRows
             idp.numRows = tmp
@@ -274,6 +354,25 @@ object AnchorTransposeHook {
     @JvmStatic
     fun getLastRotation(context: Context): Int =
         prefs(context).getInt(KEY_LAST_ROTATION, Surface.ROTATION_0)
+
+    /**
+     * Portrait-canonical grid dimensions as (columns, rows), or null if no initGrid has run yet this
+     * process.
+     *
+     * Callers that need the TRUE portrait grid must use this rather than reading
+     * `idp.numColumns`/`idp.numRows`: those are swapped to N×M by [afterInitGrid] whenever the
+     * launcher is in landscape, so a caller reading them in landscape gets the transposed pair. Any
+     * coordinate math done against the swapped dims produces a wrong mapping — for the
+     * portrait-canonical migration that would mean reverse-mapping the whole workspace through the
+     * wrong grid and scrambling every position.
+     */
+    @JvmStatic
+    fun getPortraitGrid(): Pair<Int, Int>? =
+        if (portraitColsCache > 0 && portraitRowsCache > 0) {
+            Pair(portraitColsCache, portraitRowsCache)
+        } else {
+            null
+        }
 
     private fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

@@ -184,12 +184,16 @@ public class ModelWriter {
         updateItemInfoProps(item, container, screenId, cellX, cellY);
         notifyItemModified(item);
 
-        enqueueDeleteRunnable(new UpdateItemRunnable(item, () -> new ContentWriter(mContext)
+        // Anchor: item.cellX/cellY are DISPLAY-frame; the DB is portrait-canonical. See CoordFrame.
+        enqueueDeleteRunnable(new UpdateItemRunnable(item, () -> {
+            kotlin.Pair<Integer, Integer> cell = anchorPortraitCell(item);
+            return new ContentWriter(mContext)
                 .put(Favorites.CONTAINER, item.container)
-                .put(Favorites.CELLX, item.cellX)
-                .put(Favorites.CELLY, item.cellY)
+                .put(Favorites.CELLX, cell.getFirst())
+                .put(Favorites.CELLY, cell.getSecond())
                 .put(Favorites.RANK, item.rank)
-                .put(Favorites.SCREEN, item.screenId)));
+                .put(Favorites.SCREEN, item.screenId);
+        }));
     }
 
     /**
@@ -206,10 +210,12 @@ public class ModelWriter {
             ItemInfo item = items.get(i);
             updateItemInfoProps(item, container, screen, item.cellX, item.cellY);
 
+            // Anchor: display frame -> portrait-canonical for storage. See CoordFrame.
+            kotlin.Pair<Integer, Integer> cell = anchorPortraitCell(item);
             final ContentValues values = new ContentValues();
             values.put(Favorites.CONTAINER, item.container);
-            values.put(Favorites.CELLX, item.cellX);
-            values.put(Favorites.CELLY, item.cellY);
+            values.put(Favorites.CELLX, cell.getFirst());
+            values.put(Favorites.CELLY, cell.getSecond());
             values.put(Favorites.RANK, item.rank);
             values.put(Favorites.SCREEN, item.screenId);
 
@@ -228,15 +234,19 @@ public class ModelWriter {
         item.spanX = spanX;
         item.spanY = spanY;
         notifyItemModified(item);
-        new UpdateItemRunnable(item, () -> new ContentWriter(mContext)
+        // Anchor: display frame -> portrait-canonical for storage, spans included. See CoordFrame.
+        new UpdateItemRunnable(item, () -> {
+            kotlin.Pair<Integer, Integer> cell = anchorPortraitCell(item);
+            kotlin.Pair<Integer, Integer> span = anchorPortraitSpan(item);
+            return new ContentWriter(mContext)
                 .put(Favorites.CONTAINER, item.container)
-                .put(Favorites.CELLX, item.cellX)
-                .put(Favorites.CELLY, item.cellY)
+                .put(Favorites.CELLX, cell.getFirst())
+                .put(Favorites.CELLY, cell.getSecond())
                 .put(Favorites.RANK, item.rank)
-                .put(Favorites.SPANX, item.spanX)
-                .put(Favorites.SPANY, item.spanY)
-                .put(Favorites.SCREEN, item.screenId))
-                .executeOnModelThread();
+                .put(Favorites.SPANX, span.getFirst())
+                .put(Favorites.SPANY, span.getSecond())
+                .put(Favorites.SCREEN, item.screenId);
+        }).executeOnModelThread();
     }
 
     /**
@@ -249,6 +259,27 @@ public class ModelWriter {
             item.onAddToDatabase(writer);
             return writer;
         }).executeOnModelThread();
+    }
+
+    /**
+     * Anchor: the portrait-canonical cell to store for an item whose cellX/cellY are in the display
+     * frame. A no-op in portrait and for non-workspace containers (folder-relative positions do not
+     * rotate).
+     */
+    private static kotlin.Pair<Integer, Integer> anchorPortraitCell(ItemInfo item) {
+        if (item.container != Favorites.CONTAINER_DESKTOP) {
+            return new kotlin.Pair<>(item.cellX, item.cellY);
+        }
+        return app.anchor.rotation.CoordFrame.toPortraitCell(
+                item.cellX, item.cellY, item.spanX, item.spanY);
+    }
+
+    /** Anchor: the portrait-canonical spans to store. See {@link #anchorPortraitCell}. */
+    private static kotlin.Pair<Integer, Integer> anchorPortraitSpan(ItemInfo item) {
+        if (item.container != Favorites.CONTAINER_DESKTOP) {
+            return new kotlin.Pair<>(item.spanX, item.spanY);
+        }
+        return app.anchor.rotation.CoordFrame.toPortraitSpan(item.spanX, item.spanY);
     }
 
     public void notifyItemModified(ItemInfo item) {
