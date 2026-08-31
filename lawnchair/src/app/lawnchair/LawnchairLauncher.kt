@@ -598,6 +598,10 @@ class LawnchairLauncher : QuickstepLauncher() {
         // WM re-dispatches it to the engine — fixes the post-set choppy home scroll invisibly (no black,
         // no leak, no visible transition), reproducing what a recents→home/unlock would otherwise heal.
         wallpaperStabilizationManager.healWallpaperVisibilityIfPending()
+        // A lock/unlock destroys and recreates the wallpaper engine, and the new instance starts from
+        // its own hardcoded rest position rather than wherever the camera actually is. Re-assert it so
+        // the first swipe after unlocking doesn't jump.
+        wallpaperStabilizationManager.resyncEngineCamera()
         // Grid/icon setup takes priority on first launch; the wallpaper prompt waits until the grid
         // onboarding has been shown so two dialogs never stack.
         if (!maybeShowGridOnboarding()) {

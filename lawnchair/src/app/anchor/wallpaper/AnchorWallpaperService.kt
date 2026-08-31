@@ -122,9 +122,30 @@ class AnchorWallpaperService : WallpaperService() {
         // source pixels in both orientations → pixel-perfect rotation. The engine must NOT re-map axes
         // per rotation here (doing so was the old ~192px vertical jump on rotation). The counter-rotation
         // canvas transform alone handles putting those bitmap pixels upright on the glass.
-        // Rest at home: left edge (worldX=0), bottom row (worldY=HOME_REST_WORLD_Y).
+        // Rest at home. These are BITMAP-space and therefore rotation-dependent, so they are derived
+        // from the same role->bitmap mapping the launcher pushes rather than hardcoded: the page role
+        // rests at PAGE_REST (one end, all of the range ahead of it) and the row role at
+        // HOME_REST_WORLD_Y (row 0 = image bottom).
+        //
+        // This matters because a lock/unlock DESTROYS and recreates the engine, and a fresh instance
+        // draws from these defaults before the launcher pushes anything. Hardcoding (0, 0.9) was only
+        // correct at ROTATION_0 — in the other three orientations the lock screen showed a different
+        // crop than home rests at, and the first swipe after unlocking jumped as the engine snapped to
+        // the real position. Deriving them means the lock screen shows exactly the home rest crop and
+        // unlocking is continuous.
         private var worldX = 0f
         private var worldY = HOME_REST_WORLD_Y
+
+        /** Re-derive the rest camera for the current rotation (see the note above). */
+        private fun applyRestCamera() {
+            val (x, y) = app.anchor.rotation.WallpaperCropMath.roleToBitmapCamera(
+                page = PAGE_REST_WORLD,
+                row = HOME_REST_WORLD_Y,
+                rotation = currentRotation(),
+            )
+            worldX = x
+            worldY = y
+        }
 
         // Parallax strength (percent of the screen short side per step), cached so the hot parallax
         // drawFrame path never constructs AnchorPreferences. Refreshed on lifecycle callbacks
@@ -137,6 +158,7 @@ class AnchorWallpaperService : WallpaperService() {
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
             setTouchEventsEnabled(false)
+            applyRestCamera()
             // Ask for a 32-bit surface explicitly. A wallpaper engine otherwise inherits whatever the
             // device defaults to, and a 16-bit (565) surface would re-quantise these smooth-gradient
             // backgrounds into visible bands no matter how good the source bitmap is — which is the
@@ -155,6 +177,40 @@ class AnchorWallpaperService : WallpaperService() {
             xPixelOffset: Int,
             yPixelOffset: Int,
         ) {
+            // Only Anchor drives this camera. The SYSTEM also dispatches offsets — the lock screen and
+            // SystemUI push their own, and on a lock/unlock they arrive as (0.5, 0.5) with
+            // xOffsetStep/yOffsetStep = -1, which is the "no pages / unknown" sentinel a non-launcher
+            // caller sends. Accepting those parked the camera dead-centre, so the first real scroll
+            // after unlocking snapped from 0.5 back to the true position — the visible teleport.
+            //
+            // The launcher always sends a real page step (setWallpaperOffsetSteps), so a negative or
+            // zero step identifies an offset we did not originate. Ignore those and keep rendering the
+            // camera we already have; the launcher re-asserts the true position on resume anyway.
+            // Only Anchor drives this camera. The SYSTEM also dispatches offsets — on a lock/unlock
+            // SystemUI/the lock screen push their own, arriving as (0.5, 0.5) with
+            // xOffsetStep/yOffsetStep = -1, its "no pages / unknown" sentinel. Accepting those parked
+            // the camera dead-centre, so the first scroll after unlocking snapped from 0.5 back to the
+            // true position — the visible teleport. Anchor never sets offset steps, so a negative step
+            // identifies a dispatch we did not originate; ignore it and keep the camera we have.
+            // Only Anchor drives this camera, and "only Anchor" has to be decided by VALUE.
+            //
+            // Two other senders reach this callback. The system (lock screen / SystemUI) dispatches
+            // (0.5, 0.5) with step = -1, its "unknown" sentinel. Launcher3's own
+            // WallpaperOffsetInterpolator dispatches (scrollOffset, 0.5) with a real positive step —
+            // and it sends from its own handler thread. A suppression flag cannot reliably win that
+            // race — a send is already past any guard by the time we set it — so after a lock/unlock
+            // an in-flight (0.5, 0.5) still landed, parked the camera dead-centre, and the first
+            // scroll snapped back from there.
+            //
+            // Matching against the exact value the launcher last published closes it deterministically
+            // — same process, so this is a direct read of a volatile field.
+            val expected = WallpaperStabilizationManager.lastPushedCamera
+            val isOurs = expected != null &&
+                kotlin.math.abs(xOffset - expected.first) < 1e-4f &&
+                kotlin.math.abs(yOffset - expected.second) < 1e-4f
+            if (!isOurs) {
+                return
+            }
             worldX = xOffset.coerceIn(0f, 1f)
             worldY = yOffset.coerceIn(0f, 1f)
             val f = surfaceHolder.surfaceFrame
@@ -379,6 +435,10 @@ class AnchorWallpaperService : WallpaperService() {
         // (1 − ROW_MARGIN) so the engine's rest crop matches the manager's camera and the lock-screen
         // crop. Used as the initial worldY before the launcher pushes any offset.
         const val HOME_REST_WORLD_Y = 0.9f
+
+        // Mirrors WallpaperStabilizationManager.PAGE_REST_WORLD: the page role rests at one end so the
+        // whole range is available to scroll into.
+        const val PAGE_REST_WORLD = 0f
 
         // Process-level decoded-bitmap cache, shared across all Engine instances in this process. The
         // system keeps multiple engine instances alive across a switch; caching here means whichever one

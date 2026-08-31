@@ -128,8 +128,6 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // flag/background manipulation needed (and toggling FLAG_SHOW_WALLPAPER at runtime actively
         // broke the wallpaper). We only drive parallax offsets + Launcher3 suppression here.
         liveWallpaperActiveCached = active || prefCustom
-        com.android.launcher3.util.WallpaperOffsetInterpolator.sAnchorSuppressSystemOffsets =
-            liveWallpaperActiveCached!!
         if (liveWallpaperActiveCached == true) {
             pushLiveOffsets()
         }
@@ -149,6 +147,7 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     // so a slow Binder call can't build a backlog of stale offsets.
     private val uiHelperHandler = com.android.launcher3.util.Executors.UI_HELPER_EXECUTOR.handler
     @Volatile private var pendingToken: android.os.IBinder? = null
+
     private val pushOffsetsRunnable = Runnable {
         // Runs on the UI-helper thread. Only the Binder call is done here; the window token is captured
         // on the MAIN thread (decorView access is not thread-safe and throws "Window couldn't find
@@ -157,6 +156,15 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         runCatching {
             val token = pendingToken ?: return@runCatching
             val (bx, by) = bitmapCamera()
+            // NB: do NOT call setWallpaperOffsetSteps here. It declares the offset GRID, so the
+            // framework quantises the value to the nearest multiple — stamping 0.5 snapped our 0.10
+            // to 0.5 and caused the very jump it was added to prevent. The engine distinguishes our
+            // offsets from the system's by the system's own step=-1 sentinel instead.
+            // Publish what we are about to send so the engine can verify the offset is ours.
+            // Launcher3's WallpaperOffsetInterpolator and the system both push to this same token
+            // from other threads, so no suppression flag can reliably win that race. Matching on the
+            // value closes it deterministically.
+            lastPushedCamera = bx to by
             wallpaperManager.setWallpaperOffsets(token, bx, by)
         }
     }
@@ -267,6 +275,7 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         val step = delta * LIVE_STEP_PER_SWEEP
         // Page scroll moves the PAGE role in canonical space; direction is applied at push time by
         // bitmapCamera() along with the axis swap, so this stays rotation-agnostic.
+        val bef = pageWorld
         pageWorld = (pageWorld + step).coerceIn(0f, 1f)
         pushLiveOffsets()
     }
@@ -278,17 +287,8 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
      * the row role drives bitmap-Y; at ROTATION_90/270 the counter-rotation swaps them. Sign handling
      * stays with the callers that move each role, so this is a pure axis swap.
      */
-    private fun bitmapCamera(): Pair<Float, Float> {
-        val rotation = currentRotation()
-        // Mirror each role onto the bitmap axis when the counter-rotation flips that axis on glass,
-        // so "row up" and "swipe forward" always drag the wallpaper the same way whatever the
-        // orientation. Roles stay canonical in storage; this is the only place direction is applied.
-        val pageSign = WallpaperCropMath.horizontalGlassAxis(rotation).sign
-        val rowSign = WallpaperCropMath.verticalGlassAxis(rotation).sign
-        val page = if (pageSign < 0) 1f - pageWorld else pageWorld
-        val row = if (rowSign < 0) 1f - rowWorld else rowWorld
-        return if (WallpaperCropMath.isLandscape(rotation)) Pair(row, page) else Pair(page, row)
-    }
+    private fun bitmapCamera(): Pair<Float, Float> =
+        WallpaperCropMath.roleToBitmapCamera(pageWorld, rowWorld, currentRotation())
 
     /**
      * Called by [app.anchor.navigation.TwoRowNavigationManager] when a row transition starts.
@@ -372,6 +372,24 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
      * transition state and resets the scroll delta baseline. The camera position is left untouched
      * — it is already correct (rotation is pixel-perfect by construction).
      */
+    /**
+     * Re-asserts the current camera on the engine.
+     *
+     * A wallpaper engine is destroyed and recreated across a lock/unlock, and the new instance starts
+     * from its own hardcoded rest (worldX=0, worldY=HOME_REST_WORLD_Y) in RAW BITMAP space. The
+     * launcher stores the camera by role and applies the rotation mirror at push time, so those two
+     * only agree in portrait — at ROTATION_90/180/270 the fresh engine begins from a different crop
+     * than the launcher believes is showing. Nothing corrected it until the next gesture, so the first
+     * swipe after an unlock jumped as the engine snapped to the real position.
+     *
+     * Pushing the camera on resume makes the engine's starting crop match the launcher's state, so the
+     * first gesture moves by its own delta like any other.
+     */
+    fun resyncEngineCamera() {
+        if (!isLiveWallpaperActive()) return
+        pushLiveOffsets()
+    }
+
     fun resetForWorkspaceReady() {
         isRowTransitioning = false
         isRotationRebinding = false
@@ -438,6 +456,17 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
          * scroll into — unlike the ROW role, which is anchored near the image bottom.
          */
         private const val PAGE_REST_WORLD = 0f
+
+        /**
+         * The last camera Anchor pushed, read by [app.anchor.wallpaper.AnchorWallpaperService] to
+         * confirm an incoming offset originated here (same process, so this is a direct read).
+         * Launcher3's WallpaperOffsetInterpolator and the system push to the same token from other
+         * threads, so matching on the value is what makes "is this ours" deterministic.
+         */
+        @Volatile
+        @JvmStatic
+        var lastPushedCamera: Pair<Float, Float>? = null
+
 
         // How many full navigation SWEEPS fill the world (edge to edge) before the camera caps. A
         // "sweep" is one full row scroll (page 0 → last page) OR one row switch. This is the SINGLE

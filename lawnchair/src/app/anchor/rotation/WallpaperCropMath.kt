@@ -75,6 +75,21 @@ object WallpaperCropMath {
     }
 
     /**
+     * Maps the role-space camera (page, row) onto the bitmap axes for [rotation], applying both the
+     * axis swap and the per-axis direction mirror.
+     *
+     * Roles are stored canonically (page rests at one end, row at the home-rest anchor) and converted
+     * only here, so a rotation can never change what a stored value means. Shared by the launcher's
+     * push path and the wallpaper engine's own default, which is what makes the lock screen show
+     * exactly the crop home rests at.
+     */
+    fun roleToBitmapCamera(page: Float, row: Float, rotation: Int): Pair<Float, Float> {
+        val p = if (horizontalGlassAxis(rotation).sign < 0) 1f - page else page
+        val r = if (verticalGlassAxis(rotation).sign < 0) 1f - row else row
+        return if (isLandscape(rotation)) Pair(r, p) else Pair(p, r)
+    }
+
+    /**
      * The portrait-canonical viewport dimensions for the given physical [boundsW]x[boundsH] and
      * [rotation]. In landscape the physical bounds are swapped back to portrait orientation so the
      * crop is rotation-invariant.
