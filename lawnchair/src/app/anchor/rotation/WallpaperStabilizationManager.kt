@@ -30,7 +30,7 @@ import java.io.File
  * ## World-camera model
  *
  * The wallpaper is a fixed 2D world; the screen is a camera viewport at a single normalised position
- * ([liveWorldX], [liveWorldY]), both interpreted in BITMAP space (rotation-invariant):
+ * ([pageWorld], [rowWorld]) — stored by ROLE and mapped to bitmap axes at push time:
  *
  * - **Horizontal gestures (page scroll)** accumulate a delta into the horizontal-on-glass axis
  *   ([onScrollOffset]) — the wallpaper is a world you pan through, so rights add up across rows until
@@ -74,14 +74,24 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     // pushing the camera position via WallpaperManager.setWallpaperOffsets → the engine's
     // onOffsetsChanged.
     //
-    // IMPORTANT: we push BITMAP-SPACE camera coordinates (liveWorldX/liveWorldY), NOT glass-space
+    // IMPORTANT: we push BITMAP-SPACE camera coordinates (see bitmapCamera()), NOT glass-space
     // offsets. Bitmap-space is rotation-invariant: a pure device rotation never changes them, and the
     // engine's crop is computed only from (worldX, worldY) + the rotation-invariant portrait-canonical
     // viewport, so it selects the identical source pixels in both orientations → pixel-perfect rotation.
     // The glass→bitmap axis mapping lives HERE, applied to gesture deltas at the moment they happen.
     private var liveWallpaperActiveCached: Boolean? = null
-    private var liveWorldX = 0f          // bitmap-space camera X [0,1] (page scroll)
-    private var liveWorldY = HOME_REST_WORLD_Y  // bitmap-space camera Y [0,1] (row; bottom/home rest)
+    // The camera is stored by ROLE, not by bitmap axis.
+    //
+    // The two roles have genuinely different semantics: the PAGE axis is a free scroll that needs
+    // headroom in both directions and rests at one end, while the ROW axis is anchored — row 0 sits at
+    // HOME_REST_WORLD_Y (0.9, the bottom of the image) and rows climb from there. Storing those as
+    // liveWorldX/liveWorldY meant the rest positions were bound to bitmap axes, but WHICH bitmap axis
+    // each role drives flips with rotation (the counter-rotation maps horizontal-on-glass to bitmap-Y
+    // at ROTATION_90). So in landscape page scrolling inherited the ROW rest of 0.9 and had only 0.10
+    // of room in one direction — half a sweep — then stalled. Keying by role makes that impossible:
+    // each role keeps its own rest and range no matter how the device is held.
+    private var pageWorld = PAGE_REST_WORLD      // free scroll axis (page swipes)
+    private var rowWorld = HOME_REST_WORLD_Y     // anchored axis (row switches; row 0 = image bottom)
     private var vGlassAnimator: ValueAnimator? = null
 
     /**
@@ -127,7 +137,7 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     }
 
     /**
-     * Push the current BITMAP-SPACE camera (liveWorldX, liveWorldY) to the live wallpaper engine, if
+     * Push the current BITMAP-SPACE camera (see [bitmapCamera]) to the live wallpaper engine, if
      * the window token is up. These are rotation-invariant; the engine uses them directly (no remap),
      * so a pure rotation is pixel-perfect.
      */
@@ -146,7 +156,8 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // wallpaper (toggle-off / recreate) can never crash this background thread.
         runCatching {
             val token = pendingToken ?: return@runCatching
-            wallpaperManager.setWallpaperOffsets(token, liveWorldX, liveWorldY)
+            val (bx, by) = bitmapCamera()
+            wallpaperManager.setWallpaperOffsets(token, bx, by)
         }
     }
 
@@ -254,27 +265,23 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // camera by LIVE_STEP_PER_SWEEP — independent of page count. No (pagesInRow−1) scaling, so every
         // swipe on a 2- or 4-page row moves the wallpaper the same uniform fraction.
         val step = delta * LIVE_STEP_PER_SWEEP
-        val m = WallpaperCropMath.horizontalGlassAxis(currentRotation())
-        applyLiveCameraDelta(m, step)
+        // Page scroll always moves the PAGE role. Only the SIGN depends on rotation (which glass
+        // direction counts as "forward"); the axis no longer does, because roles own their own state.
+        val sign = WallpaperCropMath.horizontalGlassAxis(currentRotation()).sign
+        pageWorld = (pageWorld + sign * step).coerceIn(0f, 1f)
         pushLiveOffsets()
     }
 
-    private fun applyLiveCameraDelta(m: WallpaperCropMath.AxisMapping, step: Float) {
-        val s = m.sign * step
-        when (m.axis) {
-            WallpaperCropMath.WorldAxis.X -> liveWorldX = (liveWorldX + s).coerceIn(0f, 1f)
-            WallpaperCropMath.WorldAxis.Y -> liveWorldY = (liveWorldY + s).coerceIn(0f, 1f)
-        }
-    }
-
-    /** Set one axis of the live-wallpaper camera to an absolute value. */
-    private fun setLiveWorldAxis(axis: WallpaperCropMath.WorldAxis, value: Float) {
-        val v = value.coerceIn(0f, 1f)
-        when (axis) {
-            WallpaperCropMath.WorldAxis.X -> liveWorldX = v
-            WallpaperCropMath.WorldAxis.Y -> liveWorldY = v
-        }
-    }
+    /**
+     * Maps the role-space camera to the BITMAP-space (x, y) the engine consumes.
+     *
+     * This is the one place the rotation mapping lives. In portrait the page role drives bitmap-X and
+     * the row role drives bitmap-Y; at ROTATION_90/270 the counter-rotation swaps them. Sign handling
+     * stays with the callers that move each role, so this is a pure axis swap.
+     */
+    private fun bitmapCamera(): Pair<Float, Float> =
+        if (WallpaperCropMath.isLandscape(currentRotation())) Pair(rowWorld, pageWorld)
+        else Pair(pageWorld, rowWorld)
 
     /**
      * Called by [app.anchor.navigation.TwoRowNavigationManager] when a row transition starts.
@@ -295,16 +302,14 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // Canonical vertical-world target (portrait-Y sense): row 0 rests at HOME_REST_WORLD_Y
         // (bottom); each row up subtracts one step, clamped to the top. Then map to the CURRENT
         // rotation's world axis + sign.
-        val canonical = (HOME_REST_WORLD_Y - toRow * LIVE_STEP_PER_SWEEP).coerceIn(0f, HOME_REST_WORLD_Y)
-        val m = WallpaperCropMath.verticalGlassAxis(currentRotation())
-        val target = if (m.sign < 0) 1f - canonical else canonical
-        val current = when (m.axis) {
-            WallpaperCropMath.WorldAxis.X -> liveWorldX
-            WallpaperCropMath.WorldAxis.Y -> liveWorldY
-        }
+        // Row 0 rests at HOME_REST_WORLD_Y (image bottom); each row up subtracts one step. This is a
+        // property of the ROW role and is now stored as such, so it no longer leaks into page scrolling
+        // when rotation swaps which bitmap axis each role drives.
+        val target = (HOME_REST_WORLD_Y - toRow * LIVE_STEP_PER_SWEEP).coerceIn(0f, HOME_REST_WORLD_Y)
+        val current = rowWorld
         vGlassAnimator?.cancel()
         if (kotlin.math.abs(current - target) < 0.001f) {
-            setLiveWorldAxis(m.axis, target)
+            rowWorld = target.coerceIn(0f, 1f)
             pushLiveOffsets()
             return
         }
@@ -312,7 +317,7 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
             duration = durationMs
             interpolator = DecelerateInterpolator()
             addUpdateListener { anim ->
-                setLiveWorldAxis(m.axis, anim.animatedValue as Float)
+                rowWorld = (anim.animatedValue as Float).coerceIn(0f, 1f)
                 pushLiveOffsets()
             }
             start()
@@ -398,6 +403,12 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         private const val ROW_MARGIN = 0.1f
         private const val HOME_REST_WORLD_Y = 1f - ROW_MARGIN
 
+        /**
+         * Rest position of the PAGE role. Page 0 sits at one end so the whole range is available to
+         * scroll into — unlike the ROW role, which is anchored near the image bottom.
+         */
+        private const val PAGE_REST_WORLD = 0f
+
         // How many full navigation SWEEPS fill the world (edge to edge) before the camera caps. A
         // "sweep" is one full row scroll (page 0 → last page) OR one row switch. This is the SINGLE
         // SOURCE OF TRUTH shared with the engine: the slider is expressed as per-swipe drift, and the
@@ -418,8 +429,8 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
 
         // Live-wallpaper camera advance per full navigation SWEEP, in bitmap-space world units [0,1].
         // BOTH a horizontal sweep and a row switch advance their axis by this constant, so horizontal
-        // and vertical motion are EQUAL. The camera is clamped to [0,1] (applyLiveCameraDelta /
-        // setLiveWorldAxis), which maps to the real bitmap pan room.
+        // and vertical motion are EQUAL. Each role is clamped to [0,1], which maps to the real
+        // bitmap pan room.
         //
         // Motion is CONSTANT and uniform: onScrollOffset accumulates delta*LIVE_STEP_PER_SWEEP with no
         // page-count scaling, so every swipe on a 2- or 4-page row moves the wallpaper the same fraction,
