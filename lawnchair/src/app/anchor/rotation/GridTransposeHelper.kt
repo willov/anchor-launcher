@@ -126,6 +126,31 @@ object GridTransposeHelper {
     }
 
     /**
+     * Display cellX for an item stored portrait-canonically. Span-aware, so it is correct for
+     * multi-cell widgets as well as 1×1 icons (for which it reduces to [remapCoordinates]).
+     *
+     * Split into X and Y accessors because the loader assigns the two coordinates separately.
+     */
+    fun displayCellX(
+        portraitCol: Int, portraitRow: Int,
+        portraitSpanX: Int, portraitSpanY: Int,
+        portraitCols: Int, portraitRows: Int,
+        rotation: Int,
+    ): Int = remapWidgetPosition(
+        portraitCol, portraitRow, portraitSpanX, portraitSpanY, portraitCols, portraitRows, rotation,
+    ).first
+
+    /** Display cellY for an item stored portrait-canonically. See [displayCellX]. */
+    fun displayCellY(
+        portraitCol: Int, portraitRow: Int,
+        portraitSpanX: Int, portraitSpanY: Int,
+        portraitCols: Int, portraitRows: Int,
+        rotation: Int,
+    ): Int = remapWidgetPosition(
+        portraitCol, portraitRow, portraitSpanX, portraitSpanY, portraitCols, portraitRows, rotation,
+    ).second
+
+    /**
      * Span-aware reverse mapping: recovers the portrait (col, row) for a widget given its
      * *display* cell coordinates and *display* span dimensions for [rotation].
      *

@@ -130,6 +130,11 @@ public class LoaderCursor extends CursorWrapper {
     private final int mOptionsIndex;
     private final int mAppWidgetSourceIndex;
 
+    // Anchor: whether the open DB stores portrait-canonical coordinates. Resolved once per cursor
+    // (it cannot change while a load is in flight) because it is read for every item.
+    @Nullable
+    private Boolean mIsPortraitCanonical;
+
     private final PackageManager mPM;
 
     @Nullable
@@ -282,16 +287,25 @@ public class LoaderCursor extends CursorWrapper {
 
     /**
      * Returns the x position for the item in the cell layout's grid
+     *
+     * Anchor: spans are stored portrait-canonical and swap on a quarter turn, so they are mapped to
+     * the active frame here for the same reason the cell coordinates are.
      */
     public int getSpanX() {
-        return getInt(mSpanXIndex);
+        if (!isPortraitCanonical()) {
+            return getInt(mSpanXIndex);
+        }
+        return isLandscapeFrame() ? getInt(mSpanYIndex) : getInt(mSpanXIndex);
     }
 
     /**
      * Returns the y position for the item in the cell layout's grid
      */
     public int getSpanY() {
-        return getInt(mSpanYIndex);
+        if (!isPortraitCanonical()) {
+            return getInt(mSpanYIndex);
+        }
+        return isLandscapeFrame() ? getInt(mSpanXIndex) : getInt(mSpanYIndex);
     }
 
     /**
@@ -534,8 +548,96 @@ public class LoaderCursor extends CursorWrapper {
         info.id = id;
         info.container = container;
         info.screenId = getInt(mScreenIndex);
-        info.cellX = getInt(mCellXIndex);
-        info.cellY = getInt(mCellYIndex);
+        // Anchor: the DB stores portrait-canonical coordinates; map them to the frame the workspace
+        // is currently laid out in. See mapCellXToDisplay/mapCellYToDisplay.
+        info.cellX = mapCellXToDisplay();
+        info.cellY = mapCellYToDisplay();
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Anchor: portrait-canonical -> display coordinate mapping.
+    // ---------------------------------------------------------------------------------------------
+    //
+    // Coordinates are stored ONCE, in the portrait frame, and the display coordinates for the
+    // current rotation are derived here on read. Rotation therefore writes nothing to the DB at all,
+    // which is both far faster than the old reactive rewrite (~0.9-1.9s measured: rewrite every row,
+    // then forceReload + a full LoaderTask) and structurally immune to the data-loss class where the
+    // recorded rotation and the on-disk coordinates could disagree.
+    //
+    // The transform is a handful of integer operations per item -- the arithmetic was never the cost.
+    //
+    // GATING: the frame comes from AnchorTransposeHook.getActiveRotation(), the single decision
+    // stored once per config change, which is also what swapped mIDP.numColumns/numRows. Reading the
+    // live predicate here instead could disagree with that swap, and a disagreement feeds
+    // checkItemPlacement coordinates that do not match the active grid -- which re-homes items AND
+    // PERSISTS the move. One decision, both consumers.
+    //
+    // MIGRATION SAFETY: a DB that has not yet been converted to portrait-canonical still holds
+    // display coordinates for whatever frame was last active, so mapping it again would double-apply
+    // the rotation. isPortraitCanonical() gates on the marker written by PortraitCanonicalMigration,
+    // so an unconverted DB is read exactly as it was before this change. This makes the read side
+    // self-healing regardless of the order migration and loading happen in -- notably when the
+    // migration deferred because the launcher was in landscape at install time.
+
+    /** True when the open workspace DB has been converted to portrait-canonical coordinates. */
+    private boolean isPortraitCanonical() {
+        if (mIsPortraitCanonical == null) {
+            mIsPortraitCanonical = app.anchor.rotation.PortraitCanonicalMigration
+                    .isLiveDbCanonical();
+        }
+        return mIsPortraitCanonical;
+    }
+
+    /** The rotation frame the workspace is currently laid out in. */
+    private int displayRotation() {
+        return app.anchor.rotation.AnchorTransposeHook.getActiveRotation();
+    }
+
+    private int mapCellXToDisplay() {
+        int cellX = getInt(mCellXIndex);
+        if (!isPortraitCanonical()) {
+            return cellX;
+        }
+        return app.anchor.rotation.GridTransposeHelper.INSTANCE.displayCellX(
+                cellX, getInt(mCellYIndex), getInt(mSpanXIndex), getInt(mSpanYIndex),
+                portraitCols(), portraitRows(), displayRotation());
+    }
+
+    private int mapCellYToDisplay() {
+        int cellY = getInt(mCellYIndex);
+        if (!isPortraitCanonical()) {
+            return cellY;
+        }
+        return app.anchor.rotation.GridTransposeHelper.INSTANCE.displayCellY(
+                getInt(mCellXIndex), cellY, getInt(mSpanXIndex), getInt(mSpanYIndex),
+                portraitCols(), portraitRows(), displayRotation());
+    }
+
+    /**
+     * Portrait-canonical grid width. mIDP.numColumns/numRows are swapped to NxM while the launcher
+     * is in landscape, so they cannot be used directly for a mapping expressed in portrait terms.
+     */
+    private int portraitCols() {
+        kotlin.Pair<Integer, Integer> grid =
+                app.anchor.rotation.AnchorTransposeHook.getPortraitGrid();
+        if (grid != null) {
+            return grid.getFirst();
+        }
+        // No initGrid yet: un-swap the live dims against the active frame.
+        return isLandscapeFrame() ? mIDP.numRows : mIDP.numColumns;
+    }
+
+    private int portraitRows() {
+        kotlin.Pair<Integer, Integer> grid =
+                app.anchor.rotation.AnchorTransposeHook.getPortraitGrid();
+        if (grid != null) {
+            return grid.getSecond();
+        }
+        return isLandscapeFrame() ? mIDP.numColumns : mIDP.numRows;
+    }
+
+    private boolean isLandscapeFrame() {
+        return app.anchor.rotation.AnchorTransposeHook.isLandscapeFrame();
     }
 
     /**
@@ -728,7 +830,13 @@ public class LoaderCursor extends CursorWrapper {
         item.cellX = newX;
         item.cellY = newY;
         // Persist the healed position so this item is never re-evaluated as out-of-bounds again.
-        updater().put(Favorites.CELLX, newX).put(Favorites.CELLY, newY).commit();
+        // Anchor: newX/newY are DISPLAY-frame (they were chosen against the active grid), but the DB
+        // is portrait-canonical — store the converted pair, not the display one. In portrait this is
+        // a no-op; in landscape, writing the display values here would move the item on next load.
+        kotlin.Pair<Integer, Integer> stored = app.anchor.rotation.CoordFrame.toPortraitCell(
+                newX, newY, item.spanX, item.spanY);
+        updater().put(Favorites.CELLX, stored.getFirst())
+                .put(Favorites.CELLY, stored.getSecond()).commit();
         return true;
     }
 

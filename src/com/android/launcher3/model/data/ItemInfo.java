@@ -259,13 +259,31 @@ public class ItemInfo {
     }
 
     public void writeToValues(@NonNull final ContentWriter writer) {
+        // Anchor: cellX/cellY/spanX/spanY are DISPLAY-frame in memory but the DB is
+        // portrait-canonical, so convert on the way out. In portrait this is a no-op; in landscape,
+        // skipping it would persist landscape coordinates as if they were portrait and move the item
+        // the next time it is loaded. Only workspace items rotate — folder-relative positions do not.
+        int outCellX = cellX;
+        int outCellY = cellY;
+        int outSpanX = spanX;
+        int outSpanY = spanY;
+        if (container == CONTAINER_DESKTOP) {
+            kotlin.Pair<Integer, Integer> cell =
+                    app.anchor.rotation.CoordFrame.toPortraitCell(cellX, cellY, spanX, spanY);
+            kotlin.Pair<Integer, Integer> span =
+                    app.anchor.rotation.CoordFrame.toPortraitSpan(spanX, spanY);
+            outCellX = cell.getFirst();
+            outCellY = cell.getSecond();
+            outSpanX = span.getFirst();
+            outSpanY = span.getSecond();
+        }
         writer.put(LauncherSettings.Favorites.ITEM_TYPE, itemType)
                 .put(LauncherSettings.Favorites.CONTAINER, container)
                 .put(LauncherSettings.Favorites.SCREEN, screenId)
-                .put(LauncherSettings.Favorites.CELLX, cellX)
-                .put(LauncherSettings.Favorites.CELLY, cellY)
-                .put(LauncherSettings.Favorites.SPANX, spanX)
-                .put(LauncherSettings.Favorites.SPANY, spanY)
+                .put(LauncherSettings.Favorites.CELLX, outCellX)
+                .put(LauncherSettings.Favorites.CELLY, outCellY)
+                .put(LauncherSettings.Favorites.SPANX, outSpanX)
+                .put(LauncherSettings.Favorites.SPANY, outSpanY)
                 .put(LauncherSettings.Favorites.RANK, rank);
     }
 

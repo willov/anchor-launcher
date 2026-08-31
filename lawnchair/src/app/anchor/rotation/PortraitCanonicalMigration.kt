@@ -90,7 +90,14 @@ object PortraitCanonicalMigration {
         portraitCols: Int,
         portraitRows: Int,
     ): Boolean {
-        if (isMigrated(db)) return false
+        // Record the state for the read side on EVERY path out of this function, including the
+        // early returns — the loader consults it for every item, and a path that forgot to set it
+        // would leave the read side guessing.
+        if (isMigrated(db)) {
+            setLiveDbCanonical(true)
+            return false
+        }
+        setLiveDbCanonical(false)
 
         // A grid we cannot reason about — refuse rather than guess. Leaving the DB unmigrated is
         // always safe: the marker stays absent and the next open retries with better values.
@@ -134,6 +141,7 @@ object PortraitCanonicalMigration {
                 writeMarker(db)
 
                 t.commit()
+                setLiveDbCanonical(true)
                 Log.d(TAG, "PortraitCanonicalMigration: done, $converted item(s) converted")
             }
             return true
@@ -215,6 +223,34 @@ object PortraitCanonicalMigration {
     private fun backupFavorites(db: SQLiteDatabase) {
         dropTable(db, BACKUP_TABLE)
         db.execSQL("CREATE TABLE $BACKUP_TABLE AS SELECT * FROM ${Favorites.TABLE_NAME}")
+    }
+
+    /**
+     * Whether the live workspace DB is portrait-canonical, as decided by [migrateIfNeeded] on this
+     * process's DB open. Cached because the read side consults it for every item loaded.
+     *
+     * The value is settled before any read can happen: [migrateIfNeeded] runs inside
+     * `ModelDbController.createDatabaseHelper`, which every `query()` reaches through
+     * `createDbIfNotExists()` before touching the table. So the loader can never observe this while
+     * it is still undecided.
+     */
+    @Volatile private var liveDbIsCanonical: Boolean? = null
+
+    /**
+     * True when the live workspace DB stores portrait-canonical coordinates.
+     *
+     * Consulted by the loader's read side to decide whether to map coordinates to the display frame.
+     * If the migration deferred (launcher was in landscape at install time) this stays false and the
+     * DB is read exactly as it was before the pre-computed transpose — so the read side is correct
+     * whatever order migration and loading happen in, rather than depending on an unwritten
+     * "install in portrait" rule.
+     */
+    @JvmStatic
+    fun isLiveDbCanonical(): Boolean = liveDbIsCanonical ?: false
+
+    /** Records the migration state of the live DB. Called from [migrateIfNeeded]. */
+    private fun setLiveDbCanonical(canonical: Boolean) {
+        liveDbIsCanonical = canonical
     }
 
     /** True when this DB has already been converted to portrait-canonical coordinates. */

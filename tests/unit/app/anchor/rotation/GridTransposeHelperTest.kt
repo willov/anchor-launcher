@@ -251,4 +251,69 @@ class GridTransposeHelperTest {
             }
         }
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // Read/write round trip. The loader maps portrait->display on read (displayCellX/displayCellY);
+    // every write maps display->portrait on the way back (reverseWidgetPositionToPortrait). A stored
+    // position must survive that round trip unchanged in EVERY frame, or an item drifts each time it
+    // is touched while rotated.
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    fun displayThenReverse_recoversStoredCell_forEveryRotation() {
+        for (rotation in allRotations) {
+            for (col in 0 until cols) {
+                for (row in 0 until rows) {
+                    val dx = GridTransposeHelper.displayCellX(col, row, 1, 1, cols, rows, rotation)
+                    val dy = GridTransposeHelper.displayCellY(col, row, 1, 1, cols, rows, rotation)
+                    val (backCol, backRow) = GridTransposeHelper.reverseWidgetPositionToPortrait(
+                        dx, dy, 1, 1, cols, rows, rotation,
+                    )
+                    assertThat("r$rotation ($backCol,$backRow)").isEqualTo("r$rotation ($col,$row)")
+                }
+            }
+        }
+    }
+
+    @Test
+    fun displayThenReverse_recoversStoredWidget_forEveryRotation() {
+        val spanX = 3
+        val spanY = 2
+        for (rotation in allRotations) {
+            for (col in 0..(cols - spanX)) {
+                for (row in 0..(rows - spanY)) {
+                    val dx = GridTransposeHelper.displayCellX(
+                        col, row, spanX, spanY, cols, rows, rotation,
+                    )
+                    val dy = GridTransposeHelper.displayCellY(
+                        col, row, spanX, spanY, cols, rows, rotation,
+                    )
+                    val (dSpanX, dSpanY) =
+                        GridTransposeHelper.spanForRotation(spanX, spanY, rotation)
+                    val (backCol, backRow) = GridTransposeHelper.reverseWidgetPositionToPortrait(
+                        dx, dy, dSpanX, dSpanY, cols, rows, rotation,
+                    )
+                    val (backSpanX, backSpanY) =
+                        GridTransposeHelper.reverseSpanToPortrait(dSpanX, dSpanY, rotation)
+                    assertThat("r$rotation ($backCol,$backRow) ${backSpanX}x$backSpanY")
+                        .isEqualTo("r$rotation ($col,$row) ${spanX}x$spanY")
+                }
+            }
+        }
+    }
+
+    @Test
+    fun displayAccessors_agreeWithRemapWidgetPosition() {
+        // displayCellX/Y must be exactly the components of the span-aware mapping the writer inverts.
+        for (rotation in allRotations) {
+            val expected =
+                GridTransposeHelper.remapWidgetPosition(1, 2, 3, 2, cols, rows, rotation)
+            assertThat(
+                Pair(
+                    GridTransposeHelper.displayCellX(1, 2, 3, 2, cols, rows, rotation),
+                    GridTransposeHelper.displayCellY(1, 2, 3, 2, cols, rows, rotation),
+                ),
+            ).isEqualTo(expected)
+        }
+    }
 }
