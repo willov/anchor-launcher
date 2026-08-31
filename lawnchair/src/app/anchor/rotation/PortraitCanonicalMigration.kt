@@ -75,15 +75,18 @@ object PortraitCanonicalMigration {
      *   persisted last rotation ([AnchorTransposeHook.getLastRotation]). For a DB already in
      *   portrait ([Surface.ROTATION_0]) the coordinate pass is a no-op, but the marker is still
      *   written so later opens skip the work.
+     * @param currentRotation the frame the launcher is rendering in RIGHT NOW. The conversion only
+     *   runs when this is [Surface.ROTATION_0] — see the guard below for why landscape is unsafe.
      * @param portraitCols portrait-canonical column count (never the swapped landscape value).
      * @param portraitRows portrait-canonical row count.
-     * @return true if this call performed the migration, false if it was already done.
+     * @return true if this call performed the migration, false if it was already done or deferred.
      */
     @JvmStatic
     fun migrateIfNeeded(
         context: Context,
         db: SQLiteDatabase,
         fromRotation: Int,
+        currentRotation: Int,
         portraitCols: Int,
         portraitRows: Int,
     ): Boolean {
@@ -94,6 +97,27 @@ object PortraitCanonicalMigration {
         if (portraitCols <= 0 || portraitRows <= 0) {
             Log.w(TAG, "PortraitCanonicalMigration: skipped, invalid grid " +
                 "${portraitCols}x$portraitRows")
+            return false
+        }
+
+        // ONLY migrate while the launcher is in the portrait frame.
+        //
+        // Coordinates are valid only against the grid of their OWN frame. Portrait-canonical coords
+        // describe a portraitCols × portraitRows grid; the landscape grid is the TRANSPOSE of that.
+        // So converting while the launcher is landscape hands the loader portrait coordinates to
+        // check against an N×M grid, and every item whose cellY exceeds the landscape row count is
+        // out of bounds. LoaderCursor.checkItemPlacement then re-homes it AND PERSISTS the move
+        // (rehomeOutOfBoundsItem), permanently destroying the layout — the v2 data-loss bug exactly.
+        //
+        // Measured on the 6×9 test tablet: migrating in landscape put 13 of 35 items out of bounds.
+        //
+        // Until the loader maps portrait→display coordinates itself, the only safe moment to convert
+        // is when the two frames already agree — i.e. in portrait, where the canonical coordinates
+        // and the active grid are identical and the mismatch window is zero. Deferring costs
+        // nothing: the marker stays absent and the next open in portrait performs the conversion.
+        if (currentRotation != Surface.ROTATION_0) {
+            Log.d(TAG, "PortraitCanonicalMigration: deferred, launcher is at rotation " +
+                "$currentRotation (converting only in portrait to avoid an out-of-bounds re-home)")
             return false
         }
 

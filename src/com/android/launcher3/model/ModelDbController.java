@@ -184,6 +184,7 @@ public class ModelDbController {
                         mContext,
                         databaseHelper.getWritableDatabase(),
                         app.anchor.rotation.AnchorTransposeHook.getLastRotation(mContext),
+                        app.anchor.rotation.AnchorTransposeHook.getActiveRotation(),
                         portraitGrid.getFirst(),
                         portraitGrid.getSecond());
             }
