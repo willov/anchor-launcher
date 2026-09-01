@@ -327,12 +327,13 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // direction on rows that have more pages.
         val pageStep = LIVE_STEP_PER_SWEEP / (pagesInTargetRow - 1).coerceAtLeast(1)
 
-        // Also cap the step so ALL rows fit the room available above the rest position. Rows are
-        // capped at MAX_ROWS (5), and with 2-page rows the row step is at its largest (0.2), so
-        // 4-5 rows would otherwise need 0.6-0.8 of the 0.5 available and the top rows would simply
-        // stop moving. Shrinking the step keeps every row reachable; it costs a slightly smaller
-        // vertical drift than horizontal in exactly that configuration, which is a better failure
-        // than not moving at all. (Rows with 3+ pages already have a small enough step to fit.)
+        // Also cap the step so the rows the user ACTUALLY HAS fit the room above rest. This scales to
+        // the live row count, not to any maximum: at 1-3 rows fitStep is >= the step we already
+        // wanted, so it does nothing. It only engages at 4+ rows with short (2-page) rows, where the
+        // step would otherwise be its largest (0.2) and the top rows would need more room than exists
+        // and simply stop moving. Shrinking the step keeps every row reachable, at the cost of
+        // slightly less vertical drift than horizontal in exactly that configuration — a better
+        // failure than not moving at all.
         val rowsAbove = (totalRows - 1).coerceAtLeast(1)
         val fitStep = CAMERA_REST_ROOM / rowsAbove
         val rowStep = minOf(LIVE_STEP_PER_SWEEP, pageStep, fitStep)
