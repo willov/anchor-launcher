@@ -1323,10 +1323,12 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         // Now that we have removed some pages, ensure state description is up to date.
         updateAccessibilityViewPageDescription();
 
-        // Reset default home page if it's now out of range after page removal
-        int storedDefault = PreferenceExtensionsKt.firstBlocking(mPreferenceManager2.getDefaultHomePage());
+        // Reset the legacy global default home page if it's now out of range after page removal.
+        // Anchor's per-row homes are stored as screen IDs and resolve to the row's leftmost page
+        // when their screen is gone, so they need no equivalent reset.
+        int storedDefault = getLegacyGlobalDefaultPage();
         if (storedDefault >= getChildCount()) {
-            setDefaultPage(DEFAULT_PAGE);
+            PreferenceExtensionsKt.setBlocking(mPreferenceManager2.getDefaultHomePage(), DEFAULT_PAGE);
         }
     }
 
@@ -4051,9 +4053,21 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     /**
      * Returns the validated default home page index from user preferences.
      * Falls back to {@link #DEFAULT_PAGE} if the stored page is out of range.
+     *
+     * <p>Anchor: the default page is per ROW, not global — the home screen is a 2D matrix and each
+     * row is navigated independently, so "the page you come home to" is a property of the row you
+     * are in. When the row matrix is live this reports the ACTIVE row's home page (as an absolute
+     * workspace index); rows with no home set resolve to their leftmost page, which is Lawnchair's
+     * original behaviour. The global preference remains only as the migration source.
      */
     public int getDefaultPage() {
-        int storedPage = PreferenceExtensionsKt.firstBlocking(mPreferenceManager2.getDefaultHomePage());
+        if (mAnchorTwoRowManager != null) {
+            int rowHome = mAnchorTwoRowManager.homeWorkspacePage();
+            if (rowHome >= 0 && rowHome < getChildCount()) {
+                return rowHome;
+            }
+        }
+        int storedPage = getLegacyGlobalDefaultPage();
         int pageCount = getChildCount();
         if (storedPage >= 0 && storedPage < pageCount) {
             return storedPage;
@@ -4062,9 +4076,23 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     }
 
     /**
+     * Anchor: the raw global {@code default_home_page} preference, unmapped to any row. Only the
+     * one-shot migration into the per-row model and the out-of-range reset below read this.
+     */
+    public int getLegacyGlobalDefaultPage() {
+        return PreferenceExtensionsKt.firstBlocking(mPreferenceManager2.getDefaultHomePage());
+    }
+
+    /**
      * Sets the given page index as the default home page.
+     *
+     * <p>Anchor: routed to the row that owns the page, so "Set as default page" applies to the row
+     * the user is looking at. Falls back to the global preference when the row matrix isn't up yet.
      */
     public void setDefaultPage(int pageIndex) {
+        if (mAnchorTwoRowManager != null && mAnchorTwoRowManager.setHomeWorkspacePage(pageIndex)) {
+            return;
+        }
         PreferenceExtensionsKt.setBlocking(mPreferenceManager2.getDefaultHomePage(), pageIndex);
     }
 

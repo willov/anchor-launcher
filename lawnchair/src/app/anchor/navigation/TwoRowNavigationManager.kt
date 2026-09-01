@@ -97,7 +97,8 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
         val workspace = launcher.workspace
         val ids = rowScreenIds.getOrNull(0) ?: return
         if (ids.isEmpty()) return
-        val homeScreenId = ids[0]
+        val homeIdx = homePageInRow(0)
+        val homeScreenId = ids.getOrElse(homeIdx) { ids[0] }
         val homePage = workspace.getPageIndexForScreenId(homeScreenId)
 
         // Base "already home" on the LIVE workspace page, not the cached rowPageIndex (which can be
@@ -107,15 +108,15 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
         if (onHomeScreen) return
 
         if (activeRowIndex != 0) {
-            // From an upper row: drop to row 0, then ensure row 0 is parked on its first page so
+            // From an upper row: drop to row 0, then ensure row 0 is parked on its HOME page so
             // back goes all the way home (not just one row down).
-            rowPageIndex[0] = 0
+            rowPageIndex[0] = homeIdx
             val from = activeRowIndex
             activeRowIndex = 0
             animateRowTransition(from, 0)
         } else {
-            // On row 0 but not the first page — snap to it.
-            rowPageIndex[0] = 0
+            // On row 0 but not its home page — snap to it.
+            rowPageIndex[0] = homeIdx
             if (homePage >= 0) workspace.snapToPage(homePage)
         }
     }
@@ -443,6 +444,94 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
             .start()
     }
 
+    // ── Per-row home page ───────────────────────────────────────────────────────────────────────
+
+    /**
+     * The index WITHIN row [rowIndex] of that row's home page — the page the row rests on and
+     * returns to. Falls back to 0 (the row's leftmost page) when no home has been set, or when the
+     * stored screen no longer belongs to the row, which is exactly Lawnchair's original behaviour.
+     */
+    fun homePageInRow(rowIndex: Int): Int {
+        val ids = rowScreenIds.getOrNull(rowIndex) ?: return 0
+        if (ids.isEmpty()) return 0
+        val storedId = prefs.getRowHomeScreenId(rowIndex)
+        if (storedId == AnchorPreferences.NO_HOME_SCREEN) return 0
+        return ids.indexOf(storedId).takeIf { it >= 0 } ?: 0
+    }
+
+    /**
+     * The ABSOLUTE workspace page index of row [rowIndex]'s home page, or -1 if the row has no live
+     * pages. This is what [com.android.launcher3.Workspace.getDefaultPage] reports to Launcher3.
+     */
+    fun homeWorkspacePage(rowIndex: Int): Int {
+        val ids = rowScreenIds.getOrNull(rowIndex) ?: return -1
+        val screenId = ids.getOrNull(homePageInRow(rowIndex)) ?: return -1
+        return launcher.workspace.getPageIndexForScreenId(screenId)
+    }
+
+    /** The active row's home page as an absolute workspace page index, or -1. */
+    fun homeWorkspacePage(): Int = homeWorkspacePage(activeRowIndex)
+
+    /**
+     * Records the given ABSOLUTE workspace page as the home page of whichever row owns it. Backs
+     * Lawnchair's "Set as default page" long-press action, which is now per-row: the action always
+     * targets the row the user is looking at.
+     *
+     * Returns false when the page belongs to no known row (e.g. a transient empty screen).
+     */
+    fun setHomeWorkspacePage(workspacePage: Int): Boolean {
+        if (!initialized) return false
+        val screenId = launcher.workspace.getScreenIdForPageIndex(workspacePage)
+        if (screenId < 0) return false
+        for (r in rowScreenIds.indices) {
+            if (screenId in rowScreenIds[r]) {
+                prefs.setRowHomeScreenId(r, screenId)
+                // The camera rests at the image centre on the home page, so redefining home
+                // redefines where rest is. The user set home from the page they are standing on, so
+                // the camera belongs exactly at rest — no distance to re-derive. Only for the ACTIVE
+                // row; setting another row's home takes effect when that row is next entered.
+                if (r == activeRowIndex) {
+                    launcher.wallpaperStabilizationManager.restPageCameraHere()
+                }
+                return true
+            }
+        }
+        return false
+    }
+
+    /** True if [workspacePage] is the home page of the row that owns it. */
+    fun isHomeWorkspacePage(workspacePage: Int): Boolean =
+        initialized && workspacePage >= 0 && workspacePage == homeWorkspacePage(activeRowIndex)
+
+    /**
+     * Signed distance, in pages, from the active row's home page to its current page. Negative means
+     * the current page is LEFT of home. This is what the wallpaper camera uses to place itself
+     * relative to rest, so that rest (the image centre) always coincides with the row's home page.
+     */
+    fun pagesFromHome(): Int {
+        if (!initialized) return 0
+        val ids = rowScreenIds.getOrNull(activeRowIndex) ?: return 0
+        val screenId = launcher.workspace.getScreenIdForPageIndex(launcher.workspace.currentPage)
+        val current = ids.indexOf(screenId)
+        if (current < 0) return 0
+        return current - homePageInRow(activeRowIndex)
+    }
+
+    /**
+     * One-shot import of Lawnchair's single global `default_home_page` (an ABSOLUTE workspace page
+     * index) into the per-row model, so a user who had set a default page keeps it. The page is
+     * attributed to whichever row owns it, which for a pre-existing install is row 0.
+     *
+     * Runs after the rows are populated, and only while no per-row home has been set yet.
+     */
+    private fun migrateGlobalDefaultPage() {
+        if (prefs.globalDefaultPageMigrated) return
+        prefs.globalDefaultPageMigrated = true
+        val legacyPage = launcher.workspace.legacyGlobalDefaultPage
+        if (legacyPage <= 0) return  // 0 is the leftmost page = the per-row default already
+        setHomeWorkspacePage(legacyPage)
+    }
+
     private fun targetWorkspacePage(rowIndex: Int): Int {
         val ids     = rowScreenIds.getOrNull(rowIndex) ?: return 0
         val pageIdx = rowPageIndex.getOrElse(rowIndex) { 0 }
@@ -670,6 +759,11 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
         // Mark initialized before calling setCurrentPage so onWorkspacePageSettled can process
         // the resulting page event normally (updating rowPageIndex) rather than re-entering here.
         initialized = true
+        // Rows are populated, so a legacy global default page can now be attributed to its owning row.
+        migrateGlobalDefaultPage()
+        // Each row starts parked on its OWN home page. Unset rows resolve to their leftmost page,
+        // so this is a no-op for an install that never used "Set as default page".
+        for (r in rowScreenIds.indices) rowPageIndex[r] = homePageInRow(r)
         // Cancel any Launcher3-initiated snap animation (e.g. restoring a saved page that belongs
         // to a non-row-0 row) and park the workspace on the correct row-0 starting page.
         // abortScrollerAnimation inside setCurrentPage stops the in-flight scroller so no

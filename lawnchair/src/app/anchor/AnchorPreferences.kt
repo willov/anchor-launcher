@@ -196,6 +196,40 @@ class AnchorPreferences(context: Context) {
 
     private fun rowScreenKey(rowIndex: Int) = "$KEY_ROW_SCREENS_PREFIX$rowIndex"
 
+    /**
+     * True once Lawnchair's single global `default_home_page` has been imported into the per-row
+     * home model. One-shot: the global preference is the migration SOURCE only, and re-importing it
+     * would overwrite a per-row home the user has since set.
+     */
+    var globalDefaultPageMigrated: Boolean
+        get() = prefs.getBoolean(KEY_GLOBAL_DEFAULT_PAGE_MIGRATED, false)
+        set(value) { prefs.edit().putBoolean(KEY_GLOBAL_DEFAULT_PAGE_MIGRATED, value).apply() }
+
+    /**
+     * The screen ID of row [rowIndex]'s home page — the page the row returns to, and the page the
+     * wallpaper camera rests at (image centre). [NO_HOME_SCREEN] means "not set", which resolves to
+     * the row's LEFTMOST page. That default is exactly Lawnchair's existing behaviour, so an
+     * untouched install behaves as before.
+     *
+     * Stored as a screen ID, not a page index, for the same reason row membership is: Launcher3
+     * renumbers page indices whenever screens are added, removed or reordered (and Anchor reorders
+     * them itself to keep rows contiguous), so an index would silently come to mean a different
+     * page. A screen ID is stable for the life of the screen.
+     */
+    fun getRowHomeScreenId(rowIndex: Int): Int =
+        prefs.getInt(rowHomeKey(rowIndex), NO_HOME_SCREEN)
+
+    fun setRowHomeScreenId(rowIndex: Int, screenId: Int) {
+        prefs.edit().putInt(rowHomeKey(rowIndex), screenId).apply()
+    }
+
+    /** Clears row [rowIndex]'s home page, reverting it to the row's leftmost page. */
+    fun clearRowHomeScreenId(rowIndex: Int) {
+        prefs.edit().remove(rowHomeKey(rowIndex)).apply()
+    }
+
+    private fun rowHomeKey(rowIndex: Int) = "$KEY_ROW_HOME_PREFIX$rowIndex"
+
     companion object {
         private const val PREFS_NAME             = "anchor_prefs"
         private const val KEY_DRAWER_LETTER_SCROLLER = "drawer_letter_scroller"
@@ -214,6 +248,8 @@ class AnchorPreferences(context: Context) {
         private const val KEY_BOTTOM_EDGE_ZONE_PERCENT = "bottom_edge_swipe_up_zone_percent"
         private const val KEY_ROW_COUNT           = "row_count"
         private const val KEY_ROW_SCREENS_PREFIX  = "row_screens_"
+        private const val KEY_ROW_HOME_PREFIX     = "row_home_screen_"
+        private const val KEY_GLOBAL_DEFAULT_PAGE_MIGRATED = "global_default_page_migrated"
         private const val KEY_PARALLAX_PERCENT    = "wallpaper_parallax_percent"
 
         const val SWIPE_NOTIFICATIONS = "notifications"
@@ -236,6 +272,9 @@ class AnchorPreferences(context: Context) {
         const val WALLPAPER_SOURCE_CUSTOM = "custom"   // Anchor on: picked/bundled image via live wallpaper
 
         const val MAX_ROWS = 5
+
+        /** [getRowHomeScreenId] value meaning "no explicit home page" → use the row's leftmost page. */
+        const val NO_HOME_SCREEN = -1
 
         // Bottom-edge swipe-up grab strip height (percent of screen height).
         const val BOTTOM_EDGE_ZONE_PERCENT_MIN = 0

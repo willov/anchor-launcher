@@ -14,6 +14,12 @@ a single continuous space rather than a set of unrelated screens.
 
 **The image centre maps to the HOME PAGE of the current row. The camera rests at the image centre.**
 
+*(Implemented: `WallpaperStabilizationManager.anchorPageCameraToHome()`. `onScrollOffset` remains a
+pure delta accumulator — that is what gives the "continuous world you pan through" feel within a row
+— and is pinned to rest at the row's home page on row switch, on model rebind, and when home is
+redefined. It is deliberately NOT re-anchored after a rotation rebind: a rotation must be
+pixel-perfect and the camera is already correct by construction, since rotation never touches it.)*
+
 That single rule settles most of the design:
 
 - **"Which crop is canonical?"** — the one you see on your home page. No arbitrary choice.
@@ -119,18 +125,29 @@ Revisit only if, after per-row home lands, the camera is observed drifting far f
 use — but the excursion is small (600px of 2896px at 10% on a 1200x1920 tablet), so "far" is not
 really reachable.
 
-## Prerequisite: per-row default page
+## Prerequisite: per-row default page — IMPLEMENTED
 
-The model rests on "the home page of the current row", so home must be settable per row. Today
-Lawnchair has a single global `default_home_page` pref plus a "Set as default page" long-press action.
+The model rests on "the home page of the current row", so home must be settable per row. Lawnchair
+had a single global `default_home_page` pref plus a "Set as default page" long-press action; both are
+now per-row.
 
-- Extend to `defaultPageForRow(r)`; migrate the existing global value to row 0.
-- Default: leftmost on every row, which is today's behaviour — no migration surprise.
-- Reuses existing UX (the long-press action), so no new concept for the user.
+- `AnchorPreferences.getRowHomeScreenId(r)` / `setRowHomeScreenId(r, id)`. Stored as a **screen ID**,
+  not a page index — Launcher3 renumbers indices whenever screens are added, removed or reordered
+  (and Anchor reorders them itself to keep rows contiguous), so an index would silently come to mean
+  a different page. This mirrors how row membership is already stored.
+- `TwoRowNavigationManager.homePageInRow(r)` / `homeWorkspacePage(r)` / `setHomeWorkspacePage(page)`.
+- `Workspace.getDefaultPage()` reports the ACTIVE row's home; `setDefaultPage()` routes to the row
+  that owns the page. So the existing long-press action and the popup's "hide when already default"
+  filter became per-row with no change at their call sites.
+- Default: unset → the row's leftmost page, which is exactly Lawnchair's original behaviour.
+- The legacy global value is imported once (`globalDefaultPageMigrated`) and attributed to the row
+  that owns that page — row 0 for any pre-existing install.
 
-**Open question:** Home-press currently returns to the global default page. Should it return to the
-CURRENT ROW's home instead? That is arguably correct independently of the wallpaper, but it changes
-navigation, not just rendering — decide deliberately.
+**Open question — still open, deliberately not decided here.** Home-press currently returns to ROW
+0's home (via `navigateToHome`, which is also what the back gesture uses). Should it instead return
+to the CURRENT ROW's home? That is arguably correct independently of the wallpaper, but it changes
+navigation, not just rendering. The per-row data now exists to implement either, so this is purely a
+UX decision.
 
 ## Other open questions
 

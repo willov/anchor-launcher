@@ -230,6 +230,11 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     fun unfreezeOffset() {
         isRowTransitioning = false
         lastScrollOffset = Float.NaN
+        // We have arrived in a new row, which has its OWN home page. Re-anchor so rest (the image
+        // centre) coincides with THAT row's home rather than carrying the previous row's horizontal
+        // wander across. Vertical navigation still doesn't move you horizontally in the world: when
+        // both rows are parked on their home page this is a no-op, because both anchor to rest.
+        anchorPageCameraToHome()
     }
 
     /**
@@ -277,6 +282,48 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // bitmapCamera() along with the axis swap, so this stays rotation-agnostic.
         val bef = pageWorld
         pageWorld = (pageWorld + step).coerceIn(0f, 1f)
+        pushLiveOffsets()
+    }
+
+    /**
+     * Re-anchors the PAGE camera so that the active row's HOME page sits at rest — the image centre.
+     *
+     * This is what makes "the image centre maps to the home page of the current row" true rather
+     * than incidental. [onScrollOffset] is a pure accumulator: it moves the camera by the delta of
+     * the finger, which gives the "continuous world you pan through" feel within a row but has no
+     * idea where home is. Anchoring pins that accumulator to a known point.
+     *
+     * The camera is placed at rest ± the row-relative page distance from home, so anchoring while
+     * parked off-home still lands the camera where a scroll from home would have put it — the user
+     * sees the same pixels whether they walked to this page or arrived here directly.
+     *
+     * Called when the row's home is (re)defined, when a row switch settles, and after a rebind.
+     * NOT called per-frame: within a row the accumulator owns the camera, so that scrolling stays
+     * continuous and a pure rotation still moves nothing.
+     */
+    fun anchorPageCameraToHome() {
+        if (!isLiveWallpaperActive()) return
+        val nav = launcher.twoRowNavigationManager
+        val pagesFromHome = nav.pagesFromHome()
+        // Distance of one page step in world units: a full sweep of the row costs LIVE_STEP_PER_SWEEP
+        // and is divided evenly across the row's (pages − 1) steps, exactly as onScrollOffset
+        // accumulates it. A single-page row has no step, so it simply rests at centre.
+        val steps = (nav.pagesInRow(nav.activeRowIndex) - 1).coerceAtLeast(1)
+        val pageStep = LIVE_STEP_PER_SWEEP / steps
+        pageWorld = (CAMERA_REST_WORLD + pagesFromHome * pageStep).coerceIn(0f, 1f)
+        lastScrollOffset = Float.NaN
+        pushLiveOffsets()
+    }
+
+    /**
+     * The degenerate case of [anchorPageCameraToHome]: the page under the user IS the home page, so
+     * the camera goes straight to rest with no distance to compute. Used when home is (re)defined
+     * from the page the user is standing on.
+     */
+    fun restPageCameraHere() {
+        if (!isLiveWallpaperActive()) return
+        pageWorld = CAMERA_REST_WORLD
+        lastScrollOffset = Float.NaN
         pushLiveOffsets()
     }
 
@@ -400,9 +447,15 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     }
 
     fun resetForWorkspaceReady() {
+        val wasRotating = isRotationRebinding
         isRowTransitioning = false
         isRotationRebinding = false
         lastScrollOffset = Float.NaN
+        // Do NOT re-anchor after a ROTATION rebind: a rotation must be pixel-perfect, and the camera
+        // is already correct by construction (rotation never touches it). Anchoring is only for a
+        // cold start / model rebind, where the accumulator has no history to preserve and the row's
+        // home page is the defined resting point.
+        if (!wasRotating) anchorPageCameraToHome()
     }
 
     /**
@@ -479,8 +532,13 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         private const val HOME_REST_WORLD_Y = CAMERA_REST_WORLD
 
         /**
-         * Rest position of the PAGE role. Page 0 sits at one end so the whole range is available to
-         * scroll into — unlike the ROW role, which is anchored near the image bottom.
+         * Rest position of the PAGE role — the image centre, where the ACTIVE ROW'S HOME PAGE sits
+         * (see [anchorPageCameraToHome]). The home page is the canonical crop: it is what the lock
+         * screen and the set-wallpaper preview render, so resting there makes all three agree.
+         *
+         * Only the reachable RANGE is asymmetric: a leftmost home can pan right only, a middle home
+         * both ways. That asymmetry is accepted rather than compensated — see
+         * `docs/wallpaper-parallax-model.md`.
          */
         private const val PAGE_REST_WORLD = CAMERA_REST_WORLD
 
