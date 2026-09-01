@@ -230,11 +230,11 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     fun unfreezeOffset() {
         isRowTransitioning = false
         lastScrollOffset = Float.NaN
-        // We have arrived in a new row, which has its OWN home page. Re-anchor so rest (the image
-        // centre) coincides with THAT row's home rather than carrying the previous row's horizontal
-        // wander across. Vertical navigation still doesn't move you horizontally in the world: when
-        // both rows are parked on their home page this is a no-op, because both anchor to rest.
-        anchorPageCameraToHome()
+        // Deliberately NOT re-anchored to the new row's home. A row switch is VERTICAL navigation
+        // and must not move you horizontally in the world — that is the model's rule, and breaking
+        // it is visible: standing on page 2 (pageWorld ~0.7) and switching rows snapped the camera
+        // back to rest in one frame. The horizontal position carries across the switch; the row's
+        // home only defines where rest IS, not that you are dragged to it.
     }
 
     /**
@@ -297,9 +297,12 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
      * parked off-home still lands the camera where a scroll from home would have put it — the user
      * sees the same pixels whether they walked to this page or arrived here directly.
      *
-     * Called when the row's home is (re)defined, when a row switch settles, and after a rebind.
-     * NOT called per-frame: within a row the accumulator owns the camera, so that scrolling stays
-     * continuous and a pure rotation still moves nothing.
+     * Called on a cold start / model rebind, where the accumulator has no history to preserve and
+     * the row's home is the defined resting point.
+     *
+     * NOT called per-frame (within a row the accumulator owns the camera, so scrolling stays
+     * continuous and a pure rotation still moves nothing), and NOT on a row switch — a row switch is
+     * vertical navigation and must preserve the horizontal world position. See [unfreezeOffset].
      */
     fun anchorPageCameraToHome() {
         if (!isLiveWallpaperActive()) return
