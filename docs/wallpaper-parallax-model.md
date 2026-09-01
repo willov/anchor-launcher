@@ -97,6 +97,28 @@ Consequences:
 - You are always somewhere inside one shared budget, so nothing "stops" at a row boundary.
 - Every step is small but non-zero.
 
+## Drift-back to the "natural" view — considered and dropped, twice
+
+An earlier idea: if the camera had wandered far from the view that "naturally" belongs to the current
+screen, slowly drift it back. Scrapped then, and re-examined after the centring decision — still no.
+
+The new model removes the problem it solved. Drift-back was a corrective for a camera that was a pure
+accumulator with no canonical position per screen. Now home IS the image centre and every screen has a
+defined position relative to it, bounded by the excursion budget, so there is nothing to correct.
+
+It also actively conflicts with two things we want:
+
+- **The world metaphor.** The appeal of the current design is that the wallpaper is a continuous space
+  you move through. Drift-back rearranges that space while you are not looking, and breaks spatial
+  stability: return to the same page twice, see different pixels.
+- **Single-writer camera.** A background timer mutating the camera would be a fourth writer on a path
+  where three already caused the unlock snap, inverted rows, and the landscape stall. The current fix
+  works precisely because the camera only changes on explicit navigation.
+
+Revisit only if, after per-row home lands, the camera is observed drifting far from centre in normal
+use — but the excursion is small (600px of 2896px at 10% on a 1200x1920 tablet), so "far" is not
+really reachable.
+
 ## Prerequisite: per-row default page
 
 The model rests on "the home page of the current row", so home must be settable per row. Today
