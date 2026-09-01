@@ -434,11 +434,11 @@ class AnchorWallpaperService : WallpaperService() {
         // worldY at the home rest (bottom row). Mirrors WallpaperStabilizationManager.HOME_REST_WORLD_Y
         // (1 − ROW_MARGIN) so the engine's rest crop matches the manager's camera and the lock-screen
         // crop. Used as the initial worldY before the launcher pushes any offset.
-        const val HOME_REST_WORLD_Y = 0.9f
+        // Mirrors WallpaperStabilizationManager.CAMERA_REST_WORLD: both roles rest at the middle
+        // of the pannable window, which puts the image centre at the viewport centre.
+        const val HOME_REST_WORLD_Y = 0.5f
 
-        // Mirrors WallpaperStabilizationManager.PAGE_REST_WORLD: the page role rests at one end so the
-        // whole range is available to scroll into.
-        const val PAGE_REST_WORLD = 0f
+        const val PAGE_REST_WORLD = 0.5f
 
         // Process-level decoded-bitmap cache, shared across all Engine instances in this process. The
         // system keeps multiple engine instances alive across a switch; caching here means whichever one

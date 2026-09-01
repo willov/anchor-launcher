@@ -2,6 +2,19 @@
 
 ## Next Up
 
+### Wallpaper parallax model — AGREED, NOT IMPLEMENTED (2026-08-31)
+
+Design settled after the wallpaper rendering fixes: **the image centre maps to the HOME PAGE of the
+current row**, so the camera rests at the image centre and the layout only decides how far you can pan
+each way. Requires per-row default pages (today's global `default_home_page` extended, defaulting to
+leftmost = current behaviour).
+
+Full model, requirements, trade-offs and open questions: **[docs/wallpaper-parallax-model.md](docs/wallpaper-parallax-model.md)**
+
+Also tracked there: the set-wallpaper PREVIEW and the resulting LOCK SCREEN currently show different
+crops (undiagnosed).
+
+
 ### Grid setup wizard — ✅ COMPLETE & VERIFIED ON DEVICE (2026-07-12)
 
 First-launch (and on-demand via Settings → Home Screen → Run setup wizard) 3-page flow

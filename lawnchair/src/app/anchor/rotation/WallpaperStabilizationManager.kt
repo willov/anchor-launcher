@@ -84,14 +84,14 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     //
     // The two roles have genuinely different semantics: the PAGE axis is a free scroll that needs
     // headroom in both directions and rests at one end, while the ROW axis is anchored — row 0 sits at
-    // HOME_REST_WORLD_Y (0.9, the bottom of the image) and rows climb from there. Storing those as
+    // HOME_REST_WORLD_Y and rows climb from there. Storing those as
     // liveWorldX/liveWorldY meant the rest positions were bound to bitmap axes, but WHICH bitmap axis
     // each role drives flips with rotation (the counter-rotation maps horizontal-on-glass to bitmap-Y
     // at ROTATION_90). So in landscape page scrolling inherited the ROW rest of 0.9 and had only 0.10
     // of room in one direction — half a sweep — then stalled. Keying by role makes that impossible:
     // each role keeps its own rest and range no matter how the device is held.
     private var pageWorld = PAGE_REST_WORLD      // free scroll axis (page swipes)
-    private var rowWorld = HOME_REST_WORLD_Y     // anchored axis (row switches; row 0 = image bottom)
+    private var rowWorld = HOME_REST_WORLD_Y     // row switches; row 0 rests at the image centre
     private var vGlassAnimator: ValueAnimator? = null
 
     /**
@@ -326,15 +326,23 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // row would otherwise scale to a full step and re-introduce the mismatch in the other
         // direction on rows that have more pages.
         val pageStep = LIVE_STEP_PER_SWEEP / (pagesInTargetRow - 1).coerceAtLeast(1)
-        val rowStep = minOf(LIVE_STEP_PER_SWEEP, pageStep)
+
+        // Also cap the step so ALL rows fit the room available above the rest position. Rows are
+        // capped at MAX_ROWS (5), and with 2-page rows the row step is at its largest (0.2), so
+        // 4-5 rows would otherwise need 0.6-0.8 of the 0.5 available and the top rows would simply
+        // stop moving. Shrinking the step keeps every row reachable; it costs a slightly smaller
+        // vertical drift than horizontal in exactly that configuration, which is a better failure
+        // than not moving at all. (Rows with 3+ pages already have a small enough step to fit.)
+        val rowsAbove = (totalRows - 1).coerceAtLeast(1)
+        val fitStep = CAMERA_REST_ROOM / rowsAbove
+        val rowStep = minOf(LIVE_STEP_PER_SWEEP, pageStep, fitStep)
         val canonical = (HOME_REST_WORLD_Y - toRow * rowStep).coerceIn(0f, HOME_REST_WORLD_Y)
 
         // rowWorld is ALWAYS stored canonically (row 0 = HOME_REST_WORLD_Y). The rotation mirror is
         // applied once, at push time in bitmapCamera(), together with the axis swap — mirroring the
-        // target here instead meant the stored value silently changed meaning per rotation: it starts
-        // canonical (0.9) but the first landscape target was mirrored (0.2), so the first row switch
-        // lurched -0.70 instead of -0.10 and every later one was fine. Keeping one representation and
-        // converting only at the boundary removes that whole class of bug.
+        // target here instead made the stored value silently change meaning per rotation, so the first
+        // row switch after launch lurched a long way and every later one was fine. Keeping one
+        // representation and converting only at the boundary removes that whole class of bug.
         val target = canonical
         val current = rowWorld
         vGlassAnimator?.cancel()
@@ -449,13 +457,31 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         // worldY of the home row (row 0) at rest: near the BOTTOM of the image, matching the engine's
         // HOME_REST_WORLD_Y and the lock-screen crop.
         private const val ROW_MARGIN = 0.1f
-        private const val HOME_REST_WORLD_Y = 1f - ROW_MARGIN
+        /**
+         * Rest position of BOTH camera roles: the middle of the pannable window.
+         *
+         * The window is already centred in the bitmap (see the engine's baseX/baseY), so 0.5 puts the
+         * IMAGE CENTRE at the viewport centre at rest. That matters for user photos — a centred
+         * subject was landing 300px left and 240px high of where you'd expect, because the page role
+         * rested at 0 (window start) and the row role at 0.9 (near window end).
+         *
+         * Centring does NOT reduce total travel: the pannable window is the same size either way, it
+         * is just entered from the middle, so each axis gets half the range in each direction instead
+         * of all of it in one. A full page sweep costs LIVE_STEP_PER_SWEEP (0.2) regardless of page
+         * count, so 0.5 each way is ample on that axis at any number of pages.
+         */
+        private const val CAMERA_REST_WORLD = 0.5f
+
+        /** Room each role has on either side of [CAMERA_REST_WORLD]. */
+        private const val CAMERA_REST_ROOM = CAMERA_REST_WORLD
+
+        private const val HOME_REST_WORLD_Y = CAMERA_REST_WORLD
 
         /**
          * Rest position of the PAGE role. Page 0 sits at one end so the whole range is available to
          * scroll into — unlike the ROW role, which is anchored near the image bottom.
          */
-        private const val PAGE_REST_WORLD = 0f
+        private const val PAGE_REST_WORLD = CAMERA_REST_WORLD
 
         /**
          * The last camera Anchor pushed, read by [app.anchor.wallpaper.AnchorWallpaperService] to
