@@ -34,6 +34,33 @@ asymmetric:
 This is the important difference from "anchor at page 0": you are not sitting at an EDGE at rest, you
 are at CENTRE, and the layout only decides how far you can wander each way.
 
+## Asymmetric reach is accepted, not compensated
+
+If home is a corner — "super home" at row 0, page 0 — you can only pan UP and RIGHT from centre. Half
+of each axis's excursion is unreachable.
+
+**Decision: accept it.** The camera still rests at the image centre; the layout simply determines which
+directions are reachable, and the unreachable half stays unused.
+
+| home position   | reachable directions      |
+|-----------------|---------------------------|
+| bottom-left     | up + right (two half-axes)|
+| middle-left     | up/down + right           |
+| middle          | all four                  |
+
+Two alternatives were considered and REJECTED:
+
+- **Re-allocate the budget to only the reachable directions** (so a corner home gets the full budget
+  spread over the moves it can actually make). Removes the dead range, but makes total drift constant
+  and per-swipe drift vary with page count — reversing the "every swipe moves the same" property, and
+  coupling feel to layout.
+- **Rest at the MATRIX centre rather than home.** Gives symmetric reach, but home rest is then no
+  longer the image centre, which breaks lock-screen centring — the thing this model exists to fix.
+
+Accepting the asymmetry keeps: image centre at rest, constant per-swipe drift, equal H/V, and no
+per-direction budget arithmetic. The cost is that a corner home never scrolls into the down-left half
+of the excursion — it is only ever seen at rest.
+
 ## Requirements this has to satisfy
 
 - Multiple rows, independently scrolled; more than two rows must work (`MAX_ROWS = 5`).
