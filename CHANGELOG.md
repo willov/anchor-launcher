@@ -4,6 +4,12 @@ All notable changes to Anchor Launcher will be documented here.
 
 ## [Unreleased]
 
+### Changed
+- **Rotation is dramatically faster.** Turning the device now updates the home screen in well under a fifth of a second on most devices, down from around a second. Icon positions are already stored the moment the screen was last rebuilt; rotation now just re-lays them out in memory and shows the result, instead of rebuilding the whole home screen from disk.
+
+### Fixed
+- **Flipping the device a full 180° (or between the two landscape orientations directly) could leave icons stuck in their pre-flip positions.** On devices that support every orientation, a rotation that skipped straight from upright to upside-down (or from one sideways orientation straight to the other) sometimes never triggered the layout update at all, so icons ended up shifted from where they belonged until a further rotation corrected it. Both directions of both flips are now handled correctly.
+
 ## [0.5.3] - 2026-09-01
 
 ### Added
