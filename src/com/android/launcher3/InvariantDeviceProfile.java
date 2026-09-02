@@ -969,9 +969,17 @@ public class InvariantDeviceProfile {
         // Re-init grid
         initGrid(context, getCurrentGridName(context));
 
+        // Anchor: initGrid() -> afterInitGrid() has now decided the new active rotation frame.
+        // Attempt the fast path -- re-map the already-loaded model in memory and rebind, instead of
+        // the DB round-trip a full reload costs. Must run BEFORE the modelPropsChanged listeners
+        // below fire, since one of them (ModelInitializer's IDP change listener) is what would
+        // otherwise call LauncherModel.forceReload() for this same rotation.
+        boolean fastRotationRemapped = app.anchor.rotation.AnchorTransposeHook
+                .tryFastRotationRemap(context);
+
         boolean modelPropsChanged = !Arrays.equals(oldState, toModelState());
         for (OnIDPChangeListener listener : mChangeListeners) {
-            listener.onIdpChanged(modelPropsChanged);
+            listener.onIdpChanged(modelPropsChanged && !fastRotationRemapped);
         }
     }
 

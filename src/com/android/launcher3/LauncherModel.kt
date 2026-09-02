@@ -222,6 +222,34 @@ constructor(
         if (wasActive) forceReload()
     }
 
+    /**
+     * Anchor: re-maps the in-memory [BgDataModel]'s desktop item coordinates for a rotation and
+     * rebinds, WITHOUT touching the DB or posting a [LoaderTask]. This is the fast path that
+     * replaces [forceReload] on rotation once the DB is portrait-canonical (see CoordFrame /
+     * AnchorTransposeHook) -- the DB round-trip was the remaining rotation cost after the storage
+     * refactor, and the coordinate math itself is microseconds.
+     *
+     * Returns true if the fast in-place remap+rebind was performed. Returns false (and does
+     * nothing) if the model is not currently loaded -- e.g. a [LoaderTask] is already in flight, or
+     * this is a cold start -- in which case the caller must fall back to [forceReload] so the
+     * pending/next load reads the (untouched, correct) DB and maps at read time as usual.
+     */
+    fun remapWorkspaceForRotation(
+        oldRotation: Int,
+        newRotation: Int,
+        portraitCols: Int,
+        portraitRows: Int,
+    ): Boolean {
+        synchronized(mLock) {
+            if (!isModelLoaded()) return false
+            mBgDataModel.remapWorkspaceCoordinatesInPlace(
+                oldRotation, newRotation, portraitCols, portraitRows,
+            )
+        }
+        rebindCallbacks()
+        return true
+    }
+
     /** Rebinds all existing callbacks with already loaded model */
     fun rebindCallbacks() {
         if (hasCallbacks()) {

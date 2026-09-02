@@ -3,6 +3,7 @@ package app.anchor.rotation
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.res.Configuration
+import android.util.Log
 import android.view.Surface
 import com.android.launcher3.InvariantDeviceProfile
 import com.android.launcher3.Launcher
@@ -134,6 +135,14 @@ object AnchorTransposeHook {
     // reinterpreting our coordinates.
     @Volatile private var activeRotation = Surface.ROTATION_0
 
+    // The value of [activeRotation] immediately before the most recent [updateActiveRotation] call
+    // overwrote it. Captured so the in-memory rotation remap (LauncherModel.remapWorkspaceForRotation)
+    // can pivot an item from the frame it is ACTUALLY sitting in (the old active rotation) to the new
+    // one, without having to re-derive "old" from KEY_LAST_ROTATION -- which tracks the display
+    // rotation, not the gated active frame, and would disagree whenever a foreign rotation is
+    // involved. See [getPreviousActiveRotation].
+    @Volatile private var previousActiveRotation = Surface.ROTATION_0
+
     /**
      * Recomputes and stores the active display frame. Called at the single point in
      * [InvariantDeviceProfile.initGrid] where the grid is (re)built, immediately before the
@@ -142,12 +151,24 @@ object AnchorTransposeHook {
      * Returns the frame that was stored.
      */
     private fun updateActiveRotation(context: Context, rotation: Int): Int {
+        previousActiveRotation = activeRotation
         // Only adopt a rotated frame when the LAUNCHER WINDOW itself is at that rotation. When the
         // display is rotated by another app while our window stays put, the workspace is still laid
         // out in the launcher's own frame, so the coordinate frame must not move with the display.
         activeRotation = if (launcherWillRotate(context)) rotation else Surface.ROTATION_0
+        Log.d(RotationTiming.TAG, "updateActiveRotation: requested=$rotation " +
+            "previous=$previousActiveRotation -> active=$activeRotation " +
+            "(launcherWillRotate=${launcherWillRotate(context)})")
         return activeRotation
     }
+
+    /**
+     * The active frame ([getActiveRotation]) as it was immediately before the most recent
+     * [InvariantDeviceProfile.initGrid] call updated it. This is the frame the in-memory
+     * `ItemInfo.cellX/cellY` are still sitting in until the rotation remap runs.
+     */
+    @JvmStatic
+    fun getPreviousActiveRotation(): Int = previousActiveRotation
 
     /**
      * The Surface rotation constant whose coordinate frame the workspace is currently laid out in.
@@ -315,6 +336,76 @@ object AnchorTransposeHook {
             val tmp = idp.numColumns
             idp.numColumns = idp.numRows
             idp.numRows = tmp
+        }
+    }
+
+    /**
+     * Called from [InvariantDeviceProfile.onConfigChanged] right after `initGrid()` (i.e. after
+     * [afterInitGrid] has decided the new active frame). Attempts the fast path: re-map the
+     * already-loaded [com.android.launcher3.model.BgDataModel] in memory from the old active frame
+     * to the new one and rebind synchronously, instead of the DB round-trip + [LoaderTask][
+     * com.android.launcher3.model.LoaderTask] that [LauncherModel.forceReload] costs.
+     *
+     * Returns true when the fast remap was performed (the caller must NOT also force a reload —
+     * that would redundantly rebind a second time). Returns false when the fast path does not
+     * apply, in which case the normal [modelChanged][InvariantDeviceProfile.OnIDPChangeListener]
+     * -driven `forceReload()` must run as before:
+     *  - the DB is not yet portrait-canonical (old reactive-rewrite era, or migration pending)
+     *  - the active frame did not actually change (e.g. a foreign rotation that [afterInitGrid]
+     *    correctly collapsed to ROTATION_0 on both sides — nothing to remap)
+     *  - the model is not currently loaded (cold start, or a LoaderTask already in flight) — the
+     *    forthcoming/ongoing load will read the untouched DB and map correctly at read time anyway
+     */
+    @JvmStatic
+    fun tryFastRotationRemap(context: Context): Boolean {
+        if (!PortraitCanonicalMigration.isLiveDbCanonical()) {
+            Log.d(RotationTiming.TAG, "tryFastRotationRemap: skip, DB not canonical")
+            return false
+        }
+        val oldRotation = previousActiveRotation
+        val newRotation = activeRotation
+        if (oldRotation == newRotation) {
+            Log.d(RotationTiming.TAG, "tryFastRotationRemap: skip, no frame change ($oldRotation)")
+            return false
+        }
+        val grid = getPortraitGrid()
+        if (grid == null) {
+            Log.d(RotationTiming.TAG, "tryFastRotationRemap: skip, no portrait grid yet")
+            return false
+        }
+        // Timing instrumentation for the rotation-speedup measurement (baseline: 1863/1156/915ms
+        // loader-stop-to-bound for R90/R0/R270 via the old forceReload path). RotationTiming.onReveal
+        // logs the elapsed time once RotationAnimator's reveal fires (see onWorkspaceRebound).
+        RotationTiming.markStart(oldRotation, newRotation)
+        val didFastPath = LauncherAppState.getInstance(context).model.remapWorkspaceForRotation(
+            oldRotation, newRotation, grid.first, grid.second,
+        )
+        if (!didFastPath) RotationTiming.cancel()
+        return didFastPath
+    }
+
+    /** Ad-hoc timing for the in-place remap path; see [tryFastRotationRemap]. Remove once measured. */
+    object RotationTiming {
+        const val TAG = "AnchorRotationTiming"
+        @Volatile private var startNanos = 0L
+        @Volatile private var label = ""
+
+        fun markStart(oldRotation: Int, newRotation: Int) {
+            startNanos = System.nanoTime()
+            label = "R$oldRotation->R$newRotation"
+        }
+
+        fun cancel() {
+            startNanos = 0L
+        }
+
+        /** Called from RotationAnimator when the workspace is revealed (or immediately if unmasked). */
+        fun onWorkspaceBound() {
+            val start = startNanos
+            if (start == 0L) return
+            startNanos = 0L
+            val ms = (System.nanoTime() - start) / 1_000_000
+            Log.d(TAG, "fast rotation remap $label: bound+revealed in ${ms}ms")
         }
     }
 
