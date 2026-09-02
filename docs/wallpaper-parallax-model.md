@@ -143,11 +143,12 @@ now per-row.
 - The legacy global value is imported once (`globalDefaultPageMigrated`) and attributed to the row
   that owns that page — row 0 for any pre-existing install.
 
-**Open question — still open, deliberately not decided here.** Home-press currently returns to ROW
-0's home (via `navigateToHome`, which is also what the back gesture uses). Should it instead return
-to the CURRENT ROW's home? That is arguably correct independently of the wallpaper, but it changes
-navigation, not just rendering. The per-row data now exists to implement either, so this is purely a
-UX decision.
+**Decided 2026-09-01: Home returns to SUPER HOME** — row 0, and row 0's own home page — via
+`navigateToHome`, which is also what the back gesture uses. It does NOT return to the current row's
+home. Super home is the one destination that is the same from everywhere, which is what makes Home a
+reliable escape hatch from anywhere in the matrix; returning to the current row's home would make the
+destination depend on where you already are, so from an upper row you could never get all the way
+back in one press. May become a user setting later; not built yet.
 
 ## Other open questions
 

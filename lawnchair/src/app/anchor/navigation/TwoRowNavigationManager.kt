@@ -88,9 +88,19 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
     }
 
     /**
-     * Navigate directly to row 0, page 0 (the home screen).
-     * If already on row 0, page 0, this is a no-op.
+     * Navigate directly to SUPER HOME — row 0, and row 0's own home page (its leftmost page unless
+     * the user set another via "Set as default page"). A no-op if already there.
      * Used by the back gesture in [LawnchairLauncher.onStateBack].
+     *
+     * **Decided (2026-09-01): Home returns to super home, NOT the current row's home.** Now that home
+     * is per-row, "go home" could plausibly mean either; super home wins because it is the one
+     * destination that is the same from everywhere, which is what makes Home a reliable escape hatch
+     * from anywhere in the matrix. Returning to the current row's home would make the gesture's
+     * destination depend on where you already are, so from an upper row you could never get all the
+     * way back in one press.
+     *
+     * Could become a user setting later (super home vs current row's home); deliberately not built
+     * yet — no need for the preference until someone wants the other behaviour.
      */
     fun navigateToHome() {
         if (!initialized) return
