@@ -9,9 +9,11 @@ All notable changes to Anchor Launcher will be documented here.
 ### Added
 - **Each row now has its own home page.** "Set as default page" (long-press the home screen) used to set a single page for the whole launcher; it now applies to the row you are on, so every row can have its own starting page. Rows you never set one for keep behaving exactly as before — they start at their leftmost page — and an existing default page is carried over automatically.
 - **The wallpaper now rests on your home page.** The centre of your wallpaper is shown when you are on the current row's home page, so the picture is framed the way you'd expect wherever you set home. Moving further from home pans the background away from centre in either direction; pages to the left of home pan one way and pages to the right pan the other.
+- **Anchor now offers to restore your wallpaper if Android resets it.** Updating the app can make the system drop Anchor's wallpaper and fall back to a plain static one, so your background silently stops being rotation-stable. Your image is never lost — only the system's choice of wallpaper is — so Anchor now notices and offers to put it back, with the option to keep what you have or not be asked again. If you deliberately picked a *different* live wallpaper, you are never prompted; Anchor simply steps aside.
 
 ### Note
 - Pressing Home still returns to the bottom row's home page, as before. Whether it should instead return to the *current* row's home is deliberately left unchanged for now.
+- A wallpaper reset caused by force-stopping Anchor is noticed the next time you open the home screen, since force-stopping shuts the launcher down too.
 
 ## [0.5.2] - 2026-08-31
 

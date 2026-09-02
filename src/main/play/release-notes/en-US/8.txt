@@ -1,5 +1,6 @@
-Per-row home pages.
+Per-row home pages, and wallpaper restore.
 
 • Each row of home screens can now have its own starting page. Long-press the home screen and choose "Set as default page" to set it for the row you are on.
 • Rows you haven't set one for are unchanged — they still start at their leftmost page.
 • The wallpaper now rests centred on your home page, so the picture is framed the way you expect and pans either side of it as you swipe.
+• If Android resets Anchor's wallpaper (this can happen when the app updates), Anchor now offers to restore it — your image was never lost.
