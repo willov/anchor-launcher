@@ -282,7 +282,19 @@ class LawnchairLauncher : QuickstepLauncher() {
     private val anchorWallpaperChangedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val anchorPrefs = app.anchor.AnchorPreferences(this@LawnchairLauncher)
-            if (!anchorPrefs.pendingWallpaperRestart) return
+            if (!anchorPrefs.pendingWallpaperRestart) {
+                // Not our own set: the wallpaper changed underneath us. If that dropped our engine,
+                // offer to restore it NOW rather than waiting for the next resume — a reset can happen
+                // while the user is sitting on the home screen (which is exactly when they notice the
+                // background change), and onResume alone would not fire until they left and came back.
+                // The prompt does its own filtering: it only acts on a static-image wallpaper, and
+                // silently syncs the pref when another live wallpaper was chosen deliberately.
+                if (hasBeenResumed()) {
+                    wallpaperStabilizationManager.refreshLiveWallpaperState()
+                    wallpaperStabilizationManager.maybeShowWallpaperResetPrompt()
+                }
+                return
+            }
             // Only rebuild while backgrounded, so the recreate is invisible (the user is still in
             // Settings / the picker); by the time they return home it is already correct.
             if (hasBeenResumed()) return
