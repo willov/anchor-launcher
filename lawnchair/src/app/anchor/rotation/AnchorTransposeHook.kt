@@ -41,37 +41,52 @@ object AnchorTransposeHook {
     @Volatile private var portraitColsCache = 0
     @Volatile private var portraitRowsCache = 0
 
-    // The launcher window's OWN authoritative orientation, recorded by the launcher itself from its
+    // The launcher window's OWN authoritative rotation, recorded by the launcher itself from its
     // Activity.onConfigurationChanged (see [onLauncherConfigurationChanged]). This is the ONLY reliable
     // signal for "did the LAUNCHER window actually rotate", and it is correctly ordered because the
     // launcher records it before it re-triggers the transpose.
     //
-    // Why not read launcher.resources.configuration.orientation directly inside beforeConfigChanged:
-    // the transpose is driven by DisplayController.CHANGE_ROTATION, which fires ~75ms BEFORE the
-    // launcher Activity's own onConfigurationChanged updates its config. So a direct read there sees the
-    // STALE (pre-rotation) orientation and wrongly skips a real rotation. And the raw DISPLAY rotation
-    // is wrong the other way: another app (YouTube/Tapo) forcing landscape rotates the DISPLAY while the
-    // portrait-locked launcher window never rotates — transposing then corrupts the layout. The
-    // launcher's own recorded orientation is correct in BOTH cases (auto-rotate, manual rotate-button,
-    // and other-app forced rotation). Initialised to ROTATION_0-equivalent (portrait) as a safe default.
-    @Volatile private var launcherIsLandscape = false
+    // Stored as the precise Surface.ROTATION_* constant, NOT a landscape/portrait boolean. A boolean
+    // cannot distinguish ROTATION_0 from ROTATION_180 (both "portrait"), or ROTATION_90 from
+    // ROTATION_270 (both "landscape") -- android.content.res.Configuration.orientation collapses
+    // exactly those pairs. A tablet capable of all four rotations can flip directly within either pair
+    // (portrait <-> upside-down, or landscape <-> the other landscape) without ever crossing the
+    // portrait/landscape boundary, so a boolean comparison sees no change and never re-drives
+    // onConfigChanged -- the transpose silently freezes at the pre-flip frame while the window itself
+    // still rotates, producing exactly the "icons landed at the wrong physical position" symptom this
+    // whole class exists to prevent. Comparing the full rotation constant fixes all four transitions.
+    //
+    // Why not read launcher.resources.configuration directly inside beforeConfigChanged: the transpose
+    // is driven by DisplayController.CHANGE_ROTATION, which fires ~75ms BEFORE the launcher Activity's
+    // own onConfigurationChanged updates its config. So a direct read there sees the STALE (pre-rotation)
+    // value and wrongly skips a real rotation. And the raw DISPLAY rotation is wrong the other way:
+    // another app (YouTube/Tapo) forcing landscape rotates the DISPLAY while the portrait-locked launcher
+    // window never rotates — transposing then corrupts the layout. The launcher's own recorded rotation
+    // is correct in BOTH cases (auto-rotate, manual rotate-button, and other-app forced rotation).
+    @Volatile private var launcherRotation = Surface.ROTATION_0
     @Volatile private var launcherOrientationKnown = false
 
     /**
      * Called from [com.android.launcher3.Launcher.onConfigurationChanged] with the launcher's OWN new
      * configuration — the authoritative orientation of the home window. Records it, then (if the
-     * orientation actually changed the landscape state) re-drives the transpose via onConfigChanged so
+     * rotation actually changed) re-drives the transpose via onConfigChanged so
      * beforeConfigChanged/afterInitGrid run with the correct, up-to-date launcher orientation.
      *
      * This is what makes a real rotation (auto-rotate OR the manual rotate-suggestion button) transpose
-     * correctly, while an other-app forced rotation — which never delivers a landscape config to the
+     * correctly, while an other-app forced rotation — which never delivers a matching config to the
      * locked launcher — never triggers a transpose.
+     *
+     * The precise rotation is read from [DisplayController] rather than derived from [newConfig]
+     * (which only carries the coarse portrait/landscape orientation) — see the comment on
+     * [launcherRotation]. By the time the launcher's own onConfigurationChanged fires, DisplayController
+     * has already recorded the new rotation (it is the earlier of the two signals), so this read is
+     * current, not the stale/racy read [launcherWillRotate] explicitly avoids doing at its OWN call site.
      */
     @JvmStatic
     fun onLauncherConfigurationChanged(context: Context, newConfig: Configuration) {
-        val nowLandscape = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val changed = !launcherOrientationKnown || nowLandscape != launcherIsLandscape
-        launcherIsLandscape = nowLandscape
+        val nowRotation = DisplayController.INSTANCE.get(context).info.rotation
+        val changed = !launcherOrientationKnown || nowRotation != launcherRotation
+        launcherRotation = nowRotation
         launcherOrientationKnown = true
         if (changed) {
             // Re-run the config path now that the launcher orientation is authoritative and current.
@@ -81,15 +96,17 @@ object AnchorTransposeHook {
 
     /**
      * True only when the requested display rotation matches the LAUNCHER WINDOW's own actual
-     * orientation — i.e. the launcher really is at that orientation, so transposing to it is valid.
-     * Uses the launcher's recorded orientation ([onLauncherConfigurationChanged]) when available. If it
+     * rotation — i.e. the launcher really is at that rotation, so transposing to it is valid.
+     * Uses the launcher's recorded rotation ([onLauncherConfigurationChanged]) when available. If it
      * has not been recorded yet (the launcher hasn't fired its own config change this process), fall
      * back to READING the launcher activity's current configuration orientation directly — that read is
      * reliable EXCEPT during the launcher's own onConfigurationChanged (the ~75ms window where it lags),
      * and in this fallback the launcher is NOT rotating (if it were, onLauncherConfigurationChanged
-     * would have recorded it), so the read is accurate. Only when there is no launcher activity at all
-     * (true cold start, before any window exists) do we allow the transpose — the initial grid is built
-     * correctly from the display and there is no existing layout to corrupt.
+     * would have recorded it), so the coarse orientation is sufficient here (this fallback only ever
+     * needs to distinguish "not rotating same as display" from "not rotating, matches display" — see
+     * below). Only when there is no launcher activity at all (true cold start, before any window
+     * exists) do we allow the transpose — the initial grid is built correctly from the display and
+     * there is no existing layout to corrupt.
      *
      * NOTE: the earlier `!known -> return true` fallback was a data-loss hole: when another app (Tapo)
      * forced the DISPLAY to landscape while the launcher window stayed portrait and had not yet recorded
@@ -99,16 +116,21 @@ object AnchorTransposeHook {
     @JvmStatic
     fun launcherWillRotate(context: Context): Boolean {
         val displayRotation = DisplayController.INSTANCE.get(context).info.rotation
+        if (launcherOrientationKnown) {
+            return displayRotation == launcherRotation
+        }
+        val launcher = Launcher.ACTIVITY_TRACKER.getCreatedContext<Launcher>()
+            ?: return true // genuine cold start: no window yet, no layout to corrupt
+        // Not yet recorded means the launcher is NOT currently rotating (if it were,
+        // onLauncherConfigurationChanged would have recorded it already), so the coarse
+        // landscape/portrait bucket is sufficient to detect a foreign (other-app) rotation here: the
+        // launcher's un-rotated configuration can only match the display's bucket when nothing has
+        // forced the display to the other bucket.
         val displayIsLandscape =
             displayRotation == Surface.ROTATION_90 || displayRotation == Surface.ROTATION_270
-        val launcherLandscape = if (launcherOrientationKnown) {
-            launcherIsLandscape
-        } else {
-            val launcher = Launcher.ACTIVITY_TRACKER.getCreatedContext<Launcher>()
-                ?: return true // genuine cold start: no window yet, no layout to corrupt
+        val launcherIsLandscape =
             launcher.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        }
-        return displayIsLandscape == launcherLandscape
+        return displayIsLandscape == launcherIsLandscape
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -134,6 +156,14 @@ object AnchorTransposeHook {
     // reinterpreting our coordinates.
     @Volatile private var activeRotation = Surface.ROTATION_0
 
+    // The value of [activeRotation] immediately before the most recent [updateActiveRotation] call
+    // overwrote it. Captured so the in-memory rotation remap (LauncherModel.remapWorkspaceForRotation)
+    // can pivot an item from the frame it is ACTUALLY sitting in (the old active rotation) to the new
+    // one, without having to re-derive "old" from KEY_LAST_ROTATION -- which tracks the display
+    // rotation, not the gated active frame, and would disagree whenever a foreign rotation is
+    // involved. See [getPreviousActiveRotation].
+    @Volatile private var previousActiveRotation = Surface.ROTATION_0
+
     /**
      * Recomputes and stores the active display frame. Called at the single point in
      * [InvariantDeviceProfile.initGrid] where the grid is (re)built, immediately before the
@@ -142,12 +172,33 @@ object AnchorTransposeHook {
      * Returns the frame that was stored.
      */
     private fun updateActiveRotation(context: Context, rotation: Int): Int {
+        previousActiveRotation = activeRotation
         // Only adopt a rotated frame when the LAUNCHER WINDOW itself is at that rotation. When the
         // display is rotated by another app while our window stays put, the workspace is still laid
         // out in the launcher's own frame, so the coordinate frame must not move with the display.
-        activeRotation = if (launcherWillRotate(context)) rotation else Surface.ROTATION_0
+        val willRotate = launcherWillRotate(context)
+        activeRotation = if (willRotate) rotation else Surface.ROTATION_0
+        // Keep [launcherRotation]/[launcherOrientationKnown] in sync even when this call was driven by
+        // the DisplayController path rather than [onLauncherConfigurationChanged] -- which happens for a
+        // same-bucket flip (see [launcherDrivesRotation]), the one case where the Activity callback never
+        // fires at all. Without this, launcherRotation would stay stale at the pre-flip value forever,
+        // and every later launcherWillRotate/launcherDrivesRotation call would wrongly conclude the
+        // launcher window stopped following the display. Adopting the rotation here (willRotate=true) IS
+        // by definition "the launcher window is at this rotation", so it is always safe to record.
+        if (willRotate) {
+            launcherRotation = rotation
+            launcherOrientationKnown = true
+        }
         return activeRotation
     }
+
+    /**
+     * The active frame ([getActiveRotation]) as it was immediately before the most recent
+     * [InvariantDeviceProfile.initGrid] call updated it. This is the frame the in-memory
+     * `ItemInfo.cellX/cellY` are still sitting in until the rotation remap runs.
+     */
+    @JvmStatic
+    fun getPreviousActiveRotation(): Int = previousActiveRotation
 
     /**
      * The Surface rotation constant whose coordinate frame the workspace is currently laid out in.
@@ -170,7 +221,8 @@ object AnchorTransposeHook {
 
     /**
      * True when a rotation should be driven by the LAUNCHER's own onConfigurationChanged rather than by
-     * the DisplayController's CHANGE_ROTATION callback — which is whenever a launcher activity exists.
+     * the DisplayController's CHANGE_ROTATION callback — which is whenever a launcher activity exists
+     * AND the pending rotation will actually deliver an Activity-level config change.
      * The DisplayController path fires ~75ms earlier with a stale launcher orientation; letting it also
      * run onConfigChanged produced a redundant SECOND full grid rebind per rotation (the ~0.5s reload
      * ran twice → ~1.8s + a flash of the pre-transpose grid). Suppressing it there and letting the
@@ -183,10 +235,40 @@ object AnchorTransposeHook {
      *   return. Skipping here is correct (and avoids the data-loss transpose entirely).
      * - No launcher activity at all (cold start / headless): return false so the original
      *   DisplayController-driven path still runs and builds the initial grid.
+     * - **A same-bucket flip (ROTATION_0<->ROTATION_180, or ROTATION_90<->ROTATION_270)**: the launcher
+     *   declares `orientation|screenSize|...` in its manifest, and `screenWidthDp`/`screenHeightDp`/
+     *   `orientation` are IDENTICAL for a portrait<->upside-down (or landscape<->the-other-landscape)
+     *   flip, so `ActivityThread` computes a zero-diff Configuration and never calls
+     *   `Activity.onConfigurationChanged` AT ALL. On a tablet with `mAllowAllRotations=true` this is a
+     *   real, reachable rotation (a direct 180 flip), and without this check `onLauncherConfigurationChanged`
+     *   would simply never run for it — the transpose silently freezes at the pre-flip frame forever,
+     *   because nothing else re-drives onConfigChanged. Detected by comparing [newRotation] against the
+     *   recorded [launcherRotation]'s bucket; must return false (let DisplayController drive it) whenever
+     *   they land in the same bucket, even though [launcherOrientationKnown] may already be true.
      */
     @JvmStatic
-    fun launcherDrivesRotation(context: Context): Boolean =
-        Launcher.ACTIVITY_TRACKER.getCreatedContext<Launcher>() is app.lawnchair.LawnchairLauncher
+    fun launcherDrivesRotation(context: Context, newRotation: Int): Boolean {
+        if (Launcher.ACTIVITY_TRACKER.getCreatedContext<Launcher>() !is app.lawnchair.LawnchairLauncher) {
+            return false
+        }
+        if (!launcherOrientationKnown) return true
+        val sameBucket = isLandscapeRotation(newRotation) == isLandscapeRotation(launcherRotation)
+        if (sameBucket) {
+            // This IS the launcher window rotating -- the Activity callback simply never fires for a
+            // same-bucket flip (see the class doc above), so this is the only place that ever learns the
+            // new rotation. Record it now, BEFORE returning false to let the DisplayController path call
+            // onConfigChanged: that path's afterInitGrid -> updateActiveRotation calls launcherWillRotate,
+            // which compares the (about to be requested) display rotation against launcherRotation -- if
+            // left stale at the pre-flip value, that comparison would wrongly fail (they're never equal
+            // for a genuine same-bucket flip other than by coincidence), collapsing activeRotation to
+            // ROTATION_0 instead of adopting newRotation.
+            launcherRotation = newRotation
+        }
+        return !sameBucket
+    }
+
+    private fun isLandscapeRotation(rotation: Int): Boolean =
+        rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270
 
     /**
      * Called at the START of [InvariantDeviceProfile.onConfigChanged], before initGrid().
@@ -316,6 +398,35 @@ object AnchorTransposeHook {
             idp.numColumns = idp.numRows
             idp.numRows = tmp
         }
+    }
+
+    /**
+     * Called from [InvariantDeviceProfile.onConfigChanged] right after `initGrid()` (i.e. after
+     * [afterInitGrid] has decided the new active frame). Attempts the fast path: re-map the
+     * already-loaded [com.android.launcher3.model.BgDataModel] in memory from the old active frame
+     * to the new one and rebind synchronously, instead of the DB round-trip + [LoaderTask][
+     * com.android.launcher3.model.LoaderTask] that [LauncherModel.forceReload] costs.
+     *
+     * Returns true when the fast remap was performed (the caller must NOT also force a reload —
+     * that would redundantly rebind a second time). Returns false when the fast path does not
+     * apply, in which case the normal [modelChanged][InvariantDeviceProfile.OnIDPChangeListener]
+     * -driven `forceReload()` must run as before:
+     *  - the DB is not yet portrait-canonical (old reactive-rewrite era, or migration pending)
+     *  - the active frame did not actually change (e.g. a foreign rotation that [afterInitGrid]
+     *    correctly collapsed to ROTATION_0 on both sides — nothing to remap)
+     *  - the model is not currently loaded (cold start, or a LoaderTask already in flight) — the
+     *    forthcoming/ongoing load will read the untouched DB and map correctly at read time anyway
+     */
+    @JvmStatic
+    fun tryFastRotationRemap(context: Context): Boolean {
+        if (!PortraitCanonicalMigration.isLiveDbCanonical()) return false
+        val oldRotation = previousActiveRotation
+        val newRotation = activeRotation
+        if (oldRotation == newRotation) return false
+        val grid = getPortraitGrid() ?: return false
+        return LauncherAppState.getInstance(context).model.remapWorkspaceForRotation(
+            oldRotation, newRotation, grid.first, grid.second,
+        )
     }
 
     /**

@@ -26,6 +26,7 @@ import androidx.annotation.AnyThread
 import com.android.launcher3.BuildConfig
 import com.android.launcher3.BuildConfigs
 import com.android.launcher3.Flags
+import com.android.launcher3.LauncherSettings.Favorites.CONTAINER_DESKTOP
 import com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_APP_PAIR
 import com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_DEEP_SHORTCUT
 import com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_FOLDER
@@ -198,6 +199,45 @@ constructor(
     fun dataLoadComplete(allItems: SparseArray<ItemInfo>) {
         mutableWorkspaceData.replaceDataMap(allItems)
         updateHomeRepository()
+    }
+
+    /**
+     * Anchor: re-maps every desktop item's in-memory (display-frame) coordinates from
+     * [oldRotation]'s frame to [newRotation]'s frame, in place, without touching the DB.
+     *
+     * The DB is portrait-canonical and untouched by rotation (see CoordFrame); the loader applies
+     * portrait->display mapping only at DB-read time (LoaderCursor). An in-memory `ItemInfo` never
+     * goes through the loader again once loaded, so it is still sitting in [oldRotation]'s display
+     * frame after the device rotates. This walks the model and re-derives each item's frame via
+     * portrait as the pivot (old-display -> portrait -> new-display), so a subsequent sync rebind
+     * (LauncherModel.rebindCallbacks with the model already loaded) renders the correct layout
+     * without a DB round-trip or a LoaderTask.
+     *
+     * [portraitCols]/[portraitRows] must be the true portrait-canonical grid dimensions (see
+     * AnchorTransposeHook.getPortraitGrid) -- not the live, possibly-swapped IDP dimensions.
+     */
+    @Synchronized
+    fun remapWorkspaceCoordinatesInPlace(oldRotation: Int, newRotation: Int, portraitCols: Int, portraitRows: Int) {
+        for (item in itemsIdMap) {
+            if (item.container != CONTAINER_DESKTOP) continue
+            val portrait = app.anchor.rotation.GridTransposeHelper.reverseWidgetPositionToPortrait(
+                item.cellX, item.cellY, item.spanX, item.spanY, portraitCols, portraitRows, oldRotation,
+            )
+            val portraitSpan = app.anchor.rotation.GridTransposeHelper.reverseSpanToPortrait(
+                item.spanX, item.spanY, oldRotation,
+            )
+            val newDisplaySpan = app.anchor.rotation.GridTransposeHelper.spanForRotation(
+                portraitSpan.first, portraitSpan.second, newRotation,
+            )
+            val newDisplayCell = app.anchor.rotation.GridTransposeHelper.remapWidgetPosition(
+                portrait.first, portrait.second, portraitSpan.first, portraitSpan.second,
+                portraitCols, portraitRows, newRotation,
+            )
+            item.cellX = newDisplayCell.first
+            item.cellY = newDisplayCell.second
+            item.spanX = newDisplaySpan.first
+            item.spanY = newDisplaySpan.second
+        }
     }
 
     /**
