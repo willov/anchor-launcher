@@ -417,7 +417,6 @@ class LawnchairLauncher : QuickstepLauncher() {
         // by construction, so there is nothing to re-sync here.
         wallpaperStabilizationManager.resetForWorkspaceReady()
         rotationAnimator.onWorkspaceRebound()
-        app.anchor.rotation.AnchorTransposeHook.RotationTiming.onWorkspaceBound()
     }
 
     override fun onPageEndTransition() {

@@ -218,8 +218,6 @@ constructor(
      */
     @Synchronized
     fun remapWorkspaceCoordinatesInPlace(oldRotation: Int, newRotation: Int, portraitCols: Int, portraitRows: Int) {
-        Log.d(TAG, "remapWorkspaceCoordinatesInPlace: $oldRotation->$newRotation " +
-            "portraitGrid=${portraitCols}x$portraitRows")
         for (item in itemsIdMap) {
             if (item.container != CONTAINER_DESKTOP) continue
             val portrait = app.anchor.rotation.GridTransposeHelper.reverseWidgetPositionToPortrait(
@@ -235,10 +233,6 @@ constructor(
                 portrait.first, portrait.second, portraitSpan.first, portraitSpan.second,
                 portraitCols, portraitRows, newRotation,
             )
-            Log.d(TAG, "  item ${item.id} screen=${item.screenId} " +
-                "old=(${item.cellX},${item.cellY},${item.spanX}x${item.spanY}) " +
-                "portrait=(${portrait.first},${portrait.second},${portraitSpan.first}x${portraitSpan.second}) " +
-                "new=(${newDisplayCell.first},${newDisplayCell.second},${newDisplaySpan.first}x${newDisplaySpan.second})")
             item.cellX = newDisplayCell.first
             item.cellY = newDisplayCell.second
             item.spanX = newDisplaySpan.first

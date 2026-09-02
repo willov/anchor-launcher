@@ -322,7 +322,7 @@ public class InvariantDeviceProfile {
                                 | CHANGE_DESKTOP_MODE)) == 0;
                     if (rotationOnly
                             && app.anchor.rotation.AnchorTransposeHook
-                                .launcherDrivesRotation(displayContext)) {
+                                .launcherDrivesRotation(displayContext, info.rotation)) {
                         return;
                     }
                     if ((flags & (CHANGE_DENSITY | CHANGE_SUPPORTED_BOUNDS
