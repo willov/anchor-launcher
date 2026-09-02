@@ -12,7 +12,6 @@ import android.util.Log
 import android.view.Surface
 import com.android.launcher3.LauncherSettings.Favorites
 import com.android.launcher3.provider.LauncherDbUtils.SQLiteTransaction
-import com.android.launcher3.provider.LauncherDbUtils.dropTable
 import com.android.launcher3.provider.LauncherDbUtils.tableExists
 
 /**
@@ -33,7 +32,7 @@ import com.android.launcher3.provider.LauncherDbUtils.tableExists
  * Existing installs hold coordinates in whatever frame was last active, so they must be reverse
  * mapped to portrait exactly once. That is this class.
  *
- * ## Safety properties (all three are required, see the Pixel daily-driver constraint)
+ * ## Safety properties (both are required, see the Pixel daily-driver constraint)
  *
  * 1. **Atomic** — the coordinate flip and the marker that records it are committed in a single
  *    [SQLiteTransaction]. A process kill either leaves the DB fully migrated and marked, or fully
@@ -41,8 +40,6 @@ import com.android.launcher3.provider.LauncherDbUtils.tableExists
  *    another — precisely the desync that caused the historical data loss.
  * 2. **Idempotent** — gated on a marker so a repeated run is a cheap no-op. Re-running can never
  *    double-apply a rotation.
- * 3. **Recoverable** — the pre-migration rows are copied to [BACKUP_TABLE] before any mutation, so a
- *    bad outcome is one SQL statement from being undone.
  *
  * ## Why the marker lives in the DB and not in SharedPreferences
  *
@@ -58,9 +55,6 @@ object PortraitCanonicalMigration {
 
     /** Table holding the migration marker. One row, one column. */
     private const val MARKER_TABLE = "anchor_coord_frame"
-
-    /** Pre-migration copy of [Favorites.TABLE_NAME], kept for rollback. */
-    const val BACKUP_TABLE = "favorites_pre_precompute"
 
     /**
      * Bumped only if the canonical frame's meaning ever changes. Version 1 = "cellX/cellY/spanX/spanY
@@ -133,10 +127,6 @@ object PortraitCanonicalMigration {
 
         try {
             SQLiteTransaction(db).use { t ->
-                // Rollback copy FIRST, inside the same transaction, so it is either present with the
-                // pre-migration rows or absent along with the migration itself.
-                backupFavorites(db)
-
                 val converted = convertToPortraitCanonical(db, fromRotation, portraitCols, portraitRows)
                 writeMarker(db)
 
@@ -219,12 +209,6 @@ object PortraitCanonicalMigration {
         return changed
     }
 
-    /** Copies the live favorites rows to [BACKUP_TABLE], replacing any previous copy. */
-    private fun backupFavorites(db: SQLiteDatabase) {
-        dropTable(db, BACKUP_TABLE)
-        db.execSQL("CREATE TABLE $BACKUP_TABLE AS SELECT * FROM ${Favorites.TABLE_NAME}")
-    }
-
     /**
      * Whether the live workspace DB is portrait-canonical, as decided by [migrateIfNeeded] on this
      * process's DB open. Cached because the read side consults it for every item loaded.
@@ -266,24 +250,5 @@ object PortraitCanonicalMigration {
         db.execSQL("CREATE TABLE IF NOT EXISTS $MARKER_TABLE (version INTEGER PRIMARY KEY)")
         db.execSQL("DELETE FROM $MARKER_TABLE")
         db.execSQL("INSERT INTO $MARKER_TABLE (version) VALUES ($CANONICAL_VERSION)")
-    }
-
-    /**
-     * Restores the pre-migration rows from [BACKUP_TABLE] and clears the marker, returning the DB to
-     * its state before [migrateIfNeeded] ran. Debug/recovery only — not called in normal operation.
-     *
-     * @return true if a backup existed and was restored.
-     */
-    @JvmStatic
-    fun rollback(db: SQLiteDatabase): Boolean {
-        if (!tableExists(db, BACKUP_TABLE)) return false
-        SQLiteTransaction(db).use { t ->
-            db.execSQL("DELETE FROM ${Favorites.TABLE_NAME}")
-            db.execSQL("INSERT INTO ${Favorites.TABLE_NAME} SELECT * FROM $BACKUP_TABLE")
-            dropTable(db, MARKER_TABLE)
-            t.commit()
-        }
-        Log.w(TAG, "PortraitCanonicalMigration: rolled back to pre-migration coordinates")
-        return true
     }
 }

@@ -22,6 +22,10 @@ import org.junit.Test
  * The reachable frames (0/90/270) were additionally verified end-to-end against a real device DB;
  * see the pre-computed-transpose work. This file is the safety net for the rest.
  *
+ * Single-cell items (spanX=spanY=1) are exercised through the same span-aware functions
+ * ([remapWidgetPosition]/[reverseWidgetPositionToPortrait]) used for widgets — there is no separate
+ * non-span-aware code path in production, so no separate test path either.
+ *
  * Run: `./gradlew testLawnWithQuickstepPlayDebugUnitTest --tests "app.anchor.rotation.GridTransposeHelperTest"`
  */
 class GridTransposeHelperTest {
@@ -34,6 +38,12 @@ class GridTransposeHelperTest {
         Surface.ROTATION_0, Surface.ROTATION_90, Surface.ROTATION_180, Surface.ROTATION_270,
     )
 
+    /** (cols, rows) for [rotation]: 90/270 transpose the grid, 0/180 keep it. */
+    private fun dimensionsForRotation(rotation: Int): Pair<Int, Int> = when (rotation) {
+        Surface.ROTATION_0, Surface.ROTATION_180 -> Pair(cols, rows)
+        else -> Pair(rows, cols)
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Round-trip: forward then reverse must recover the original cell, in every frame.
     // ---------------------------------------------------------------------------------------------
@@ -43,11 +53,11 @@ class GridTransposeHelperTest {
         for (rotation in allRotations) {
             for (col in 0 until cols) {
                 for (row in 0 until rows) {
-                    val (dCol, dRow) = GridTransposeHelper.remapCoordinates(
-                        col, row, cols, rows, rotation,
+                    val (dCol, dRow) = GridTransposeHelper.remapWidgetPosition(
+                        col, row, 1, 1, cols, rows, rotation,
                     )
-                    val (backCol, backRow) = GridTransposeHelper.reverseMapToPortrait(
-                        dCol, dRow, cols, rows, rotation,
+                    val (backCol, backRow) = GridTransposeHelper.reverseWidgetPositionToPortrait(
+                        dCol, dRow, 1, 1, cols, rows, rotation,
                     )
                     assertThat("r$rotation ($col,$row) -> ($dCol,$dRow) -> ($backCol,$backRow)")
                         .isEqualTo("r$rotation ($col,$row) -> ($dCol,$dRow) -> ($col,$row)")
@@ -65,16 +75,18 @@ class GridTransposeHelperTest {
     @Test
     fun allFourRotations_produceDistinctCells_forAnAsymmetricItem() {
         // (1,2) is asymmetric in both axes, so no two frames can coincide by symmetry.
-        val mapped = allRotations.map { GridTransposeHelper.remapCoordinates(1, 2, cols, rows, it) }
+        val mapped = allRotations.map {
+            GridTransposeHelper.remapWidgetPosition(1, 2, 1, 1, cols, rows, it)
+        }
         assertThat(mapped.toSet()).hasSize(4)
     }
 
     @Test
     fun rotation180_isNotIdentity_andIsNotEitherLandscape() {
-        val portrait = GridTransposeHelper.remapCoordinates(1, 2, cols, rows, Surface.ROTATION_0)
-        val flipped = GridTransposeHelper.remapCoordinates(1, 2, cols, rows, Surface.ROTATION_180)
-        val land90 = GridTransposeHelper.remapCoordinates(1, 2, cols, rows, Surface.ROTATION_90)
-        val land270 = GridTransposeHelper.remapCoordinates(1, 2, cols, rows, Surface.ROTATION_270)
+        val portrait = GridTransposeHelper.remapWidgetPosition(1, 2, 1, 1, cols, rows, Surface.ROTATION_0)
+        val flipped = GridTransposeHelper.remapWidgetPosition(1, 2, 1, 1, cols, rows, Surface.ROTATION_180)
+        val land90 = GridTransposeHelper.remapWidgetPosition(1, 2, 1, 1, cols, rows, Surface.ROTATION_90)
+        val land270 = GridTransposeHelper.remapWidgetPosition(1, 2, 1, 1, cols, rows, Surface.ROTATION_270)
 
         // 180 is a real flip, not a no-op: this is the branch that cannot be reached on the phone.
         assertThat(flipped).isNotEqualTo(portrait)
@@ -88,12 +100,12 @@ class GridTransposeHelperTest {
     fun rotation180_appliedTwice_isIdentity() {
         for (col in 0 until cols) {
             for (row in 0 until rows) {
-                val (x, y) = GridTransposeHelper.remapCoordinates(
-                    col, row, cols, rows, Surface.ROTATION_180,
+                val (x, y) = GridTransposeHelper.remapWidgetPosition(
+                    col, row, 1, 1, cols, rows, Surface.ROTATION_180,
                 )
                 // 180 keeps the grid dimensions, so it can legitimately be applied to its own output.
-                val (x2, y2) = GridTransposeHelper.remapCoordinates(
-                    x, y, cols, rows, Surface.ROTATION_180,
+                val (x2, y2) = GridTransposeHelper.remapWidgetPosition(
+                    x, y, 1, 1, cols, rows, Surface.ROTATION_180,
                 )
                 assertThat(Pair(x2, y2)).isEqualTo(Pair(col, row))
             }
@@ -108,22 +120,22 @@ class GridTransposeHelperTest {
     @Test
     fun matchesDeviceObservedMapping_rotation90() {
         // Counter-clockwise physical turn reports ROTATION_90: newCol = row, newRow = cols-1-col.
-        assertThat(GridTransposeHelper.remapCoordinates(1, 0, cols, rows, Surface.ROTATION_90))
+        assertThat(GridTransposeHelper.remapWidgetPosition(1, 0, 1, 1, cols, rows, Surface.ROTATION_90))
             .isEqualTo(Pair(0, 3))
-        assertThat(GridTransposeHelper.remapCoordinates(2, 0, cols, rows, Surface.ROTATION_90))
+        assertThat(GridTransposeHelper.remapWidgetPosition(2, 0, 1, 1, cols, rows, Surface.ROTATION_90))
             .isEqualTo(Pair(0, 2))
-        assertThat(GridTransposeHelper.remapCoordinates(0, 2, cols, rows, Surface.ROTATION_90))
+        assertThat(GridTransposeHelper.remapWidgetPosition(0, 2, 1, 1, cols, rows, Surface.ROTATION_90))
             .isEqualTo(Pair(2, 4))
     }
 
     @Test
     fun matchesDeviceObservedMapping_rotation270() {
         // Clockwise physical turn reports ROTATION_270: newCol = rows-1-row, newRow = col.
-        assertThat(GridTransposeHelper.remapCoordinates(1, 0, cols, rows, Surface.ROTATION_270))
+        assertThat(GridTransposeHelper.remapWidgetPosition(1, 0, 1, 1, cols, rows, Surface.ROTATION_270))
             .isEqualTo(Pair(10, 1))
-        assertThat(GridTransposeHelper.remapCoordinates(2, 0, cols, rows, Surface.ROTATION_270))
+        assertThat(GridTransposeHelper.remapWidgetPosition(2, 0, 1, 1, cols, rows, Surface.ROTATION_270))
             .isEqualTo(Pair(10, 2))
-        assertThat(GridTransposeHelper.remapCoordinates(0, 2, cols, rows, Surface.ROTATION_270))
+        assertThat(GridTransposeHelper.remapWidgetPosition(0, 2, 1, 1, cols, rows, Surface.ROTATION_270))
             .isEqualTo(Pair(8, 0))
     }
 
@@ -133,24 +145,21 @@ class GridTransposeHelperTest {
 
     @Test
     fun dimensionsForRotation_transposeOnlyOnQuarterTurns() {
-        assertThat(GridTransposeHelper.dimensionsForRotation(cols, rows, Surface.ROTATION_0))
-            .isEqualTo(Pair(cols, rows))
-        assertThat(GridTransposeHelper.dimensionsForRotation(cols, rows, Surface.ROTATION_180))
-            .isEqualTo(Pair(cols, rows))
-        assertThat(GridTransposeHelper.dimensionsForRotation(cols, rows, Surface.ROTATION_90))
-            .isEqualTo(Pair(rows, cols))
-        assertThat(GridTransposeHelper.dimensionsForRotation(cols, rows, Surface.ROTATION_270))
-            .isEqualTo(Pair(rows, cols))
+        assertThat(dimensionsForRotation(Surface.ROTATION_0)).isEqualTo(Pair(cols, rows))
+        assertThat(dimensionsForRotation(Surface.ROTATION_180)).isEqualTo(Pair(cols, rows))
+        assertThat(dimensionsForRotation(Surface.ROTATION_90)).isEqualTo(Pair(rows, cols))
+        assertThat(dimensionsForRotation(Surface.ROTATION_270)).isEqualTo(Pair(rows, cols))
     }
 
     @Test
     fun everyMappedCell_staysInsideTheRotatedGrid() {
         for (rotation in allRotations) {
-            val (gridCols, gridRows) =
-                GridTransposeHelper.dimensionsForRotation(cols, rows, rotation)
+            val (gridCols, gridRows) = dimensionsForRotation(rotation)
             for (col in 0 until cols) {
                 for (row in 0 until rows) {
-                    val (x, y) = GridTransposeHelper.remapCoordinates(col, row, cols, rows, rotation)
+                    val (x, y) = GridTransposeHelper.remapWidgetPosition(
+                        col, row, 1, 1, cols, rows, rotation,
+                    )
                     assertThat(x in 0 until gridCols).isTrue()
                     assertThat(y in 0 until gridRows).isTrue()
                 }
@@ -216,8 +225,7 @@ class GridTransposeHelperTest {
         val spanX = 5
         val spanY = 9
         for (rotation in allRotations) {
-            val (gridCols, gridRows) =
-                GridTransposeHelper.dimensionsForRotation(cols, rows, rotation)
+            val (gridCols, gridRows) = dimensionsForRotation(rotation)
             val (dSpanX, dSpanY) = GridTransposeHelper.spanForRotation(spanX, spanY, rotation)
             for (col in 0..(cols - spanX)) {
                 for (row in 0..(rows - spanY)) {
@@ -229,24 +237,6 @@ class GridTransposeHelperTest {
                     assertThat("r$rotation fits: ${x >= 0 && y >= 0 &&
                         x + dSpanX <= gridCols && y + dSpanY <= gridRows}")
                         .isEqualTo("r$rotation fits: true")
-                }
-            }
-        }
-    }
-
-    @Test
-    fun singleCellWidget_agreesWithPlainCellMapping() {
-        // remapWidgetPosition must reduce to remapCoordinates when the item is 1x1.
-        for (rotation in allRotations) {
-            for (col in 0 until cols) {
-                for (row in 0 until rows) {
-                    assertThat(
-                        GridTransposeHelper.remapWidgetPosition(
-                            col, row, 1, 1, cols, rows, rotation,
-                        ),
-                    ).isEqualTo(
-                        GridTransposeHelper.remapCoordinates(col, row, cols, rows, rotation),
-                    )
                 }
             }
         }
