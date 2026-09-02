@@ -4,6 +4,8 @@ All notable changes to Anchor Launcher will be documented here.
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-09-02
+
 ### Changed
 - **Rotation is dramatically faster.** Turning the device now updates the home screen in well under a fifth of a second on most devices, down from around a second. Icon positions are already stored the moment the screen was last rebuilt; rotation now just re-lays them out in memory and shows the result, instead of rebuilding the whole home screen from disk.
 

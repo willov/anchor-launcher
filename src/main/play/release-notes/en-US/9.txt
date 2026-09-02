@@ -1,0 +1,4 @@
+Faster rotation, and a rotation fix.
+
+• Rotating the device now updates the home screen much faster than before.
+• Fixed: on devices that support every orientation, flipping straight from upright to upside-down (or between the two sideways orientations) could leave icons stuck in their old positions.
