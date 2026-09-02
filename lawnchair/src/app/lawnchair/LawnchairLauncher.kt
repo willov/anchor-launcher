@@ -602,10 +602,13 @@ class LawnchairLauncher : QuickstepLauncher() {
         // its own hardcoded rest position rather than wherever the camera actually is. Re-assert it so
         // the first swipe after unlocking doesn't jump.
         wallpaperStabilizationManager.resyncEngineCamera()
-        // Grid/icon setup takes priority on first launch; the wallpaper prompt waits until the grid
-        // onboarding has been shown so two dialogs never stack.
+        // Grid/icon setup takes priority on first launch; the wallpaper prompts wait until the grid
+        // onboarding has been shown so two dialogs never stack. The reset prompt is last: it only
+        // applies to a user who already chose an Anchor wallpaper, so it can never collide with
+        // onboarding (which only runs while the source is still the default).
         if (!maybeShowGridOnboarding()) {
             maybeShowWallpaperOnboarding()
+            wallpaperStabilizationManager.maybeShowWallpaperResetPrompt()
         }
 
         dragLayer.viewTreeObserver.addOnDrawListener(

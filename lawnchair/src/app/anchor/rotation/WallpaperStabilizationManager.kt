@@ -18,7 +18,9 @@ import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.animation.ValueAnimator
 import app.anchor.AnchorPreferences
+import app.anchor.AnchorWallpaperPicker
 import app.lawnchair.LawnchairLauncher
+import com.android.launcher3.R
 import com.android.launcher3.util.DisplayController
 import java.io.File
 
@@ -80,6 +82,7 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     // viewport, so it selects the identical source pixels in both orientations → pixel-perfect rotation.
     // The glass→bitmap axis mapping lives HERE, applied to gesture deltas at the moment they happen.
     private var liveWallpaperActiveCached: Boolean? = null
+
     // The camera is stored by ROLE, not by bitmap axis.
     //
     // The two roles have genuinely different semantics: the PAGE axis is a free scroll that needs
@@ -119,10 +122,7 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         val prefCustom =
             AnchorPreferences(launcher).wallpaperSource == AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
         // The offset bridge / Launcher3 suppression is keyed on the system actually running our engine.
-        val active = runCatching {
-            wallpaperManager.wallpaperInfo?.component?.className ==
-                "app.anchor.wallpaper.AnchorWallpaperService"
-        }.getOrDefault(false)
+        val active = wallpaperOwnership() == WallpaperOwnership.OURS
         // The launcher theme (BaseLauncherTheme) already sets windowBackground=transparent +
         // windowShowWallpaper=true, so the window is a wallpaper passthrough by default — no runtime
         // flag/background manipulation needed (and toggling FLAG_SHOW_WALLPAPER at runtime actively
@@ -462,6 +462,135 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
     }
 
     /**
+     * What the system's wallpaper is, relative to what Anchor thinks it should be.
+     *
+     * This is deliberately THREE-way, not a boolean "is it ours". A plain `!isOurs` test collapses two
+     * completely different situations — the system having reset us, and the user having deliberately
+     * chosen a different live wallpaper — and prompting "your wallpaper was reset, restore it?" at
+     * someone who just picked Muzei is the app second-guessing a deliberate choice.
+     *
+     * [android.app.WallpaperManager.getWallpaperInfo] is what separates them: it is null for a STATIC
+     * image wallpaper and non-null for ANY live wallpaper engine.
+     */
+    enum class WallpaperOwnership {
+        /** Our engine is running — nothing to do. */
+        OURS,
+
+        /** A static image wallpaper. This is what the system falls back to when it drops ours. */
+        STATIC,
+
+        /** Some other live wallpaper engine — the user chose it deliberately. Never prompt. */
+        OTHER_ENGINE,
+    }
+
+    fun wallpaperOwnership(): WallpaperOwnership {
+        val info = runCatching { wallpaperManager.wallpaperInfo }.getOrNull()
+            ?: return WallpaperOwnership.STATIC
+        return if (info.component?.className == ANCHOR_ENGINE_CLASS) {
+            WallpaperOwnership.OURS
+        } else {
+            WallpaperOwnership.OTHER_ENGINE
+        }
+    }
+
+    /**
+     * Detects that the system dropped Anchor's live wallpaper and offers to re-apply it.
+     *
+     * The user's PREFERENCE survives everything ([AnchorPreferences.wallpaperSource] and the image
+     * file both persist), but the system's wallpaper component does not: it is a system-level choice,
+     * and on a reinstall Android drops a live wallpaper whose package was replaced and falls back to
+     * a static image. Observed to be INTERMITTENT — a Samsung tablet lost it on reinstall while a
+     * Pixel kept it minutes later — so it has to be detected, never assumed.
+     *
+     * Re-applying cannot be done silently: setting a live wallpaper requires
+     * `ACTION_CHANGE_LIVE_WALLPAPER` and the system's own confirm screen. So this prompts.
+     *
+     * Deliberately does nothing unless the wallpaper is [WallpaperOwnership.STATIC]. If the user
+     * picked ANOTHER live wallpaper we sync the pref to that reality silently and stay out of the way.
+     *
+     * Returns true if a dialog was shown, so the caller can avoid stacking dialogs.
+     */
+    fun maybeShowWallpaperResetPrompt(): Boolean {
+        val prefs = AnchorPreferences(launcher)
+        // Only meaningful if the user actually asked for an Anchor wallpaper.
+        if (prefs.wallpaperSource != AnchorPreferences.WALLPAPER_SOURCE_CUSTOM) return false
+        // A set may still be in flight: the launcher restarts itself after setting the wallpaper and
+        // wallpaperInfo lags the pref by a resume or two (the documented reason refreshLiveWallpaperState
+        // gates on the pref, not on wallpaperInfo). Checking now would fire "was this reset?" at the
+        // exact moment the user set it.
+        //
+        // The skip must EXPIRE, and it has to expire in persistent state. pendingWallpaperRestart is
+        // cleared in exactly one place — the ACTION_WALLPAPER_CHANGED receiver — which only fires if
+        // the set actually COMPLETES. A user who opens the system confirm screen and backs out (or
+        // whose set is dropped) leaves it true indefinitely. An in-memory counter cannot rescue that:
+        // this manager is per-activity, so the count resets to 0 on every launcher recreate and the
+        // threshold is never reached. Verified on device — a stuck flag suppressed the prompt through
+        // exactly the reset it exists to report.
+        //
+        // So consume the flag here instead. By the time the launcher has resumed and reached this
+        // point, whatever the flag was scheduling (the one-shot restart) has either happened or is
+        // never going to; either way it has served its purpose and must not silence us again.
+        //
+        // Safe to consume: the restart receiver only acts while BACKGROUNDED (`if (hasBeenResumed())
+        // return`), and this runs from onResume — so it can never steal a restart the receiver was
+        // still going to perform. We still skip THIS pass, so a set that genuinely just completed
+        // gets its quiet resume; the next one checks for real.
+        if (prefs.pendingWallpaperRestart || prefs.pendingWallpaperHeal) {
+            prefs.pendingWallpaperRestart = false
+            return false
+        }
+
+        when (wallpaperOwnership()) {
+            WallpaperOwnership.OURS -> return false
+            WallpaperOwnership.OTHER_ENGINE -> {
+                // A deliberate choice, not a reset. Never prompt — just make the pref agree with
+                // reality so we stop pushing parallax offsets at an engine that is not ours.
+                prefs.wallpaperSource = AnchorPreferences.WALLPAPER_SOURCE_SYSTEM
+                liveWallpaperActiveCached = null
+                return false
+            }
+            WallpaperOwnership.STATIC -> Unit // fall through to the prompt
+        }
+
+        if (prefs.wallpaperResetPromptSuppressed) return false
+        if (!launcher.isInState(com.android.launcher3.LauncherState.NORMAL)) return false
+        // The image we would restore must still exist.
+        val path = prefs.customWallpaperPath
+        if (path == null || !java.io.File(path).exists()) return false
+
+        // Defer so the home screen is visible behind the dialog, matching the onboarding prompt.
+        launcher.workspace.postDelayed({
+            if (launcher.isDestroyed || launcher.isFinishing) return@postDelayed
+            // Re-check: a set may have started, or the wallpaper been restored, during the delay.
+            if (prefs.wallpaperSource != AnchorPreferences.WALLPAPER_SOURCE_CUSTOM) return@postDelayed
+            if (prefs.wallpaperResetPromptSuppressed) return@postDelayed
+            if (wallpaperOwnership() != WallpaperOwnership.STATIC) return@postDelayed
+            android.app.AlertDialog.Builder(launcher)
+                .setTitle(R.string.anchor_wallpaper_reset_title)
+                .setMessage(R.string.anchor_wallpaper_reset_message)
+                .setPositiveButton(R.string.anchor_wallpaper_reset_restore) { _, _ ->
+                    AnchorWallpaperPicker.setAsLiveWallpaper(launcher)
+                }
+                // NOT "use system": if this ever fires on a user running another engine, what they are
+                // using is not the system wallpaper. "Keep current" is true in every case it can appear.
+                .setNegativeButton(R.string.anchor_wallpaper_reset_keep) { _, _ ->
+                    // Must WRITE the pref, not just dismiss. Leaving it on CUSTOM means the mismatch
+                    // persists and the dialog returns on the next launch — so "keep current" would not
+                    // actually stop the asking — and the launcher keeps pushing parallax at an engine
+                    // that is not running. This records the choice the user just made.
+                    prefs.wallpaperSource = AnchorPreferences.WALLPAPER_SOURCE_SYSTEM
+                    liveWallpaperActiveCached = null
+                }
+                .setNeutralButton(R.string.anchor_wallpaper_reset_never) { _, _ ->
+                    // Keep the custom source, just stop asking about it.
+                    prefs.wallpaperResetPromptSuppressed = true
+                }
+                .show()
+        }, RESET_PROMPT_DELAY_MS)
+        return true
+    }
+
+    /**
      * One-shot heal for the post-set choppy home scroll (Samsung, verified). After our live wallpaper
      * is (re)set from the foreground and the launcher recreates, the wallpaper engine's surface is left
      * out-of-sync with the launcher's compositing group: the launcher's RenderThread stalls dequeuing
@@ -511,6 +640,12 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
 
     companion object {
         private const val TAG = "AnchorWallpaper"
+
+        /** Fully-qualified name of our wallpaper engine, as reported by WallpaperInfo. */
+        private const val ANCHOR_ENGINE_CLASS = "app.anchor.wallpaper.AnchorWallpaperService"
+
+        /** Delay before the reset prompt, so the home screen is visible behind it. */
+        private const val RESET_PROMPT_DELAY_MS = 600L
         // worldY of the home row (row 0) at rest: near the BOTTOM of the image, matching the engine's
         // HOME_REST_WORLD_Y and the lock-screen crop.
         private const val ROW_MARGIN = 0.1f

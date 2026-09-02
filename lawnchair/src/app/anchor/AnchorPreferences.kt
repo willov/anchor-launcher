@@ -197,6 +197,15 @@ class AnchorPreferences(context: Context) {
     private fun rowScreenKey(rowIndex: Int) = "$KEY_ROW_SCREENS_PREFIX$rowIndex"
 
     /**
+     * True once the user has answered the "Anchor's wallpaper was reset" prompt with "Don't ask
+     * again". Suppresses the prompt permanently without changing [wallpaperSource], for a user who
+     * wants to keep the custom source but is not interested in being asked about it.
+     */
+    var wallpaperResetPromptSuppressed: Boolean
+        get() = prefs.getBoolean(KEY_WALLPAPER_RESET_PROMPT_SUPPRESSED, false)
+        set(value) { prefs.edit().putBoolean(KEY_WALLPAPER_RESET_PROMPT_SUPPRESSED, value).apply() }
+
+    /**
      * True once Lawnchair's single global `default_home_page` has been imported into the per-row
      * home model. One-shot: the global preference is the migration SOURCE only, and re-importing it
      * would overwrite a per-row home the user has since set.
@@ -250,6 +259,7 @@ class AnchorPreferences(context: Context) {
         private const val KEY_ROW_SCREENS_PREFIX  = "row_screens_"
         private const val KEY_ROW_HOME_PREFIX     = "row_home_screen_"
         private const val KEY_GLOBAL_DEFAULT_PAGE_MIGRATED = "global_default_page_migrated"
+        private const val KEY_WALLPAPER_RESET_PROMPT_SUPPRESSED = "wallpaper_reset_prompt_suppressed"
         private const val KEY_PARALLAX_PERCENT    = "wallpaper_parallax_percent"
 
         const val SWIPE_NOTIFICATIONS = "notifications"
