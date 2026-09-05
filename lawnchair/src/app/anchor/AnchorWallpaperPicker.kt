@@ -90,9 +90,24 @@ object AnchorWallpaperPicker {
         val preview = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
             putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, component)
         }
+        // Diagnostic: an intermittent report of the system confirm screen not appearing at all on a
+        // FIRST attempt (the retry then works). Two candidates we cannot yet separate — Android
+        // swallowing the start as a background-activity launch, or the result coming straight back as
+        // CANCELED. Log the elapsed time and the code: a near-instant CANCELED means the dialog was
+        // never really shown, whereas a slow one means the user actually saw and dismissed it.
+        val startedAt = android.os.SystemClock.elapsedRealtime()
         val confirmed = try {
-            BlankActivity.startBlankActivityForResult(activity, preview).resultCode ==
-                Activity.RESULT_OK
+            val code = BlankActivity.startBlankActivityForResult(activity, preview).resultCode
+            val elapsed = android.os.SystemClock.elapsedRealtime() - startedAt
+            Log.i(TAG, "CHANGE_LIVE_WALLPAPER result=$code after ${elapsed}ms")
+            if (code != Activity.RESULT_OK && elapsed < SUSPICIOUSLY_FAST_DISMISS_MS) {
+                Log.w(
+                    TAG,
+                    "Confirm screen returned in ${elapsed}ms - too fast to have been seen; " +
+                        "the system likely never showed it",
+                )
+            }
+            code == Activity.RESULT_OK
         } catch (e: Exception) {
             Log.w(TAG, "Direct live-wallpaper preview failed (${e.message}); opening chooser")
             runCatching {
@@ -104,6 +119,13 @@ object AnchorWallpaperPicker {
 
         return confirmed
     }
+
+    /**
+     * Below this, a non-OK result from the system confirm screen cannot plausibly be a real user
+     * dismissal - nobody reads and rejects a wallpaper prompt that fast - so it points at the screen
+     * never having been shown at all. Diagnostic only; nothing branches on it.
+     */
+    private const val SUSPICIOUSLY_FAST_DISMISS_MS = 400L
 
     /**
      * Closes the standalone wallpaper chooser once a pick has fully landed, so the user returns to
@@ -198,14 +220,39 @@ object AnchorWallpaperPicker {
             }
             return false
         }
+        val prefs = AnchorPreferences(activity)
+        // Arm the one-shot flags BEFORE the promote, not after.
+        //
+        // commitStagedWallpaper writes the live wallpaper file, and that write makes the system
+        // broadcast ACTION_WALLPAPER_CHANGED. LawnchairLauncher.anchorWallpaperChangedReceiver keys off
+        // pendingWallpaperRestart to tell OUR OWN set apart from a foreign wallpaper change — so if the
+        // broadcast lands before the flag is set, it takes the "not ours" branch, can fire the
+        // wallpaper-was-reset prompt at the user, and leaves the flag armed to be consumed by some
+        // later unrelated recreate.
+        //
+        // Arming first is safe precisely because it is paired with the rollback below: the flags must
+        // never be armed on mere CONFIRMATION (that would restart the launcher for a change that never
+        // landed), but arming them immediately before a promote we are about to perform, and clearing
+        // them if that promote fails, keeps them true to what actually happened.
+        //
+        // Setting the live wallpaper from within our running app leaves Samsung's wallpaper-surface
+        // visibility in a state that blanks to black on the next Home press (a clean cold-start does
+        // not). pendingWallpaperRestart makes the launcher restart on its next resume, reproducing that
+        // clean state; pendingWallpaperHeal then re-asserts wallpaper visibility once so WM re-dispatches
+        // it to the engine, otherwise home scroll is janky until a real recents->home/unlock transition.
+        // Both are consumed in LawnchairLauncher.
+        prefs.pendingWallpaperRestart = true
+        prefs.pendingWallpaperHeal = true
         val committed = withContext(Dispatchers.IO) {
             WallpaperStabilizationManager.commitStagedWallpaper(activity, staged)
         }
         if (!committed) {
             // The promote failed, so the live wallpaper file and customWallpaperPath are untouched and
-            // nothing was applied. Drop the staged bytes rather than leaving them to be picked up by a
-            // later PREVIEW engine (AnchorWallpaperService reads the staging file in preview mode), and
-            // do NOT arm the restart/heal flags below — there is no change for them to settle.
+            // nothing was applied. Roll the flags back — there is no change for them to settle — and
+            // drop the staged bytes rather than leaving them to be picked up by a later PREVIEW engine
+            // (AnchorWallpaperService reads the staging file in preview mode).
+            prefs.pendingWallpaperRestart = false
+            prefs.pendingWallpaperHeal = false
             withContext(Dispatchers.IO) {
                 WallpaperStabilizationManager.discardStagedWallpaper(activity)
             }
@@ -214,20 +261,7 @@ object AnchorWallpaperPicker {
         // CUSTOM = "Anchor wallpaper on". The image is rendered by our live wallpaper; the launcher
         // stays passthrough (keeps FLAG_SHOW_WALLPAPER) so it shows through while the offset bridge
         // drives its parallax.
-        AnchorPreferences(activity).apply {
-            wallpaperSource = AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
-            // Setting the live wallpaper from within our running app leaves Samsung's wallpaper-surface
-            // visibility in a state that blanks to black on the next Home press (a clean cold-start does
-            // not). Mark a one-shot restart so the launcher restarts on its next resume, reproducing
-            // that clean state. Consumed in LawnchairLauncher.onResume.
-            //
-            // Armed only AFTER the commit actually succeeded: arming on mere confirmation would restart
-            // the launcher and re-assert wallpaper visibility for a change that never landed.
-            pendingWallpaperRestart = true
-            // After the restart, re-assert wallpaper visibility once so WM re-dispatches it to the
-            // engine — otherwise home scroll is janky until a real recents→home/unlock transition.
-            pendingWallpaperHeal = true
-        }
+        prefs.wallpaperSource = AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
         finishStandaloneChooser(activity)
         return true
     }
