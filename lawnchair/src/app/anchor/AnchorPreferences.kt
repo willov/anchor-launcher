@@ -206,6 +206,18 @@ class AnchorPreferences(context: Context) {
         set(value) { prefs.edit().putBoolean(KEY_WALLPAPER_RESET_PROMPT_SUPPRESSED, value).apply() }
 
     /**
+     * True once the user has dismissed the "system wallpaper screen is portrait-locked" notice with
+     * "Don't show again". Some OEMs' `ACTION_CHANGE_LIVE_WALLPAPER` confirm screen
+     * (`com.android.wallpaper.livepicker.LiveWallpaperChange` on stock/Pixel) is hardcoded
+     * `screenOrientation="portrait"`, so opening the wallpaper picker while the device is physically in
+     * landscape forces a visible rotation to portrait for that screen only — not something Anchor
+     * controls or can fix. The notice is shown once per landscape entry until dismissed permanently.
+     */
+    var wallpaperPortraitLockNoticeSuppressed: Boolean
+        get() = prefs.getBoolean(KEY_WALLPAPER_PORTRAIT_LOCK_NOTICE_SUPPRESSED, false)
+        set(value) { prefs.edit().putBoolean(KEY_WALLPAPER_PORTRAIT_LOCK_NOTICE_SUPPRESSED, value).apply() }
+
+    /**
      * True once Lawnchair's single global `default_home_page` has been imported into the per-row
      * home model. One-shot: the global preference is the migration SOURCE only, and re-importing it
      * would overwrite a per-row home the user has since set.
@@ -260,6 +272,8 @@ class AnchorPreferences(context: Context) {
         private const val KEY_ROW_HOME_PREFIX     = "row_home_screen_"
         private const val KEY_GLOBAL_DEFAULT_PAGE_MIGRATED = "global_default_page_migrated"
         private const val KEY_WALLPAPER_RESET_PROMPT_SUPPRESSED = "wallpaper_reset_prompt_suppressed"
+        private const val KEY_WALLPAPER_PORTRAIT_LOCK_NOTICE_SUPPRESSED =
+            "wallpaper_portrait_lock_notice_suppressed"
         private const val KEY_PARALLAX_PERCENT    = "wallpaper_parallax_percent"
 
         const val SWIPE_NOTIFICATIONS = "notifications"

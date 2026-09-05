@@ -91,6 +91,12 @@
     <string name="anchor_wallpaper_reset_restore">Restore</string>
     <string name="anchor_wallpaper_reset_keep">Keep current</string>
     <string name="anchor_wallpaper_reset_never">Don\'t ask again</string>
+    <!-- Shown once when opening the wallpaper picker while the device is physically in landscape, on
+         devices whose system "set wallpaper" confirm screen is portrait-locked. -->
+    <string name="anchor_wallpaper_portrait_lock_title">Wallpaper screen may rotate</string>
+    <string name="anchor_wallpaper_portrait_lock_message">On some devices, the system screen for setting a wallpaper is locked to portrait. Your device may briefly rotate for it — the background will still be set correctly and stay rotation-stable once you return. You may need to rotate back afterwards.</string>
+    <string name="anchor_wallpaper_portrait_lock_ok">Got it</string>
+    <string name="anchor_wallpaper_portrait_lock_never">Don\'t show again</string>
     <!-- Consent gate in the Anchor wallpaper chooser: pick which engine renders the wallpaper. -->
     <string name="anchor_wallpaper_gate_title">Choose your wallpaper engine</string>
     <string name="anchor_wallpaper_gate_message">Anchor can render your wallpaper so it stays put when you rotate the screen — just like your icons. Pick one of our ready-made backgrounds, or use any image of your own. You can change this anytime in Settings → Home Screen → Wallpaper.</string>

@@ -95,6 +95,51 @@ object AnchorTransposeHook {
     }
 
     /**
+     * Refreshes [launcherRotation] from the launcher's OWN live configuration, called from
+     * [com.android.launcher3.Launcher.onResume] before [reconcileOnResume]. Needed because
+     * [onLauncherConfigurationChanged] only fires while the launcher Activity itself receives a config
+     * change — if another ANCHOR Activity was in the foreground during the rotation (e.g.
+     * [app.lawnchair.ui.preferences.AnchorWallpaperChooserActivity]), the launcher was backgrounded and
+     * never got that callback, so [launcherRotation] is left stale at whatever it was before that
+     * Activity opened. By the time onResume runs, Android has already applied the new configuration to
+     * the (about to be shown) launcher window, so `launcher.resources.configuration` is live and
+     * trustworthy here — unlike the general [launcherWillRotate] fallback comment's caveat, which is
+     * about reading DURING an in-flight onConfigurationChanged, not after a resume.
+     *
+     * Only trusts the live read when the launcher's own coarse orientation bucket agrees with the
+     * current display rotation's bucket — if a FOREIGN app (not one of ours) is what forced the
+     * intervening rotation and the launcher window itself never actually rotated, the buckets disagree
+     * and this intentionally leaves [launcherRotation] untouched, preserving [launcherWillRotate]'s
+     * existing data-loss protection for that case.
+     *
+     * Reads the launcher window's OWN `windowConfiguration.rotation` — the exact value `dumpsys` prints
+     * as `mRotation` for this activity — rather than inferring the window's rotation from the display's.
+     * That distinction is the whole point of this function: the display rotation and the launcher
+     * window's rotation are separate facts, and only the latter says which frame our grid should be
+     * built in.
+     *
+     * An earlier version compared coarse orientation BUCKETS (portrait vs landscape) instead. That was
+     * wrong in both directions. It could not separate 0° from 180° nor 90° from 270°, so a foreign app
+     * forcing ROTATION_270 while the launcher sat at ROTATION_90 passed the test and recorded a rotation
+     * the launcher never took (the v2 data-loss shape, see 9cde478e4e). Refusing every same-bucket
+     * rotation instead — the first attempt at a fix — avoided that corruption but left [launcherRotation]
+     * stale at 90 while the window really had followed to 270, so [launcherWillRotate] returned false and
+     * the grid was rebuilt in the UN-ROTATED portrait frame: a 4-wide column of icons stranded in the
+     * middle of a landscape window. Reading the window's own rotation resolves both cases exactly,
+     * because it answers the actual question instead of approximating it.
+     */
+    @JvmStatic
+    fun syncLauncherRotationFromLiveConfig(launcher: Launcher) {
+        val windowRotation = launcher.resources.configuration.windowConfiguration.rotation
+        // Guard against a window whose configuration has not been populated yet (rotation is reported
+        // as UNDEFINED/-1 before the activity has a real window). Leaving the recorded value alone is
+        // right here: an unpopulated config is no evidence either way.
+        if (windowRotation !in Surface.ROTATION_0..Surface.ROTATION_270) return
+        launcherRotation = windowRotation
+        launcherOrientationKnown = true
+    }
+
+    /**
      * True only when the requested display rotation matches the LAUNCHER WINDOW's own actual
      * rotation — i.e. the launcher really is at that rotation, so transposing to it is valid.
      * Uses the launcher's recorded rotation ([onLauncherConfigurationChanged]) when available. If it
@@ -248,7 +293,33 @@ object AnchorTransposeHook {
      */
     @JvmStatic
     fun launcherDrivesRotation(context: Context, newRotation: Int): Boolean {
-        if (Launcher.ACTIVITY_TRACKER.getCreatedContext<Launcher>() !is app.lawnchair.LawnchairLauncher) {
+        val launcher = Launcher.ACTIVITY_TRACKER.getCreatedContext<Launcher>()
+        // A launcher that EXISTS is not necessarily one that will receive a configuration change: only
+        // a STARTED activity does. Deferring to Activity.onConfigurationChanged while the launcher is
+        // backgrounded hands the rotation to a callback that can never fire, and nothing retries — the
+        // display ends up rotated while the grid keeps the old orientation's dimensions.
+        //
+        // That is exactly the wallpaper-picker flow: the system confirm screen is portrait-locked, so
+        // closing it rotates the display back to the user's landscape while the launcher is still
+        // backgrounded behind the closing chooser. Verified in a trace: DISPLAY_CB fires with new=1 and
+        // drives=true, and no ACTIVITY_CB with now=1 ever follows. onResume's reconcile cannot save it
+        // either — it runs BEFORE that final rotation arrives, sees a consistent portrait state, and
+        // correctly does nothing.
+        //
+        // So only defer when the launcher is actually started; otherwise let the DisplayController path
+        // (which does fire reliably here) drive the transpose itself.
+        if (launcher !is app.lawnchair.LawnchairLauncher) return false
+        if (!launcher.isStarted) {
+            // The launcher will not get a config change, so nothing else will ever record its new
+            // orientation -- and launcherWillRotate (which gates the actual transpose downstream)
+            // compares the display against that recorded value. Left stale, it would read this genuine
+            // rotation as a foreign one and refuse to transpose, so returning false here alone changes
+            // nothing. Adopt the rotation now, but ONLY when the launcher window is really following
+            // the display: syncLauncherRotationFromLiveConfig compares the launcher's own live
+            // configuration bucket against the display's and leaves the recorded value untouched when
+            // they disagree -- which is precisely the other-app forced-rotation case (YouTube/Tapo
+            // landscape over a portrait-locked home), preserving the v2 data-loss guard.
+            syncLauncherRotationFromLiveConfig(launcher)
             return false
         }
         if (!launcherOrientationKnown) return true
@@ -295,14 +366,6 @@ object AnchorTransposeHook {
         // rewritten on rotation (the old reactive path), or it holds one canonical frame and the
         // reader maps it (the pre-computed path). This is the switch between them.
         //
-        // Skipping here removes both the DB rewrite AND the forceReload/LoaderTask below — the
-        // ~0.9–1.9s that rotation used to cost. KEY_LAST_ROTATION is still advanced so the recorded
-        // rotation keeps describing reality for the migration and for reconcileOnResume.
-        if (PortraitCanonicalMigration.isLiveDbCanonical()) {
-            prefs.edit().putInt(KEY_LAST_ROTATION, newRotation).apply()
-            return
-        }
-
         // Only transpose when the requested display rotation matches the LAUNCHER window's own
         // orientation (see launcherWillRotate). If they disagree, another app forced the display
         // rotation (YouTube/Tapo landscape) while the launcher window did not follow — transposing then
@@ -310,11 +373,26 @@ object AnchorTransposeHook {
         // now-out-of-bounds icon and persists it, permanently destroying the layout. Do NOT advance
         // KEY_LAST_ROTATION here, so the recorded rotation keeps matching the (untouched) DB.
         //
+        // This gate MUST run before the portrait-canonical early-return below. It used to sit after it,
+        // so a rotation that happened while the launcher was backgrounded (notably by one of our OWN
+        // Activities, e.g. the wallpaper chooser) still advanced KEY_LAST_ROTATION even though the
+        // active frame was never updated. reconcileOnResume then found lastRotation already equal to the
+        // current rotation and skipped the reconciliation, leaving the grid stuck in the pre-rotation
+        // orientation until the user manually rotated back and forth.
+        //
         // Ordering note: on a genuine rotation this DisplayController-driven path fires ~75ms BEFORE the
         // launcher records its new orientation, so launcherWillRotate is still false here and we skip —
         // the transpose is then correctly re-driven from Launcher.onConfigurationChanged
         // (onLauncherConfigurationChanged) once the launcher orientation is authoritative.
         if (!launcherWillRotate(context)) return
+
+        // Skipping here removes both the DB rewrite AND the forceReload/LoaderTask below — the
+        // ~0.9–1.9s that rotation used to cost. KEY_LAST_ROTATION is still advanced so the recorded
+        // rotation keeps describing reality for the migration and for reconcileOnResume.
+        if (PortraitCanonicalMigration.isLiveDbCanonical()) {
+            prefs.edit().putInt(KEY_LAST_ROTATION, newRotation).apply()
+            return
+        }
 
         // Only transpose for rotations that occur while the launcher is actually visible.
         //

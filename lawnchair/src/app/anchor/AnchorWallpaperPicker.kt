@@ -70,45 +70,89 @@ object AnchorWallpaperPicker {
     }
 
     /**
-     * Launches the system live-wallpaper confirm dialog pre-targeted at [AnchorWallpaperService].
-     * The user taps "Set wallpaper" to apply. Falls back to the generic live-wallpaper chooser if the
-     * direct preview isn't available on this device.
+     * Launches the system live-wallpaper confirm dialog pre-targeted at [AnchorWallpaperService] and
+     * suspends until the user answers it. Returns true only if they actually tapped "Set wallpaper"
+     * (`RESULT_OK`) — false if they backed out, dismissed it, or it could not be shown at all.
+     *
+     * The dialog is REQUIRED every time, even when Anchor is already the active engine and only the
+     * image underneath it is changing — it is Android's consent gate for a live wallpaper component,
+     * not a one-time permission grant. Going through the system flow on every switch is also what some
+     * OEMs (verified: Samsung) need in order to (re-)establish the wallpaper surface's visibility;
+     * skipping it and just overwriting the file leaves the surface half-attached and home blanks to
+     * black on the next resume. So the caller must not commit any state
+     * ([AnchorPreferences.wallpaperSource]) before this resolves — otherwise backing out still leaves
+     * Anchor "set" from the app's own point of view, pointing at an engine the system was never told
+     * to (re)activate.
      */
-    fun setAsLiveWallpaper(activity: Activity) {
+    suspend fun setAsLiveWallpaper(activity: Activity): Boolean {
+        maybeShowPortraitLockNotice(activity)
         val component = serviceComponent(activity)
-        // Setting the live wallpaper from within our running app leaves Samsung's wallpaper-surface
-        // visibility in a state that blanks to black on the next Home press (a clean cold-start does
-        // not). Mark a one-shot restart so the launcher restarts on its next resume, reproducing that
-        // clean state. Consumed in LawnchairLauncher.onResume.
-        AnchorPreferences(activity).apply {
-            pendingWallpaperRestart = true
-            // After the restart, re-assert wallpaper visibility once so WM re-dispatches it to the
-            // engine — otherwise home scroll is janky until a real recents→home/unlock transition.
-            pendingWallpaperHeal = true
-        }
         val preview = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
             putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, component)
         }
-        try {
-            activity.startActivity(preview)
-            // The system live-wallpaper preview now runs in ITS OWN task (com.android.wallpaper /
-            // livepicker), independent of ours, so finishing our activity doesn't affect it. Finish the
-            // standalone chooser now so that when the user taps "Set wallpaper" and the preview dismisses,
-            // they return straight to whatever was under it (home, or Settings if opened from there) — NOT
-            // to the now-stale chooser grid, which otherwise lingers foreground and flashes away on the
-            // next Home press. Gate on the concrete chooser class: the same picker flow is ALSO invoked
-            // from the grid wizard (GridWizardScreen) and other in-settings hosts, where finishing the
-            // caller would tear down onboarding mid-flow. Only the dedicated chooser is safe to auto-close.
-            if (activity.javaClass.name ==
-                "app.lawnchair.ui.preferences.AnchorWallpaperChooserActivity"
-            ) {
-                activity.finish()
-            }
+        val confirmed = try {
+            BlankActivity.startBlankActivityForResult(activity, preview).resultCode ==
+                Activity.RESULT_OK
         } catch (e: Exception) {
             Log.w(TAG, "Direct live-wallpaper preview failed (${e.message}); opening chooser")
             runCatching {
-                activity.startActivity(Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER))
+                BlankActivity.startBlankActivityForResult(
+                    activity, Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER),
+                )
+            }.getOrNull()?.resultCode == Activity.RESULT_OK
+        }
+
+        return confirmed
+    }
+
+    /**
+     * Closes the standalone wallpaper chooser once a pick has fully landed, so the user returns to
+     * whatever was under it (home, or Settings) rather than a stale chooser grid that would otherwise
+     * linger foreground and flash away on the next Home press. The system preview ran in ITS OWN task,
+     * so this never affected it.
+     *
+     * Gated on the concrete chooser class: the same flow is ALSO invoked from the grid wizard and other
+     * in-settings hosts, where finishing the caller would tear down onboarding mid-flow.
+     *
+     * Called only AFTER the staged commit, never before — the commit still needs this Activity as its
+     * Context, and a cancelled or failed pick must leave the chooser open so the user can try again.
+     */
+    private fun finishStandaloneChooser(activity: Activity) {
+        if (activity.javaClass.name == "app.lawnchair.ui.preferences.AnchorWallpaperChooserActivity") {
+            activity.finish()
+        }
+    }
+
+    /**
+     * Shown once, right before launching the system CHANGE_LIVE_WALLPAPER confirm screen, if the
+     * device is currently in landscape — some OEMs' confirm screen
+     * (`com.android.wallpaper.livepicker.LiveWallpaperChange` on stock/Pixel) is hardcoded
+     * `screenOrientation="portrait"`, forcing a visible system-driven rotation for that screen only.
+     */
+    private suspend fun maybeShowPortraitLockNotice(activity: Activity) {
+        val prefs = AnchorPreferences(activity)
+        if (prefs.wallpaperPortraitLockNoticeSuppressed) return
+        val isLandscape = activity.resources.configuration.orientation ==
+            android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        if (!isLandscape) return
+        // Cancellable: if the activity goes away while this dialog is up the coroutine is cancelled
+        // rather than left suspended forever holding an Activity reference. (confirmSmallImage below
+        // still uses the plain suspendCoroutine form — pre-existing, left alone here.)
+        kotlinx.coroutines.suspendCancellableCoroutine<Unit> { cont ->
+            fun finish() {
+                if (cont.isActive) cont.resume(Unit)
             }
+            val dialog = android.app.AlertDialog.Builder(activity)
+                .setTitle(R.string.anchor_wallpaper_portrait_lock_title)
+                .setMessage(R.string.anchor_wallpaper_portrait_lock_message)
+                .setPositiveButton(R.string.anchor_wallpaper_portrait_lock_ok) { _, _ -> finish() }
+                .setNegativeButton(R.string.anchor_wallpaper_portrait_lock_never) { _, _ ->
+                    prefs.wallpaperPortraitLockNoticeSuppressed = true
+                    finish()
+                }
+                .setOnCancelListener { finish() }
+                .show()
+            cont.invokeOnCancellation { runCatching { dialog.dismiss() } }
         }
     }
 
@@ -128,30 +172,64 @@ object AnchorWallpaperPicker {
                 if (!confirmSmallImage(activity, fit)) return@launch
             }
 
-            val ok = withContext(Dispatchers.IO) {
+            // Import to a STAGING file, not the live one: the running wallpaper engine watches the
+            // live file and would repaint the moment it changed — applying the new image before the
+            // user has confirmed anything. Nothing touches the live wallpaper until they confirm.
+            val staged = withContext(Dispatchers.IO) {
                 WallpaperStabilizationManager.importBundledWallpaper(activity, rawResId)
-            }
-            if (!ok) return@launch
-            AnchorPreferences(activity).wallpaperSource = AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
-            applyLiveWallpaper(activity)
+            } ?: return@launch
+            commitIfConfirmed(activity, staged)
         }
     }
 
     /**
-     * Apply the (already-imported) image as the live wallpaper by ALWAYS going through the system
-     * CHANGE_LIVE_WALLPAPER flow — even on a switch when our engine is already the active wallpaper.
-     * The system flow is required on some OEMs (verified: Samsung) to (re-)establish the wallpaper
-     * surface's visibility; skipping it (just overwriting the file) leaves the surface half-attached and
-     * home blanks to black on the next resume.
+     * Shows the system confirm dialog and, ONLY if the user actually confirms, promotes the staged
+     * image over the live wallpaper file and turns Anchor's wallpaper source on. Backing out deletes
+     * the staging file and leaves every piece of live state — the rendered wallpaper, the stored path,
+     * the source pref — exactly as it was.
      *
-     * On a switch the system tears down and resurrects the engine, and the resurrected engine used to
-     * paint a stale/mid-decode buffer for one frame (the n-1 flash). That is now prevented at the source
-     * inside [app.anchor.wallpaper.AnchorWallpaperService]: a FileObserver pre-decodes the new image into
-     * a process-level cache the instant the caller overwrites the file, so the resurrected engine's first
-     * frame is already the new image — no teardown gap, no flash.
+     * This ordering is the whole point: the running engine watches the LIVE file, so writing there
+     * before confirmation would apply the change regardless of what the user then chose.
      */
-    private fun applyLiveWallpaper(activity: Activity) {
-        setAsLiveWallpaper(activity)
+    private suspend fun commitIfConfirmed(activity: Activity, staged: java.io.File): Boolean {
+        if (!setAsLiveWallpaper(activity)) {
+            withContext(Dispatchers.IO) {
+                WallpaperStabilizationManager.discardStagedWallpaper(activity)
+            }
+            return false
+        }
+        val committed = withContext(Dispatchers.IO) {
+            WallpaperStabilizationManager.commitStagedWallpaper(activity, staged)
+        }
+        if (!committed) {
+            // The promote failed, so the live wallpaper file and customWallpaperPath are untouched and
+            // nothing was applied. Drop the staged bytes rather than leaving them to be picked up by a
+            // later PREVIEW engine (AnchorWallpaperService reads the staging file in preview mode), and
+            // do NOT arm the restart/heal flags below — there is no change for them to settle.
+            withContext(Dispatchers.IO) {
+                WallpaperStabilizationManager.discardStagedWallpaper(activity)
+            }
+            return false
+        }
+        // CUSTOM = "Anchor wallpaper on". The image is rendered by our live wallpaper; the launcher
+        // stays passthrough (keeps FLAG_SHOW_WALLPAPER) so it shows through while the offset bridge
+        // drives its parallax.
+        AnchorPreferences(activity).apply {
+            wallpaperSource = AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
+            // Setting the live wallpaper from within our running app leaves Samsung's wallpaper-surface
+            // visibility in a state that blanks to black on the next Home press (a clean cold-start does
+            // not). Mark a one-shot restart so the launcher restarts on its next resume, reproducing
+            // that clean state. Consumed in LawnchairLauncher.onResume.
+            //
+            // Armed only AFTER the commit actually succeeded: arming on mere confirmation would restart
+            // the launcher and re-assert wallpaper visibility for a change that never landed.
+            pendingWallpaperRestart = true
+            // After the restart, re-assert wallpaper visibility once so WM re-dispatches it to the
+            // engine — otherwise home scroll is janky until a real recents→home/unlock transition.
+            pendingWallpaperHeal = true
+        }
+        finishStandaloneChooser(activity)
+        return true
     }
 
     /**
@@ -223,19 +301,12 @@ object AnchorWallpaperPicker {
                 if (!confirmSmallImage(activity, fit)) return@launch
             }
 
-            val ok = withContext(Dispatchers.IO) {
-                // Copy the image to app storage only; the LIVE wallpaper renders it. Don't also push it
-                // via setBitmap — the live wallpaper covers home+lock, so setBitmap would be redundant.
-                WallpaperStabilizationManager.importCustomWallpaper(
-                    activity, uri, alsoSetSystemWallpaper = false,
-                )
-            }
-            if (!ok) return@launch
-            // CUSTOM = "Anchor wallpaper on". The image is rendered by our live wallpaper (set below);
-            // the launcher stays passthrough (keeps FLAG_SHOW_WALLPAPER) so the live wallpaper shows
-            // through while the offset bridge drives its parallax.
-            AnchorPreferences(activity).wallpaperSource = AnchorPreferences.WALLPAPER_SOURCE_CUSTOM
-            applyLiveWallpaper(activity)
+            // Staged, not live — see commitIfConfirmed. Copy to app storage only; the LIVE wallpaper
+            // renders it, so no setBitmap here (it covers home+lock already).
+            val staged = withContext(Dispatchers.IO) {
+                WallpaperStabilizationManager.importCustomWallpaper(activity, uri)
+            } ?: return@launch
+            commitIfConfirmed(activity, staged)
         }
     }
 }

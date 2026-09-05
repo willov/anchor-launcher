@@ -241,8 +241,34 @@ class AnchorWallpaperService : WallpaperService() {
          * decoding synchronously if the cache is empty (cold start). Does a `File.lastModified()` stat
          * and constructs AnchorPreferences, so call it ONLY on lifecycle callbacks (create / surface /
          * visibility), never per parallax frame — the hot path uses [adoptCacheIfNewer] instead.
+         *
+         * A PREVIEW surface (the system's CHANGE_LIVE_WALLPAPER confirm-dialog thumbnail) prefers the
+         * staging file over the live one, if a staged import exists — so the dialog shows the
+         * newly-picked image even though it has not been committed yet. This intentionally bypasses the
+         * shared process-level cache (which is keyed to the live path) since the staged file is not
+         * committed and must never leak into it; the already-active real engine is unaffected because it
+         * is a separate, non-preview Engine instance still reading the live path/cache as before.
          */
         private fun reloadBitmapIfChanged() {
+            if (isPreview) {
+                val staging = WallpaperStabilizationManager.stagingFile(this@AnchorWallpaperService)
+                if (staging.exists()) {
+                    val mtime = runCatching { staging.lastModified() }.getOrDefault(0L)
+                    if (bitmap != null && staging.absolutePath == loadedPath && mtime == loadedMtime) return
+                    val decoded = runCatching {
+                        WallpaperStabilizationManager.decodeDownscaled(
+                            this@AnchorWallpaperService, staging.absolutePath,
+                        )
+                    }.getOrNull()
+                    if (decoded != null) {
+                        bitmap = decoded
+                        loadedPath = staging.absolutePath
+                        loadedMtime = mtime
+                        return
+                    }
+                    // Fall through to the live file below if the staged decode failed.
+                }
+            }
             val path = AnchorPreferences(this@AnchorWallpaperService).customWallpaperPath
             val mtime = path?.let { runCatching { java.io.File(it).lastModified() }.getOrDefault(0L) } ?: 0L
             // Already showing the current file? nothing to do.

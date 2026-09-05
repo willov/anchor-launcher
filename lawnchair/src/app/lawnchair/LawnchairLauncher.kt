@@ -600,6 +600,13 @@ class LawnchairLauncher : QuickstepLauncher() {
     override fun onResume() {
         super.onResume()
         restartIfPending()
+        // If the launcher itself was backgrounded by one of OUR OWN Activities (e.g. the wallpaper
+        // chooser) during the rotation, it never got its own onConfigurationChanged callback, so
+        // AnchorTransposeHook's cached launcherRotation is stale. Refresh it from our own live config
+        // (now current, since Android applies pending config before resuming) BEFORE reconcileOnResume
+        // checks it — otherwise reconcileOnResume's data-loss gate wrongly treats this as a foreign
+        // forced-rotation and skips the transpose, leaving the grid in the old orientation's shape.
+        app.anchor.rotation.AnchorTransposeHook.syncLauncherRotationFromLiveConfig(this)
         // If the display rotated while we were backgrounded (e.g. rotating inside YouTube/camera) and
         // settled before we resumed, the deferred grid transpose never ran. Reconcile it now that we
         // are visible so the grid matches the current rotation.

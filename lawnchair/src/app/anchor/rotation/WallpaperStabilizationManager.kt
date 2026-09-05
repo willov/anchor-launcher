@@ -14,6 +14,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Rect
 import android.util.Log
 import android.os.Build
+import android.view.Surface
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.animation.ValueAnimator
@@ -23,6 +24,9 @@ import app.lawnchair.LawnchairLauncher
 import com.android.launcher3.R
 import com.android.launcher3.util.DisplayController
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * Drives Anchor's rotation-stable wallpaper, which is rendered by the
@@ -569,7 +573,9 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
                 .setTitle(R.string.anchor_wallpaper_reset_title)
                 .setMessage(R.string.anchor_wallpaper_reset_message)
                 .setPositiveButton(R.string.anchor_wallpaper_reset_restore) { _, _ ->
-                    AnchorWallpaperPicker.setAsLiveWallpaper(launcher)
+                    CoroutineScope(Dispatchers.Main).launch {
+                        AnchorWallpaperPicker.setAsLiveWallpaper(launcher)
+                    }
                 }
                 // NOT "use system": if this ever fires on a user running another engine, what they are
                 // using is not the system wallpaper. "Keep current" is true in every case it can appear.
@@ -982,30 +988,108 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         }
 
         /**
-         * Imports a BUNDLED wallpaper from a raw resource (mirror of [importCustomWallpaper] for a
-         * URI). Copies the raw bytes to `custom_wallpaper.jpg` and points
-         * [AnchorPreferences.customWallpaperPath] at it, so a bundled pick reuses the exact same
-         * rendering path as a user-picked image. Call on a background thread.
+         * Rotates [dest] IN PLACE so the device's CURRENT physical rotation becomes the reference "up"
+         * baked into the stored file, at the moment a wallpaper is imported/set.
+         *
+         * This is not about the picture's own content (a photo's horizon, an abstract wallpaper with no
+         * inherent orientation) — it is about what the DEVICE considers natural. A phone is normally
+         * held in portrait, but many tablets are used just as often in landscape (ROTATION_90 or
+         * ROTATION_270), with no privileged "natural" side. Whatever rotation the user is physically
+         * holding the device in when they set a wallpaper is, by definition, the "up" they intend —
+         * regardless of device type or the image's own content.
+         *
+         * The stored file is always PORTRAIT-CANONICAL (see the class doc), and
+         * [app.anchor.wallpaper.AnchorWallpaperService.drawFrame] counter-rotates it live to stay
+         * upright at whatever rotation the device is in when it draws — e.g. for `ROTATION_90` it
+         * applies `translate(0, rawW); rotate(-90)`. That live counter-rotation is correct and must not
+         * change: it is what keeps the wallpaper pixel-perfect across every SUBSEQUENT rotation.
+         *
+         * But it means the file's own pixels are always interpreted as "portrait-up" as the baseline —
+         * so a wallpaper set while the device is already in landscape ends up sideways once `drawFrame`
+         * applies ITS portrait-relative counter-rotation on top of that baseline. The fix is to bake the
+         * INVERSE of that counter-rotation into the stored file once, at set time, so the file's
+         * "portrait-up" reference frame is redefined to match whatever rotation the user was actually
+         * holding the device in. `drawFrame`'s rotation is then applied on top of an already-correct
+         * frame and the net result is upright — for the current rotation now, and for every rotation
+         * after (rotation itself was never the bug; only the FIRST reference frame was).
          */
-        fun importBundledWallpaper(context: Context, rawResId: Int): Boolean {
+        private fun rotateStoredFileForCurrentOrientation(context: Context, dest: File) {
+            // Read the LIVE display rotation, not DisplayController's cached info.rotation — that
+            // cache updates from a DisplayListener callback and can lag the real physical rotation by
+            // enough to bake in the WRONG inverse rotation if this runs right as the device is
+            // rotating (e.g. racing the system's own forced-portrait wallpaper confirm screen). A
+            // one-shot @Suppress is used instead of a Display/Context.display dependency so this stays
+            // callable from a background thread with a plain (non-Activity, non-UI) Context.
+            @Suppress("DEPRECATION")
+            val rotation = context.getSystemService(WindowManager::class.java)
+                ?.defaultDisplay?.rotation
+                ?: DisplayController.INSTANCE.get(context).info.rotation
+            // Inverse of drawFrame's per-rotation canvas transform (drawFrame: -90/+90/180 respectively).
+            val degrees = when (rotation) {
+                Surface.ROTATION_90 -> 90f
+                Surface.ROTATION_270 -> -90f
+                Surface.ROTATION_180 -> 180f
+                else -> return // ROTATION_0: already the reference frame, nothing to bake in.
+            }
+            val original = BitmapFactory.decodeFile(dest.absolutePath) ?: return
+            try {
+                val matrix = android.graphics.Matrix().apply { postRotate(degrees) }
+                val rotated = Bitmap.createBitmap(
+                    original, 0, 0, original.width, original.height, matrix, true,
+                )
+                dest.outputStream().use { out ->
+                    rotated.compress(Bitmap.CompressFormat.PNG, 100, out)
+                }
+                if (rotated !== original) rotated.recycle()
+            } finally {
+                original.recycle()
+            }
+        }
+
+        /** The live file the wallpaper engine's FileObserver watches and renders. */
+        private fun liveWallpaperFile(context: Context): File =
+            File(context.filesDir, "custom_wallpaper.jpg")
+
+        /**
+         * Staging file for an in-progress import. Deliberately a different name than
+         * [liveWallpaperFile] — [app.anchor.wallpaper.AnchorWallpaperService]'s FileObserver filters by
+         * exact filename, so writes here are invisible to any already-running engine until
+         * [commitStagedWallpaper] promotes this over the live path. This is what lets a user back out of
+         * the system confirm dialog without the wallpaper visibly changing underneath them.
+         *
+         * Not private: [app.anchor.wallpaper.AnchorWallpaperService] reads this directly for a
+         * PREVIEW-mode engine (the system confirm dialog's thumbnail) so that surface shows the
+         * newly-picked image while the real, already-active engine keeps showing the live file
+         * untouched until the pick is actually confirmed.
+         */
+        fun stagingFile(context: Context): File =
+            File(context.filesDir, "custom_wallpaper_staging.jpg")
+
+        /**
+         * Imports a BUNDLED wallpaper from a raw resource (mirror of [importCustomWallpaper] for a
+         * URI) into the STAGING file (see [stagingFile]) — not the live path. Call
+         * [commitStagedWallpaper] to promote it once the caller has confirmed the wallpaper should
+         * actually be applied. Returns the staged file, or null on failure. Call on a background thread.
+         */
+        fun importBundledWallpaper(context: Context, rawResId: Int): File? {
             return try {
-                val dest = File(context.filesDir, "custom_wallpaper.jpg")
+                val dest = stagingFile(context)
                 if (isSvgResource(context, rawResId)) {
                     // Vector source: rasterize at exactly the size THIS device needs instead of
                     // shipping a fixed-resolution raster that is too small for a large tablet and
                     // wastefully large for a phone. A vector never upscales, so these wallpapers are
                     // pixel-exact on any screen at any parallax setting.
-                    if (!rasterizeSvgTo(context, rawResId, dest)) return false
+                    if (!rasterizeSvgTo(context, rawResId, dest)) return null
                 } else {
                     context.resources.openRawResource(rawResId).use { input ->
                         dest.outputStream().use { output -> input.copyTo(output) }
                     }
                 }
-                AnchorPreferences(context).customWallpaperPath = dest.absolutePath
-                true
+                rotateStoredFileForCurrentOrientation(context, dest)
+                dest
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to import bundled wallpaper: ${e.message}")
-                false
+                null
             }
         }
 
@@ -1079,25 +1163,64 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
         }
 
         /**
-         * Copies the user-picked image [uri] into app-private storage and points
-         * [AnchorPreferences.customWallpaperPath] at it. Photo-picker URIs grant read access without
-         * any permission. Returns true on success. Call on a background thread.
+         * Copies the user-picked image [uri] into the STAGING file (see [stagingFile]) — not the live
+         * path. Photo-picker URIs grant read access without any permission. Returns the staged file, or
+         * null on failure. Call on a background thread.
          *
-         * When [alsoSetSystemWallpaper] is true, the same image is also set as the actual system
-         * wallpaper (home + lock) via [WallpaperManager.setBitmap] — a normal `SET_WALLPAPER`
-         * permission, auto-granted, Play-safe — with an explicit visibleCropHint = the exact rectangle
-         * Anchor shows on the home screen at rest, so the lock screen matches the home render.
+         * [alsoSetSystemWallpaper] is carried through to [commitStagedWallpaper], which is where it is
+         * actually acted on — setting the real system wallpaper must wait for the same confirmation as
+         * everything else in this flow.
          */
         fun importCustomWallpaper(
             context: Context,
             uri: android.net.Uri,
-            alsoSetSystemWallpaper: Boolean = true,
-        ): Boolean {
+        ): File? {
             return try {
-                val dest = File(context.filesDir, "custom_wallpaper.jpg")
+                val dest = stagingFile(context)
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     dest.outputStream().use { output -> input.copyTo(output) }
-                } ?: return false
+                } ?: return null
+                rotateStoredFileForCurrentOrientation(context, dest)
+                dest
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to import custom wallpaper: ${e.message}")
+                null
+            }
+        }
+
+        /**
+         * Promotes a staged import (from [importBundledWallpaper]/[importCustomWallpaper]) to the LIVE
+         * wallpaper file, and only then updates [AnchorPreferences.customWallpaperPath]. Call this ONLY
+         * after the caller has confirmed the wallpaper should actually be applied (i.e. after the system
+         * CHANGE_LIVE_WALLPAPER dialog returns confirmed) — this is the moment
+         * [app.anchor.wallpaper.AnchorWallpaperService]'s FileObserver will see the change and any
+         * already-running engine will redraw with the new image.
+         *
+         * When [alsoSetSystemWallpaper] is true, the promoted image is also set as the actual system
+         * wallpaper (home + lock) via [WallpaperManager.setBitmap] — a normal `SET_WALLPAPER`
+         * permission, auto-granted, Play-safe — with an explicit visibleCropHint = the exact rectangle
+         * Anchor shows on the home screen at rest, so the lock screen matches the home render.
+         *
+         * NOTE: currently NO caller passes true — Anchor's live wallpaper already covers home + lock,
+         * so pushing the same image again via setBitmap would be redundant. The parameter and its body
+         * are kept for the lock-screen-only case (rendering the still image on lock while the live
+         * engine drives home), which is not wired up yet. Defaults to false so the default path does no
+         * redundant work.
+         *
+         * Returns true on success. Call on a background thread.
+         */
+        fun commitStagedWallpaper(
+            context: Context,
+            staged: File,
+            alsoSetSystemWallpaper: Boolean = false,
+        ): Boolean {
+            return try {
+                val dest = liveWallpaperFile(context)
+                if (!staged.renameTo(dest)) {
+                    // Cross-filesystem or other rename failure: fall back to copy+delete.
+                    staged.copyTo(dest, overwrite = true)
+                    staged.delete()
+                }
                 AnchorPreferences(context).customWallpaperPath = dest.absolutePath
                 if (alsoSetSystemWallpaper) {
                     try {
@@ -1124,9 +1247,14 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
                 }
                 true
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to import custom wallpaper: ${e.message}")
+                Log.w(TAG, "Failed to commit staged wallpaper: ${e.message}")
                 false
             }
+        }
+
+        /** Discards a staged import that was never confirmed (user backed out of the confirm dialog). */
+        fun discardStagedWallpaper(context: Context) {
+            runCatching { stagingFile(context).delete() }
         }
     }
 }

@@ -151,6 +151,65 @@ orientation/screen/icon-aware slider caps — see "Smarter grid-size sliders" un
 (`morphogenesis-d`, `blobs-d`, `map-d`) were rendered 4096² and pushed to the device's `/sdcard/Pictures`
 for manual evaluation; not bundled in-app yet.
 
+**Fixed 2026-09-05 — backing out of the system wallpaper prompt applied the wallpaper anyway, and a
+foreign rotation could leave the grid in the wrong frame:** three related bugs in the set-wallpaper flow.
+
+*Staged write.* `importBundledWallpaper`/`importCustomWallpaper` wrote straight to the LIVE file
+(`custom_wallpaper.jpg`) before the system confirm dialog even appeared; `AnchorWallpaperService`'s
+FileObserver watches that exact file, so an already-running engine repainted immediately and backing out
+changed nothing back. They now write to `custom_wallpaper_staging.jpg` (a different name, so the
+FileObserver's filename filter ignores it) and return the staged `File`. `commitStagedWallpaper` promotes
+it and sets `customWallpaperPath` only after a confirmed result; a cancel deletes the staging file and
+touches nothing. A PREVIEW-mode engine reads the staging file so the confirm dialog still shows the new
+image.
+
+*The confirmation signal was lying.* The staged gate is only as good as the boolean it gates on, and
+`BlankActivity` reported `RESULT_OK` from a configuration-change recreate. The system live-wallpaper
+confirm screen (`com.android.wallpaper.livepicker`) is hardcoded portrait, so entering it from landscape
+ALWAYS recreates — meaning every cancel read as confirmed. `registerForActivityResult` now runs
+unconditionally in `onCreate` (the only legal place, and what makes the Activity Result API re-deliver a
+pending result across a recreate), so the real result arrives; the `onDestroy` fallback is
+`RESULT_CANCELED` only. The outcomes are not symmetric: a spurious cancel costs one repeated pick, a
+spurious OK applies a wallpaper the user declined. This also fixed the photo picker, which was getting
+`RESULT_OK` with null data.
+
+*Rotation frame.* A rotation that settles while the launcher is backgrounded by one of our own Activities
+(the wallpaper chooser) never reaches `Launcher.onConfigurationChanged`, leaving the cached launcher
+rotation stale. `syncLauncherRotationFromLiveConfig` refreshes it on resume by reading the launcher
+window's OWN `configuration.windowConfiguration.rotation` — the field `dumpsys` prints as `mRotation`,
+independent of the display's. Two earlier attempts compared coarse portrait/landscape BUCKETS instead:
+the first could not separate 90 from 270 and so adopted rotations the launcher never took (the v2
+data-loss shape, `9cde478e4e`); the second refused every same-bucket rotation and left the grid rebuilt
+in the un-rotated portrait frame — a 4-wide column of icons stranded in a landscape window. The display's
+rotation and the launcher window's rotation are separate facts; code asking "did our window follow?" must
+read the window's config, never infer it from the display.
+
+Also fixed alongside: `pendingWallpaperRestart`/`pendingWallpaperHeal` were armed on confirmation rather
+than after the commit succeeded; the staging file leaked when a promote failed (`discardStagedWallpaper`
+existed but had no callers); and the chooser's `finish()` ran before the commit that still needed it as a
+Context. Device-verified on the Pixel across control rotation, the Tapo/camera foreign-rotation
+regression (`9cde478e4e`), the same-bucket 90→270 case, and a full portrait↔landscape round trip — the
+workspace DB stayed byte-identical throughout.
+
+**Fixed 2026-09-03 — wallpaper set from landscape had the wrong "up" baked in:** found while setting up
+a tablet demo profile for Play Store screenshots. Every wallpaper (bundled SVG, bundled webp, and user
+photos alike — confirmed NOT format-specific) came out with the wrong orientation whenever it was picked
+while the device was already in landscape (ROTATION_90/180/270) — and rotating afterward correctly
+rotated the *already-wrong* image, never self-correcting. Root cause: the stored file is always
+PORTRAIT-CANONICAL, and `AnchorWallpaperService.drawFrame`'s live counter-rotation (correct, unit-tested,
+untouched) always treats the file's own pixels as "portrait-up." Nothing had ever redefined that
+reference frame to match the rotation the user was actually holding the device in at set time — so a
+tablet (routinely used in landscape, with no privileged "natural" side, unlike a phone) baked in a
+90°/180°/270° error on every set. Fixed by `rotateStoredFileForCurrentOrientation()` in
+`WallpaperStabilizationManager`, called once at the end of both `importBundledWallpaper` and
+`importCustomWallpaper`: reads `DisplayController.INSTANCE.get(context).info.rotation` at set time and
+bakes the INVERSE of `drawFrame`'s per-rotation transform into the stored bitmap, so the file's
+"portrait-up" reference is redefined to whatever the user was looking at. `drawFrame` itself is
+unchanged — rotation was never the bug, only the first reference frame. Verified on the Samsung tablet:
+setting from landscape now renders upright immediately, and subsequent rotation is still pixel-perfect.
+Explicitly applies to BOTH bundled art and user photos — the fix is about what the DEVICE considers
+"up," not the image content, and a tablet has no privileged natural orientation the way a phone does.
+
 ---
 
 ## Planned Features
