@@ -59,10 +59,11 @@ fun AnchorWallpaperCreditsScreen(
 
         PreferenceGroup {
             BundledWallpapers.all().forEach { entry ->
+                val hasSource = entry.sourceUrl.isNotBlank()
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { openUrl(entry.sourceUrl) }
+                        .let { if (hasSource) it.clickable { openUrl(entry.sourceUrl) } else it }
                         .padding(16.dp),
                 ) {
                     Text(
@@ -78,12 +79,14 @@ fun AnchorWallpaperCreditsScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Text(
-                        text = stringResource(R.string.anchor_wallpaper_credits_source),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
+                    if (hasSource) {
+                        Text(
+                            text = stringResource(R.string.anchor_wallpaper_credits_source),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
                 }
             }
         }

@@ -95,17 +95,22 @@ fun AnchorWallpaperChooserScreen(
                 }
                 bundled.forEach { entry ->
                     add { m ->
-                        SplitWallpaperCard(
-                            entry = entry,
-                            modifier = m,
-                            onPick = { variant ->
-                                activity?.let {
-                                    AnchorWallpaperPicker.selectBundled(
-                                        it, entry.rawResId(it, variant),
-                                    )
-                                }
-                            },
-                        )
+                        val pick: (BundledWallpapers.Variant) -> Unit = { variant ->
+                            activity?.let {
+                                AnchorWallpaperPicker.selectBundled(
+                                    it, entry.rawResId(it, variant),
+                                )
+                            }
+                        }
+                        if (entry.hasBothVariants(context)) {
+                            SplitWallpaperCard(entry = entry, modifier = m, onPick = pick)
+                        } else {
+                            FullWallpaperCard(
+                                entry = entry,
+                                modifier = m,
+                                onPick = { pick(entry.soleVariant) },
+                            )
+                        }
                     }
                 }
             }
@@ -224,6 +229,51 @@ private fun SplitWallpaperCard(
                     .weight(1f)
                     .fillMaxSize()
                     .clickable { onPick(BundledWallpapers.Variant.DARK) },
+            )
+        }
+        Text(
+            text = entry.title,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 6.dp, start = 4.dp),
+        )
+        Text(
+            text = entry.artist,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 4.dp),
+        )
+    }
+}
+
+/**
+ * A bundled-wallpaper card for an entry with only ONE variant bundled (no separate light/dark art) —
+ * a single full-width thumbnail instead of [SplitWallpaperCard]'s light/dark halves, since there's
+ * nothing to split.
+ */
+@Composable
+private fun FullWallpaperCard(
+    entry: BundledWallpapers.Entry,
+    onPick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable(onClick = onPick),
+        ) {
+            VariantHalf(
+                entry = entry,
+                variant = entry.soleVariant,
+                align = Alignment.Center,
+                modifier = Modifier.fillMaxSize(),
             )
         }
         Text(

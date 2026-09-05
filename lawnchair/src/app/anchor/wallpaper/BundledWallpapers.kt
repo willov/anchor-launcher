@@ -13,34 +13,41 @@ import android.content.Context
  * Registry of the wallpapers Anchor ships in-app — the single source of truth for the background
  * chooser and the credits/tribute screen.
  *
- * Each background has a **light** and **dark** variant, stored as `res/raw/anchor_wp_<id>_l.webp` and
- * `..._d.webp` (names must be `[a-z0-9_]`). Raw resource ids are resolved by NAME at runtime (via
+ * Most backgrounds have a **light** and **dark** variant, stored as `res/raw/anchor_wp_<id>_l.webp` and
+ * `..._d.webp` (names must be `[a-z0-9_]`); a single-look background ships only the dark file (see
+ * [Entry.hasBothVariants]). Raw resource ids are resolved by NAME at runtime (via
  * [android.content.res.Resources.getIdentifier]) so this file has **no compile-time dependency** on
- * the image files — and no dependency on their FORMAT either, which is why the jpg→webp switch needed
- * no code change here. Entries whose images aren't present are filtered out.
+ * the image files — and no dependency on their FORMAT either, which is why the jpg-to-webp switch
+ * needed no code change here. Entries whose dark variant isn't present are filtered out entirely.
  *
- * Bundled images are GNOME backgrounds (Jakub Steiner, CC-BY-SA 3.0), rasterized from the upstream
- * SVG/JXL at 3072². The flat-shape artwork (blobs, drool) is stored as **lossless** WebP because it is
- * built from flat colour fills: JPEG's DCT sprinkles noise through those flat regions (measured
- * stdev ≈ 0.46 vs 0.00 lossless) which reads as banding/mottling along the shape edges. The
+ * Most bundled images are GNOME backgrounds (Jakub Steiner, CC-BY-SA 3.0), rasterized from the
+ * upstream SVG/JXL at 3072². The flat-shape artwork (blobs, drool) is stored as **lossless** WebP
+ * because it is built from flat colour fills: JPEG's DCT sprinkles noise through those flat regions
+ * (measured stdev ≈ 0.46 vs 0.00 lossless) which reads as banding/mottling along the shape edges. The
  * photographic ones (adwaita, amber, fold) stay lossy WebP, where that noise floor is inaudible
  * against real image detail and lossless would cost 6–10 MB each.
  *
- * The images are shipped UNMODIFIED in the licence's sense: rasterizing the upstream SVG/JXL and
+ * The GNOME images are shipped UNMODIFIED in the licence's sense: rasterizing the upstream SVG/JXL and
  * encoding it as WebP is a format shift, which CC-BY-SA 3.0 §3 expressly permits ("the right to make
  * such modifications as are technically necessary to exercise the rights in other media and formats").
  * The artwork itself is untouched — same composition, same colours, no crop. Anchor downscales/crops
  * at runtime for display only. Attribution only; a per-asset ShareAlike carve-out from the repo's
  * Apache-2.0 license.
+ *
+ * A small number of entries (e.g. "marine") are original artwork made for Anchor Launcher — not
+ * GNOME-sourced, no ShareAlike obligation, [Entry.sourceUrl] left blank since there's no upstream to
+ * link to.
  */
 object BundledWallpapers {
 
     enum class Variant(val suffix: String) { LIGHT("l"), DARK("d") }
 
     /**
-     * A shippable background with light + dark variants. [id] is the `res/raw` base name (no
-     * `anchor_wp_` prefix, no variant suffix). [title] is user-facing; the rest is the CC-BY-SA
-     * attribution.
+     * A shippable background with a dark variant and, optionally, a separate light variant. [id] is
+     * the `res/raw` base name (no `anchor_wp_` prefix, no variant suffix). [title] is user-facing; the
+     * rest is attribution. Most entries ship both variants; a single-look entry (no meaningful "light"
+     * counterpart, e.g. a fixed night-sky scene) bundles only the dark file and is shown regardless of
+     * the system's light/dark theme — see [hasBothVariants].
      */
     data class Entry(
         val id: String,
@@ -54,9 +61,16 @@ object BundledWallpapers {
         fun rawResId(context: Context, variant: Variant): Int =
             context.resources.getIdentifier(rawName(variant), "raw", context.packageName)
 
-        /** True if BOTH variants are bundled in this build. */
+        /** True if the DARK variant is bundled — the minimum for the entry to be usable at all. */
         fun isAvailable(context: Context): Boolean =
+            rawResId(context, Variant.DARK) != 0
+
+        /** True if both LIGHT and DARK are bundled (split picker card); false means a single full card. */
+        fun hasBothVariants(context: Context): Boolean =
             rawResId(context, Variant.LIGHT) != 0 && rawResId(context, Variant.DARK) != 0
+
+        /** The variant to use when only one is bundled — always DARK, the required baseline. */
+        val soleVariant: Variant get() = Variant.DARK
     }
 
     // Most GNOME backgrounds are JPEG XL upstream; a few are SVG. Point the "source" link at the
@@ -84,6 +98,34 @@ object BundledWallpapers {
         gnome("blobs", "Blobs"),
         gnome("drool", "Drool"),
         gnome("fold", "Fold"),
+        Entry(
+            id = "marine",
+            title = "Marine",
+            artist = "Anchor Launcher",
+            license = "Original artwork",
+            sourceUrl = "",
+        ),
+        Entry(
+            id = "wave",
+            title = "Wave",
+            artist = "Anchor Launcher",
+            license = "Original artwork",
+            sourceUrl = "",
+        ),
+        Entry(
+            id = "layered",
+            title = "Layered",
+            artist = "Anchor Launcher",
+            license = "Original artwork",
+            sourceUrl = "",
+        ),
+        Entry(
+            id = "ocean",
+            title = "Ocean",
+            artist = "Anchor Launcher",
+            license = "Original artwork",
+            sourceUrl = "",
+        ),
     )
 
     /** Catalogue entries whose images are actually bundled in this build. */

@@ -216,7 +216,9 @@ private fun WallpaperStep(context: Context) {
         Text(text = stringResource(id = R.string.anchor_grid_wizard_wallpaper_desc))
         Button(
             onClick = {
-                (context as? android.app.Activity)?.let { app.anchor.AnchorWallpaperPicker.launch(it) }
+                context.startActivity(
+                    app.lawnchair.ui.preferences.AnchorWallpaperChooserActivity.createIntent(context),
+                )
             },
             shapes = ButtonDefaults.shapes(),
         ) { Text(stringResource(id = R.string.anchor_grid_wizard_wallpaper_pick)) }

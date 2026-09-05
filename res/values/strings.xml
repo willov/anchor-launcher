@@ -60,7 +60,7 @@
     <string name="anchor_wallpaper_chooser_credits_link">Wallpaper credits</string>
     <!-- Wallpaper credits / attribution screen -->
     <string name="anchor_wallpaper_credits_title">Wallpaper credits</string>
-    <string name="anchor_wallpaper_credits_intro">Anchor’s built-in backgrounds are from the GNOME project, used with gratitude.</string>
+    <string name="anchor_wallpaper_credits_intro">Anchor’s built-in backgrounds include artwork from the GNOME project, used with gratitude, alongside original artwork made for Anchor Launcher.</string>
     <string name="anchor_wallpaper_credits_by">By %1$s · %2$s</string>
     <string name="anchor_wallpaper_credits_source">Source</string>
     <string name="anchor_wallpaper_credits_gnome_thanks">Thank you to the GNOME community. Consider supporting them:</string>
