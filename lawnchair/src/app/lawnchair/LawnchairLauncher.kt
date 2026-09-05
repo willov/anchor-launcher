@@ -599,6 +599,12 @@ class LawnchairLauncher : QuickstepLauncher() {
 
     override fun onResume() {
         super.onResume()
+        // Diagnostic (paired with AnchorWallpaperPicker's): log the rotation state on the FIRST resume
+        // after a wallpaper was set, which is when the user is back on home and would notice the screen
+        // failing to return to landscape. Gated on the pending flag so this stays silent on every
+        // ordinary resume rather than spamming a hot callback. Read before restartIfPending(), which
+        // consumes the flag.
+        app.anchor.AnchorWallpaperPicker.logRotationAfterWallpaperSetIfPending(this)
         restartIfPending()
         // If the launcher itself was backgrounded by one of OUR OWN Activities (e.g. the wallpaper
         // chooser) during the rotation, it never got its own onConfigurationChanged callback, so

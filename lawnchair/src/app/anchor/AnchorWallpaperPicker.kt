@@ -96,10 +96,20 @@ object AnchorWallpaperPicker {
         // CANCELED. Log the elapsed time and the code: a near-instant CANCELED means the dialog was
         // never really shown, whereas a slow one means the user actually saw and dismissed it.
         val startedAt = android.os.SystemClock.elapsedRealtime()
+        // Diagnostic 2: an intermittent report of the screen not returning to landscape after the
+        // confirm screen's forced portrait. The system's confirm activity is hardcoded
+        // screenOrientation=portrait with no configChanges (verified in LiveWallpapersPicker's own
+        // manifest), so the rotation itself is unavoidable; the open question is what does or does not
+        // restore it afterwards. Capture the rotation SETTING and the actual DISPLAY rotation on both
+        // sides of the call: if the setting still reads landscape while the display reads portrait,
+        // the preference survived and simply was not re-applied, which is a very different problem
+        // from the setting having been overwritten.
+        val rotBefore = rotationSnapshot(activity)
         val confirmed = try {
             val code = BlankActivity.startBlankActivityForResult(activity, preview).resultCode
             val elapsed = android.os.SystemClock.elapsedRealtime() - startedAt
             Log.i(TAG, "CHANGE_LIVE_WALLPAPER result=$code after ${elapsed}ms")
+            Log.i(TAG, "rotation before=$rotBefore after=${rotationSnapshot(activity)}")
             if (code != Activity.RESULT_OK && elapsed < SUSPICIOUSLY_FAST_DISMISS_MS) {
                 Log.w(
                     TAG,
@@ -126,6 +136,41 @@ object AnchorWallpaperPicker {
      * never having been shown at all. Diagnostic only; nothing branches on it.
      */
     private const val SUSPICIOUSLY_FAST_DISMISS_MS = 400L
+
+    /**
+     * Logs the rotation state on the first resume after a wallpaper was set — the moment the user is
+     * back on home and would notice the screen not having returned to landscape. Read-only: it must
+     * NOT clear [AnchorPreferences.pendingWallpaperRestart], which the launcher's own restart path and
+     * the wallpaper-changed receiver both still need.
+     *
+     * Diagnostic for an intermittent report that the screen sometimes stays portrait after the system
+     * confirm screen forced it there. Pair the line this prints with the "rotation before=... after=..."
+     * line from [setAsLiveWallpaper]: together they show whether the rotation SETTING survived the
+     * whole flow, and whether the DISPLAY ever came back to match it.
+     */
+    @JvmStatic
+    fun logRotationAfterWallpaperSetIfPending(context: Context) {
+        val prefs = AnchorPreferences(context)
+        if (!prefs.pendingWallpaperRestart && !prefs.pendingWallpaperHeal) return
+        Log.i(TAG, "resume after wallpaper set: ${rotationSnapshot(context)}")
+    }
+
+    /**
+     * "setting=N,display=M" for the diagnostics above. `setting` is Settings.System.USER_ROTATION —
+     * the orientation the user has locked the device to — and `display` is what the screen is actually
+     * showing. They are normally equal; the interesting case is when they diverge.
+     */
+    private fun rotationSnapshot(context: Context): String {
+        val setting = runCatching {
+            android.provider.Settings.System.getInt(
+                context.contentResolver, android.provider.Settings.System.USER_ROTATION,
+            )
+        }.getOrDefault(-1)
+        val display = runCatching {
+            com.android.launcher3.util.DisplayController.INSTANCE.get(context).info.rotation
+        }.getOrDefault(-1)
+        return "setting=$setting,display=$display"
+    }
 
     /**
      * Closes the standalone wallpaper chooser once a pick has fully landed, so the user returns to
