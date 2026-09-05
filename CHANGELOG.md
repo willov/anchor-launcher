@@ -4,6 +4,21 @@ All notable changes to Anchor Launcher will be documented here.
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-09-05
+
+### Added
+- **Four new built-in backgrounds** — Marine, Wave, Layered and Ocean, drawn for Anchor. They are stored as vector art and rendered at exactly your screen's size, so they stay sharp on any device and at any parallax setting.
+
+### Fixed
+- **Backing out of the system "Set wallpaper" screen no longer applies the wallpaper anyway.** Picking a background wrote it straight into place before the confirmation screen even appeared, so the change was already visible behind the prompt and declining it left the new image in place. Your pick is now held aside and only applied once you actually confirm — backing out leaves your existing wallpaper exactly as it was. This was most obvious when Anchor was already managing your wallpaper and you were only swapping the image.
+- **Cancelling the wallpaper prompt after the screen rotated could still count as confirming it.** The system's "Set wallpaper" screen is locked to portrait, so opening it from landscape forces a rotation. That rotation rebuilt the screen underneath and lost track of your answer, and the result was read as a yes — so declining still applied the wallpaper. The answer now survives the rotation.
+- **The wallpaper prompt could appear twice, the second time showing your previous background.** Same cause as above: the forced rotation restarted the request, so a second prompt appeared behind the first.
+- **The home screen could keep the wrong layout after setting a wallpaper from landscape.** Because the wallpaper screen forces a rotation while the home screen is in the background, the grid could end up arranged for the orientation you started in rather than the one you ended in. Anchor now reads the home screen window's own orientation rather than inferring it from the display, so the two can no longer disagree.
+- **Anchor could mistake your own wallpaper change for the system resetting it**, and offer to restore a background you had just deliberately chosen.
+
+### Note
+- On some devices the system's "Set wallpaper" screen is locked to portrait, so your screen may turn while it is open and stay that way afterwards. This is Android's own behaviour and outside Anchor's control; a one-time notice now explains it when you open the picker in landscape.
+
 ## [0.5.4] - 2026-09-02
 
 ### Changed

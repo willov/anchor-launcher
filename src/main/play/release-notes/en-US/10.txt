@@ -1,0 +1,5 @@
+Wallpaper fixes, and four new backgrounds.
+
+• Backing out of the system "Set wallpaper" screen no longer applies the wallpaper anyway — your pick is only used once you confirm it.
+• Fixed: opening that screen from landscape forces a rotation, which could make cancelling count as confirming, or show the prompt twice.
+• Four new built-in backgrounds: Marine, Wave, Layered and Ocean.
