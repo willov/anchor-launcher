@@ -2,7 +2,6 @@ package app.anchor.navigation
 
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
@@ -607,7 +606,6 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
             if (id < 0 || id in allKnown) continue
             rowScreenIds[activeRowIndex].add(id)
             adopted = true
-            Log.d(TAG, "adoptNewScreens: screen $id → row $activeRowIndex")
         }
 
         if (!adopted) return
@@ -652,7 +650,6 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
             if (rowScreenIds[r].size != before) {
                 changed = true
                 rowPageIndex[r] = rowPageIndex[r].coerceAtMost((rowScreenIds[r].size - 1).coerceAtLeast(0))
-                Log.d(TAG, "cleanupStaleScreenIds: removed stale IDs from row $r, remaining=${rowScreenIds[r]}")
             }
             // Upper rows must always have at least one screen.
             if (r > 0 && rowScreenIds[r].isEmpty()) {
@@ -662,7 +659,6 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
                 rowScreenIds[r].add(newId)
                 prefs.setRowScreenIds(r, rowScreenIds[r].map { it.toString() }.toSet())
                 changed = true
-                Log.d(TAG, "cleanupStaleScreenIds: row $r empty, allocated replacement $newId")
             }
         }
 
@@ -697,8 +693,6 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
             prefs.getRowScreenIds(r).mapNotNull { it.toIntOrNull() }.toSet()
         }
         val allUpperIds = savedUpperIds.flatten().toSet()
-
-        Log.d(TAG, "initialize: screenOrder.size=${screenOrder.size()} rowCount=$rowCount childCount=${workspace.childCount}")
 
         // Partition loaded workspace screens into rows. Skip negative IDs (EXTRA_EMPTY_SCREEN etc).
         // FIRST_SCREEN_ID=0 is valid and belongs to row 0 unless saved to a higher row.
@@ -757,8 +751,6 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
         }
         workspace.reorderPages(rowScreenIds.flatten())
 
-        Log.d(TAG, "initialize done: rows=${rowScreenIds.mapIndexed { i, ids -> "[$i]$ids" }}")
-
         // Register callback so TwoRowNavigationManager is notified (deferred, after layout) when
         // stripEmptyScreens removes pages and physical indices shift.
         launcher.workspace.setOnWorkspaceScreensChanged(Runnable {
@@ -796,7 +788,6 @@ class TwoRowNavigationManager(private val launcher: LawnchairLauncher) {
 
     companion object {
         private const val PHASE_MS = 150L
-        private const val TAG = "RowNav"
         private const val BOUNCE_NUDGE_DP = 24f
         // Long enough for the SPRING_LOADED → NORMAL state transition that fires
         // removeExtraEmptyScreenDelayed → runOnPageScrollsInitialized(setCurrentPage(...))

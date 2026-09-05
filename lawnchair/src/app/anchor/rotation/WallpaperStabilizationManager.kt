@@ -1155,7 +1155,6 @@ class WallpaperStabilizationManager(private val launcher: LawnchairLauncher) {
                 bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
             }
             bmp.recycle()
-            Log.d(TAG, "Rasterized bundled SVG to ${target}x$target")
             true
         }.getOrElse {
             Log.w(TAG, "SVG rasterize failed: ${it.message}")

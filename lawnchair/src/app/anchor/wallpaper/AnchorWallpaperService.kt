@@ -449,7 +449,6 @@ class AnchorWallpaperService : WallpaperService() {
                 cachedBitmap = decoded
                 cachedPath = path
                 cachedMtime = mtime
-                Log.i(TAG, "cache primed ($reason) mtime=$mtime")
             }
         }
     }
