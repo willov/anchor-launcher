@@ -13,6 +13,14 @@ All notable changes to Anchor Launcher will be documented here.
 
 ### Changed
 - **More room around the A–Z letter scroller.** In landscape on phones the letters no longer sit cramped against the screen edge. On tablets the scroller keeps its slim shape and gets clear space towards the drawer's edge and a little more distance from the app icons — a bit more in landscape than in portrait.
+- **The About page is now Anchor's own.** The links, team lists and community channels carried over from Lawnchair are gone. GitHub now opens Anchor's repository, and Donate explains that Anchor doesn't take donations yet and points to Lawnchair and GNOME instead, with a note that Anchor isn't affiliated with or endorsed by either. Lawnchair and AOSP are still credited under "Built on the shoulders of giants".
+- **Anchor no longer contacts Lawnchair's servers.** Settings used to download announcements and default search settings from lawnchair.app; that's switched off, and anything downloaded before is ignored. Startpage searches no longer identify themselves as coming from Lawnchair, and crash reports can no longer be uploaded to a public paste site — use Share or Copy on the crash notification instead.
+- **"Lawnchair" no longer appears in other languages.** Several texts (the welcome screen, the default-launcher tip, the accessibility explanations and more) still said Lawnchair outside English; they now say Anchor.
+- **Backups are named "Anchor_Backup".** Older Lawnchair-named backups still restore.
+- **The settings list shows the full version** ("Anchor Launcher 0.5.6") on the About entry, instead of a lone "0".
+
+### Added
+- **Quick setup asks about web suggestions.** A new step lets you choose whether searching the app drawer also shows suggestions from Google, DuckDuckGo, Startpage or Kagi — and explains that what you type is then sent to that search engine. New installs start with web suggestions off; if you already use Anchor, your current setting is kept.
 
 ## [0.5.5] - 2026-09-05
 
