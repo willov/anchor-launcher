@@ -403,8 +403,10 @@ play {
 // Play resources are generated. Fails the upload if the file is missing or over Play's 500 chars.
 final def playNotesDir = file("src/main/play/release-notes")
 final def currentPlayNotes = new File(playNotesDir, "en-US/${anchorVersionCode}.txt")
-def syncPlayReleaseNotes = tasks.register("syncPlayReleaseNotes", Copy) {
-    doFirst {
+// Deliberately a plain task with no declared outputs: src/ is also a Kotlin source root, so a Copy
+// task writing into it trips Gradle's overlapping-output validation on the compile tasks.
+def syncPlayReleaseNotes = tasks.register("syncPlayReleaseNotes") {
+    doLast {
         if (!currentPlayNotes.exists()) {
             throw new GradleException("Missing Play release notes: ${currentPlayNotes} (one file per versionCode)")
         }
@@ -412,10 +414,11 @@ def syncPlayReleaseNotes = tasks.register("syncPlayReleaseNotes", Copy) {
         if (length > 500) {
             throw new GradleException("${currentPlayNotes.name} is ${length} characters; Play allows 500")
         }
+        playNotesDir.eachDir { localeDir ->
+            def notes = new File(localeDir, "${anchorVersionCode}.txt")
+            if (notes.exists()) new File(localeDir, "internal.txt").setText(notes.getText("UTF-8"), "UTF-8")
+        }
     }
-    from(playNotesDir) { include "*/${anchorVersionCode}.txt" }
-    into(playNotesDir)
-    rename { "internal.txt" }
 }
 tasks.matching { it.name ==~ /generate.*PlayResources/ }.configureEach {
     dependsOn(syncPlayReleaseNotes)
