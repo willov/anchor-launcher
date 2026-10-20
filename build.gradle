@@ -136,7 +136,7 @@ final def ciRunNumber = System.getenv("GITHUB_RUN_NUMBER") ?: ""
 
 // Anchor Launcher versioning (independent of Lawnchair's version scheme)
 final def anchorVersionName = "0.5.6"
-final def anchorVersionCode = 11
+final def anchorVersionCode = 12
 
 final def quickstepMinSdk = "29"
 final def quickstepMaxSdk = "36"
@@ -395,6 +395,30 @@ play {
     // Keep as draft until the Play Console store listing is fully completed.
     // Once the app is out of draft state, remove this line.
     releaseStatus.set(com.github.triplet.gradle.androidpublisher.ReleaseStatus.DRAFT)
+}
+
+// Anchor: Triple-T picks release notes by TRACK name (internal.txt), not by version code, so an
+// upload used to get default.txt's generic text. We keep one notes file per version code
+// (<code>.txt) as history and copy the current one to internal.txt (gitignored) right before the
+// Play resources are generated. Fails the upload if the file is missing or over Play's 500 chars.
+final def playNotesDir = file("src/main/play/release-notes")
+final def currentPlayNotes = new File(playNotesDir, "en-US/${anchorVersionCode}.txt")
+def syncPlayReleaseNotes = tasks.register("syncPlayReleaseNotes", Copy) {
+    doFirst {
+        if (!currentPlayNotes.exists()) {
+            throw new GradleException("Missing Play release notes: ${currentPlayNotes} (one file per versionCode)")
+        }
+        def length = currentPlayNotes.getText("UTF-8").length()
+        if (length > 500) {
+            throw new GradleException("${currentPlayNotes.name} is ${length} characters; Play allows 500")
+        }
+    }
+    from(playNotesDir) { include "*/${anchorVersionCode}.txt" }
+    into(playNotesDir)
+    rename { "internal.txt" }
+}
+tasks.matching { it.name ==~ /generate.*PlayResources/ }.configureEach {
+    dependsOn(syncPlayReleaseNotes)
 }
 
 baselineProfile {
