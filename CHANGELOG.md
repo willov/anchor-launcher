@@ -9,6 +9,10 @@ All notable changes to Anchor Launcher will be documented here.
 ### Fixed
 - **Anchor crashed on start after updating to Android 17.** Android 17 removed a set of internal desktop-windowing settings that the launcher still checked, so opening the home screen crashed straight away and kept crashing. Anchor no longer depends on those settings; nothing changes on phones, where desktop windowing isn't used.
 - **On Android 17 the background could turn half black, or stay in the old orientation, after rotating.** Android 17 now tells the background which way the screen is facing slightly after resizing it, so it was drawn for the previous orientation and not redrawn until you swiped. Anchor now redraws the background as soon as the new orientation arrives.
+- **The app drawer sat off-centre in landscape on phones with a punch-hole camera.** In landscape the camera cutout is on one side only, and the drawer only made room for it on that side, shifting the whole list sideways. Both sides now get the same space, so the list stays centred whichever way you turn the phone.
+
+### Changed
+- **More room around the A–Z letter scroller.** In landscape on phones the letters no longer sit cramped against the screen edge. On tablets the scroller keeps its slim shape and gets clear space towards the drawer's edge and a little more distance from the app icons — a bit more in landscape than in portrait.
 
 ## [0.5.5] - 2026-09-05
 

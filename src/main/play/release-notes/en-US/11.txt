@@ -1,4 +1,6 @@
-Android 17 fixes.
+Android 17 fixes, and a tidier app drawer.
 
 • Fixed: Anchor crashed on start after updating to Android 17.
 • Fixed: on Android 17 the background could turn half black or stay in the old orientation after rotating.
+• Fixed: the app drawer sat off-centre in landscape on phones with a punch-hole camera.
+• More room around the A–Z letter scroller in landscape and on tablets.
