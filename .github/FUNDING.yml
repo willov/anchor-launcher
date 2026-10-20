@@ -1,2 +1,10 @@
-open_collective: lawnchair
-github: LawnchairLauncher
+# Donations to Anchor Launcher have not been set up yet. In the meantime, the Sponsor button
+# points to the projects Anchor is built on: Lawnchair (the launcher Anchor is forked from) and
+# GNOME (whose community made many of Anchor's built-in wallpapers).
+#
+# Anchor Launcher is an independent project. It is not affiliated with or endorsed by Lawnchair,
+# the GNOME Foundation, Google or the Android Open Source Project. Donations made through these
+# links go directly to those projects, not to Anchor Launcher.
+custom:
+  - https://opencollective.com/lawnchair
+  - https://www.gnome.org/donate/
