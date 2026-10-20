@@ -40,9 +40,31 @@ class SearchContainerView @JvmOverloads constructor(
         getAppsStore().removeUpdateListener(appsUpdateListener)
     }
 
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration?) {
+        super.onConfigurationChanged(newConfig)
+        // The strip width is orientation-dependent and the launcher handles rotation in-place
+        // (no recreate), so onFinishInflate() does not re-run. Re-apply it here, otherwise the
+        // strip keeps its portrait width while the RecyclerView reserve — re-applied by the core
+        // on every insets change — has already grown to the landscape value.
+        updateLetterIndexWidth()
+    }
+
+    private fun updateLetterIndexWidth() {
+        val widthPx = AlphabetIndexView.stripWidthPx(context)
+        val lp = letterIndex.layoutParams
+        if (lp != null && lp.width != widthPx) {
+            lp.width = widthPx
+            letterIndex.layoutParams = lp
+        }
+    }
+
     private fun setupLetterIndex() {
-        val widthPx = (AlphabetIndexView.STRIP_WIDTH_DP * resources.displayMetrics.density).toInt()
-        val lp = RelativeLayout.LayoutParams(widthPx, RelativeLayout.LayoutParams.WRAP_CONTENT)
+        // Orientation-aware: wider in landscape so the letters clear the screen edge. Must come
+        // from AlphabetIndexView so it stays consistent with the RecyclerView reserve.
+        val lp = RelativeLayout.LayoutParams(
+            AlphabetIndexView.stripWidthPx(context),
+            RelativeLayout.LayoutParams.WRAP_CONTENT,
+        )
         lp.addRule(RelativeLayout.ALIGN_PARENT_END)
         lp.addRule(RelativeLayout.ALIGN_TOP, R.id.all_apps_header)
         lp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM)

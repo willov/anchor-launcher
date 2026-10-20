@@ -1263,8 +1263,12 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
         if (grid.getDeviceProperties().isTablet()) {
             mlp.leftMargin = mlp.rightMargin = 0;
         } else {
-            mlp.leftMargin = insets.left;
-            mlp.rightMargin = insets.right;
+            // Anchor: in landscape a punch-hole cutout lands on one side only, so
+            // insets.left != insets.right. Applying them raw pushes the whole list off-centre.
+            // Use the larger of the two on both sides: content clears the cutout whichever side
+            // it is on, and stays centred. Portrait insets are symmetric, so this is a no-op there.
+            int sideInset = Math.max(insets.left, insets.right);
+            mlp.leftMargin = mlp.rightMargin = sideInset;
         }
         setLayoutParams(mlp);
 
@@ -1337,10 +1341,15 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
                 new app.anchor.AnchorPreferences(getContext()).getDrawerLetterScroller()
                         ? app.anchor.applist.AlphabetIndexView.reservedWidthPx(getContext())
                         : 0;
+        // Anchor: equalise the base side padding so the list stays centred. In landscape the
+        // cutout influences these asymmetrically, which visibly shifts the whole grid. The letter
+        // strip reserve below is added to .right only *on top of* the equalised base, so the strip
+        // keeps its gap from the icons.
+        int sidePadding = Math.max(grid.allAppsPadding.left, grid.allAppsPadding.right);
         mAH.forEach(adapterHolder -> {
             adapterHolder.mPadding.bottom = bottomPadding;
-            adapterHolder.mPadding.left = grid.allAppsPadding.left;
-            adapterHolder.mPadding.right = grid.allAppsPadding.right
+            adapterHolder.mPadding.left = sidePadding;
+            adapterHolder.mPadding.right = sidePadding
                     + (adapterHolder.mType == AdapterHolder.MAIN ? letterStripReservePx : 0);
             adapterHolder.applyPadding();
         });
