@@ -12,6 +12,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PixelFormat
+import android.graphics.Point
 import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.os.Handler
@@ -123,6 +124,11 @@ class AnchorWallpaperService : WallpaperService() {
                 if (displayId != engineDisplayId() || !isVisible) return
                 if (currentRotation() == lastDrawnRotation) return
                 val f = surfaceHolder.surfaceFrame
+                // Before Android 17 the rotation arrives BEFORE the surface is resized; drawing then
+                // would put the new rotation into the old-shaped surface for a frame. Only redraw once
+                // the surface already has the display's current shape — onSurfaceChanged covers the
+                // other order. (A 0↔180 flip keeps the shape, so it redraws here immediately.)
+                if (!surfaceMatchesDisplayShape(f.width(), f.height())) return
                 drawFrame(surfaceHolder, f.width(), f.height())
             }
         }
@@ -374,6 +380,15 @@ class AnchorWallpaperService : WallpaperService() {
 
         private fun engineDisplayId(): Int =
             (displayContext ?: this@AnchorWallpaperService).display?.displayId ?: Display.DEFAULT_DISPLAY
+
+        /** True when the surface's landscape/portrait shape matches the display's current one. */
+        private fun surfaceMatchesDisplayShape(width: Int, height: Int): Boolean {
+            val display = (displayContext ?: this@AnchorWallpaperService).display ?: return true
+            val size = Point()
+            @Suppress("DEPRECATION")
+            display.getRealSize(size)
+            return (width > height) == (size.x > size.y)
+        }
 
         private fun drawFrame(holder: SurfaceHolder, width: Int, height: Int) {
             if (width <= 0 || height <= 0) return
