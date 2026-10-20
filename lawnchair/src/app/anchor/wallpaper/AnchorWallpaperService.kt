@@ -13,8 +13,12 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.Rect
+import android.hardware.display.DisplayManager
+import android.os.Handler
+import android.os.Looper
 import android.service.wallpaper.WallpaperService
 import android.util.Log
+import android.view.Display
 import android.view.Surface
 import android.view.SurfaceHolder
 import app.anchor.AnchorPreferences
@@ -107,6 +111,22 @@ class AnchorWallpaperService : WallpaperService() {
         private val srcRect = Rect()
         private val dstRect = Rect()
 
+        // Rotation the current frame was drawn with. On Android 17 the display rotation is delivered
+        // AFTER onSurfaceChanged, so the draw for a rotation's resized surface still reads the previous
+        // rotation and counter-rotates wrongly (half-black / stuck orientation). The display listener
+        // below redraws once Display.getRotation() catches up and no longer matches this.
+        private var lastDrawnRotation = -1
+        private val displayListener = object : DisplayManager.DisplayListener {
+            override fun onDisplayAdded(displayId: Int) {}
+            override fun onDisplayRemoved(displayId: Int) {}
+            override fun onDisplayChanged(displayId: Int) {
+                if (displayId != engineDisplayId() || !isVisible) return
+                if (currentRotation() == lastDrawnRotation) return
+                val f = surfaceHolder.surfaceFrame
+                drawFrame(surfaceHolder, f.width(), f.height())
+            }
+        }
+
         // Path + mtime the current bitmap was decoded from, so we can detect a re-picked image and
         // reload without recreating the engine (the picker overwrites custom_wallpaper.jpg in place).
         private var loadedPath: String? = null
@@ -167,6 +187,13 @@ class AnchorWallpaperService : WallpaperService() {
             surfaceHolder.setFormat(PixelFormat.RGBA_8888)
             refreshParallaxPercent()
             reloadBitmapIfChanged()
+            getSystemService(DisplayManager::class.java)
+                ?.registerDisplayListener(displayListener, Handler(Looper.getMainLooper()))
+        }
+
+        override fun onDestroy() {
+            getSystemService(DisplayManager::class.java)?.unregisterDisplayListener(displayListener)
+            super.onDestroy()
         }
 
         override fun onOffsetsChanged(
@@ -345,6 +372,9 @@ class AnchorWallpaperService : WallpaperService() {
         private fun currentRotation(): Int =
             (displayContext ?: this@AnchorWallpaperService).display?.rotation ?: Surface.ROTATION_0
 
+        private fun engineDisplayId(): Int =
+            (displayContext ?: this@AnchorWallpaperService).display?.displayId ?: Display.DEFAULT_DISPLAY
+
         private fun drawFrame(holder: SurfaceHolder, width: Int, height: Int) {
             if (width <= 0 || height <= 0) return
             // Hardware canvas composites the (scaled) bitmap blit on the GPU. The software lockCanvas()
@@ -422,6 +452,7 @@ class AnchorWallpaperService : WallpaperService() {
                 }
                 canvas.drawBitmap(bmp, srcRect, dstRect, paint)
                 canvas.restore()
+                lastDrawnRotation = rotation
             } finally {
                 holder.unlockCanvasAndPost(canvas)
             }

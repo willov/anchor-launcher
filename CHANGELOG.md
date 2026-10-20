@@ -8,6 +8,7 @@ All notable changes to Anchor Launcher will be documented here.
 
 ### Fixed
 - **Anchor crashed on start after updating to Android 17.** Android 17 removed a set of internal desktop-windowing settings that the launcher still checked, so opening the home screen crashed straight away and kept crashing. Anchor no longer depends on those settings; nothing changes on phones, where desktop windowing isn't used.
+- **On Android 17 the background could turn half black, or stay in the old orientation, after rotating.** Android 17 now tells the background which way the screen is facing slightly after resizing it, so it was drawn for the previous orientation and not redrawn until you swiped. Anchor now redraws the background as soon as the new orientation arrives.
 
 ## [0.5.5] - 2026-09-05
 
