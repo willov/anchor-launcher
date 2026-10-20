@@ -61,7 +61,7 @@
     <string name="time_weeks_ago">%dw</string>
     <string name="time_months_ago">%dmo</string>
     <string name="time_years_ago">%dy</string>
-    <string name="managed_by_lawnchair">Lawnchair দ্বারা পরিচালিত করা হবে</string>
+    <string name="managed_by_lawnchair">Anchor দ্বারা পরিচালিত করা হবে</string>
     <!-- When mentioning settings UI -->
     <string name="smartspace_preferences">পছন্দ-সমুহ</string>
     <string name="settings_button_text">হোম সেটিংস</string>
@@ -117,7 +117,7 @@
     <string name="folders_filter_duplicates">শুধুমাত্র অনন্য অ্যাপগুলি দেখান</string>
     <string name="my_folder_label">আমার ফোল্ডার</string>
     <!-- A11y description -->
-    <string name="accessibility_service_description">অঙ্গভঙ্গি করার সময় নির্দিষ্ট কিছু কাজ (যেমন আপনার ফোন লক করা) করার জন্য, লনচেয়ারের অ্যাক্সেসিবিলিটি অ্যাক্সেস প্রয়োজন. \n\nলনচেয়ার ব্যবহারকারীর কোনও ক্রিয়াকলাপ পর্যবেক্ষণ করে না, যদিও সমস্ত অ্যাক্সেসিবিলিটি পরিষেবার জন্য এটি করার অধিকার প্রয়োজন। লনচেয়ার সিস্টেম দ্বারা প্রেরিত যেকোনো ইভেন্ট বাতিল করে দেয়।\n\nআপনার ফোন লক করতে, অথবা Recents স্ক্রিন খুলতে, Lawnchair performGlobalAction অ্যাক্সেসিবিলিটি পরিষেবা ব্যবহার করে।.</string>
+    <string name="accessibility_service_description">অঙ্গভঙ্গি করার সময় নির্দিষ্ট কিছু কাজ (যেমন আপনার ফোন লক করা) করার জন্য, লনচেয়ারের অ্যাক্সেসিবিলিটি অ্যাক্সেস প্রয়োজন. \n\nলনচেয়ার ব্যবহারকারীর কোনও ক্রিয়াকলাপ পর্যবেক্ষণ করে না, যদিও সমস্ত অ্যাক্সেসিবিলিটি পরিষেবার জন্য এটি করার অধিকার প্রয়োজন। লনচেয়ার সিস্টেম দ্বারা প্রেরিত যেকোনো ইভেন্ট বাতিল করে দেয়।\n\nআপনার ফোন লক করতে, অথবা Recents স্ক্রিন খুলতে, Anchor performGlobalAction অ্যাক্সেসিবিলিটি পরিষেবা ব্যবহার করে।.</string>
     <string name="x_with_y_count">%1$s (%2$d)</string>
     <string name="x_by_y">%1$d x %2$d</string>
     <string name="x_and_y">%1$s&amp;%2$s</string>
@@ -195,7 +195,7 @@
     Notifications
 
     -->
-    <string name="set_default_launcher_tip">To access shortcuts and additional features, set Lawnchair as your default launcher</string>
+    <string name="set_default_launcher_tip">To access shortcuts and additional features, set Anchor as your default launcher</string>
     <string name="notification_dots">Notification dots</string>
     <string name="show_notification_count">Show notification counter</string>
     <string name="notification_dots_color">Notification dot color</string>
@@ -370,11 +370,11 @@
     <string name="smartspace_now_playing">এখন চলছে</string>
     <string name="smartspace_onboarding">Onboarding</string>
     <!-- Onboarding strings -->
-    <string name="onboarding_open_settings_title">Configure your Lawnchair</string>
+    <string name="onboarding_open_settings_title">Configure your Anchor</string>
     <string name="onboarding_open_settings_subtitle">Long-press on the Home Screen to open Settings</string>
-    <string name="onboarding_major_upgrade_title">Welcome to Lawnchair <xliff:g example="16" id="next_major_version">%1$d</xliff:g>!</string>
+    <string name="onboarding_major_upgrade_title">Welcome to Anchor <xliff:g example="16" id="next_major_version">%1$d</xliff:g>!</string>
     <string name="onboarding_major_upgrade_subtitle">See what\'s new!</string>
-    <string name="onboarding_welcome">Welcome to Lawnchair!</string>
+    <string name="onboarding_welcome">Welcome to Anchor!</string>
     <string name="onboarding_swipe_up">Swipe up to open the App Drawer</string>
     <!-- Smartspacer strings -->
     <string name="maximum_number_of_targets">Maximum number of targets</string>
@@ -385,7 +385,7 @@
     <string name="event_provider_missing_notification_dots">To use <xliff:g example="My Provider" id="providerName">%1$s</xliff:g>, turn on Notification Dots.</string>
     <!-- Toggle button for enabling Smartspace -->
     <string name="smartspace_widget_toggle_label">Show on home screen</string>
-    <string name="smartspace_widget_toggle_description">At a Glance can be manually added to the home screen by placing the Lawnchair widget</string>
+    <string name="smartspace_widget_toggle_description">At a Glance can be manually added to the home screen by placing the Anchor widget</string>
     <!-- List of available providers -->
     <string name="smartspace_mode_label">এক নজর প্রদানকারী</string>
     <string name="smartspace_mode_google">গুগল</string>
@@ -417,7 +417,7 @@
     <string name="contributor_status_active">Active</string>
     <string name="update_check_failed">Failed to check for updates</string>
     <string name="major_update_label">Breaking change!</string>
-    <string name="major_update_description">You are about to update from Lawnchair <xliff:g example="15" id="current_major_version">%1$s</xliff:g> to Lawnchair <xliff:g example="16" id="next_major_version">%2$s</xliff:g>, please consider carefully as newer major version may be unstable than current version.</string>
+    <string name="major_update_description">You are about to update from Anchor <xliff:g example="15" id="current_major_version">%1$s</xliff:g> to Anchor <xliff:g example="16" id="next_major_version">%2$s</xliff:g>, please consider carefully as newer major version may be unstable than current version.</string>
     <string name="pro_disabled_by_unknown">Cannot update!</string>
     <string name="pro_disabled_by_major_is_newer">Cannot update, This build is way too new!</string>
     <string name="updater">Updater</string>
@@ -464,21 +464,21 @@
     <string name="gesture_handler_open_assistant">Open assistant</string>
     <string name="pick_app_for_gesture">অ্যাপ বেছে নিন</string>
     <string name="dt2s_admin_hint_title">Admin permissions required</string>
-    <string name="dt2s_admin_hint">To put the device to sleep, set Lawnchair as a device admin app. Tap \"Open settings\", then tap \"Activate this device admin app.\"</string>
+    <string name="dt2s_admin_hint">To put the device to sleep, set Anchor as a device admin app. Tap \"Open settings\", then tap \"Activate this device admin app.\"</string>
     <string name="dt2s_admin_warning">Gestures to put the device to sleep will be turned off.</string>
     <string name="d2ts_recents_a11y_hint_title">Turn on accessibility service</string>
     <string name="sleep_a11y_hint">put the device to sleep</string>
     <string name="notifications_fallback_a11y_hint">open the notification panel</string>
     <string name="quick_settings_a11y_hint">open the Quick Settings panel</string>
     <string name="recents_screen_a11y_hint">open the Recents screen</string>
-    <string name="generic_a11y_hint">To %1$s, turn on the Lawnchair accessibility service. Tap \"Open settings\", select \"Lawnchair\" and turn on \"Use Lawnchair.\"</string>
-    <string name="generic_a11y_disclaimer">Lawnchair uses Accessibility\'s `performGlobalAction` method to perform this action. This is a sensitive permission that allows monitoring other apps. However, Lawnchair is not configured for that functionality and receives no events.</string>
+    <string name="generic_a11y_hint">To %1$s, turn on the Anchor accessibility service. Tap \"Open settings\", select \"Anchor\" and turn on \"Use Anchor.\"</string>
+    <string name="generic_a11y_disclaimer">Anchor uses Accessibility\'s `performGlobalAction` method to perform this action. This is a sensitive permission that allows monitoring other apps. However, Anchor is not configured for that functionality and receives no events.</string>
     <!--
 
     Bug reporting
 
     -->
-    <string name="lawnchair_bug_report">Lawnchair bug report</string>
+    <string name="lawnchair_bug_report">Anchor bug report</string>
     <string name="crash_report_notif_title">%1$s crashed</string>
     <string name="action_upload_crash_report">Upload crash log</string>
     <string name="action_upload_error">আপলোড ব্যর্থ হয়েছে</string>
@@ -573,7 +573,7 @@
     <!-- Search providers -->
     <string name="search_provider_app_search">App search</string>
     <string name="search_provider_custom">পছন্দসই</string>
-    <string name="search_provider_sponsored_description">%1$s and Lawnchair have a revenue share agreement.\n\nSearching with %1$s helps support Lawnchair.</string>
+    <string name="search_provider_sponsored_description">%1$s and Anchor have a revenue share agreement.\n\nSearching with %1$s helps support Anchor.</string>
     <string name="app_label">অ্যাপ</string>
     <string name="website_label">ওয়েবসাইট</string>
     <string name="qsb_search_provider_app_required">অ্যাপ দরকার </string>
@@ -609,7 +609,7 @@
     <string name="max_folder_columns">Maximum folder columns</string>
     <string name="max_folder_rows">Maximum folder rows</string>
     <!-- Quickstep settings -->
-    <string name="quickswitch_ignored_warning">These settings will be ignored as Lawnchair isn\'t set as the Recents screen provider</string>
+    <string name="quickswitch_ignored_warning">These settings will be ignored as Anchor isn\'t set as the Recents screen provider</string>
     <string name="quickstep_incompatible">Incompatible system integration</string>
     <string name="quickstep_incompatible_description">Your device is configured to have system gestures (known as Quickstep) provided by %1$s, but this version of %1$s isn\'t compatible with your Android version. To continue using your device, please uninstall %1$s updates or disable %1$s as a system gesture provider.</string>
     <string name="translucent_background">Translucent background</string>

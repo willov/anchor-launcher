@@ -61,7 +61,7 @@
     <string name="time_weeks_ago">%dw</string>
     <string name="time_months_ago">%dmo</string>
     <string name="time_years_ago">%dy</string>
-    <string name="managed_by_lawnchair">A Lawnchair által kezelve</string>
+    <string name="managed_by_lawnchair">A Anchor által kezelve</string>
     <!-- When mentioning settings UI -->
     <string name="smartspace_preferences">Beállítások</string>
     <string name="settings_button_text">Kezdőoldal-beállítások</string>
@@ -117,7 +117,7 @@
     <string name="folders_filter_duplicates">Csak az egyedi alkalmazások jelenjenek meg</string>
     <string name="my_folder_label">Mappáim</string>
     <!-- A11y description -->
-    <string name="accessibility_service_description">To perform certain actions (such as locking your phone) when performing a gesture, Lawnchair requires accessibility access.\n\nLawnchair doesn\'t watch any user action, though the privilege to do so is required for all accessibility services. Lawnchair discards any event sent by the system.\n\nIn order to lock your phone, or to open the Recents screen, Lawnchair uses the performGlobalAction Accessibility service.</string>
+    <string name="accessibility_service_description">To perform certain actions (such as locking your phone) when performing a gesture, Anchor requires accessibility access.\n\nAnchor doesn\'t watch any user action, though the privilege to do so is required for all accessibility services. Anchor discards any event sent by the system.\n\nIn order to lock your phone, or to open the Recents screen, Anchor uses the performGlobalAction Accessibility service.</string>
     <string name="x_with_y_count">%1$s (%2$d)</string>
     <string name="x_by_y">%1$d × %2$d</string>
     <string name="x_and_y">%1$s és %2$s</string>
@@ -154,7 +154,7 @@
     <string name="backup_and_restore_description">Save current setup, restore backups</string>
     <string name="about_label">Névjegy</string>
     <string name="app_info_drop_target_label">Alkalmazásinformáció</string>
-    <string name="debug_restart_launcher">A Lawnchair újraindítása</string>
+    <string name="debug_restart_launcher">A Anchor újraindítása</string>
     <string name="experimental_features_label">Kísérleti funkciók</string>
     <!-- Experimental features -->
     <string name="workspace_label">Workspace</string>
@@ -195,7 +195,7 @@
     Notifications
 
     -->
-    <string name="set_default_launcher_tip">A parancsikonok és a további funkciók eléréséhez állítsa be a Lawnchair-t alapértelmezettként</string>
+    <string name="set_default_launcher_tip">A parancsikonok és a további funkciók eléréséhez állítsa be a Anchor-t alapértelmezettként</string>
     <string name="notification_dots">Értesítési pöttyök</string>
     <string name="show_notification_count">Legyen látható az értesítés-számláló</string>
     <string name="notification_dots_color">Az értesítési pöttyök színe</string>
@@ -370,11 +370,11 @@
     <string name="smartspace_now_playing">Most hallható</string>
     <string name="smartspace_onboarding">Onboarding</string>
     <!-- Onboarding strings -->
-    <string name="onboarding_open_settings_title">Configure your Lawnchair</string>
+    <string name="onboarding_open_settings_title">Configure your Anchor</string>
     <string name="onboarding_open_settings_subtitle">Long-press on the Home Screen to open Settings</string>
-    <string name="onboarding_major_upgrade_title">Welcome to Lawnchair <xliff:g example="16" id="next_major_version">%1$d</xliff:g>!</string>
+    <string name="onboarding_major_upgrade_title">Welcome to Anchor <xliff:g example="16" id="next_major_version">%1$d</xliff:g>!</string>
     <string name="onboarding_major_upgrade_subtitle">See what\'s new!</string>
-    <string name="onboarding_welcome">Welcome to Lawnchair!</string>
+    <string name="onboarding_welcome">Welcome to Anchor!</string>
     <string name="onboarding_swipe_up">Swipe up to open the App Drawer</string>
     <!-- Smartspacer strings -->
     <string name="maximum_number_of_targets">A célok maximális száma</string>
@@ -385,7 +385,7 @@
     <string name="event_provider_missing_notification_dots">Kapcsolja be az Értesítési pöttyöket a <xliff:g example="My Provider" id="providerName">%1$s</xliff:g> használatához</string>
     <!-- Toggle button for enabling Smartspace -->
     <string name="smartspace_widget_toggle_label">Megjelenítés a Kezdőképernyőn</string>
-    <string name="smartspace_widget_toggle_description">Az \'Áttekintés\' manuálisan hozzáadható a Kezdőképernyőhöz a Lawnchair kisalkalmazás elhelyezésével</string>
+    <string name="smartspace_widget_toggle_description">Az \'Áttekintés\' manuálisan hozzáadható a Kezdőképernyőhöz a Anchor kisalkalmazás elhelyezésével</string>
     <!-- List of available providers -->
     <string name="smartspace_mode_label">Az \'Áttekintés\' szolgáltatója</string>
     <string name="smartspace_mode_google">Google</string>
@@ -417,7 +417,7 @@
     <string name="contributor_status_active">Active</string>
     <string name="update_check_failed">Failed to check for updates</string>
     <string name="major_update_label">Breaking change!</string>
-    <string name="major_update_description">You are about to update from Lawnchair <xliff:g example="15" id="current_major_version">%1$s</xliff:g> to Lawnchair <xliff:g example="16" id="next_major_version">%2$s</xliff:g>, please consider carefully as newer major version may be unstable than current version.</string>
+    <string name="major_update_description">You are about to update from Anchor <xliff:g example="15" id="current_major_version">%1$s</xliff:g> to Anchor <xliff:g example="16" id="next_major_version">%2$s</xliff:g>, please consider carefully as newer major version may be unstable than current version.</string>
     <string name="pro_disabled_by_unknown">Cannot update!</string>
     <string name="pro_disabled_by_major_is_newer">Cannot update, This build is way too new!</string>
     <string name="updater">Updater</string>
@@ -464,21 +464,21 @@
     <string name="gesture_handler_open_assistant">A segéd indítása</string>
     <string name="pick_app_for_gesture">Egy alkalmazás választása</string>
     <string name="dt2s_admin_hint_title">Adminisztrátori jogosultság szükséges</string>
-    <string name="dt2s_admin_hint">To put the device to sleep, set Lawnchair as a device admin app. Tap \"Open settings\", then tap \"Activate this device admin app.\"</string>
+    <string name="dt2s_admin_hint">To put the device to sleep, set Anchor as a device admin app. Tap \"Open settings\", then tap \"Activate this device admin app.\"</string>
     <string name="dt2s_admin_warning">Gestures to put the device to sleep will be turned off.</string>
     <string name="d2ts_recents_a11y_hint_title">A \'Kisegítő lehetőségek\' bekapcsolása</string>
     <string name="sleep_a11y_hint">put the device to sleep</string>
     <string name="notifications_fallback_a11y_hint">open the notification panel</string>
     <string name="quick_settings_a11y_hint">open the Quick Settings panel</string>
     <string name="recents_screen_a11y_hint">open the Recents screen</string>
-    <string name="generic_a11y_hint">To %1$s, turn on the Lawnchair accessibility service. Tap \"Open settings\", select \"Lawnchair\" and turn on \"Use Lawnchair.\"</string>
-    <string name="generic_a11y_disclaimer">Lawnchair uses Accessibility\'s `performGlobalAction` method to perform this action. This is a sensitive permission that allows monitoring other apps. However, Lawnchair is not configured for that functionality and receives no events.</string>
+    <string name="generic_a11y_hint">To %1$s, turn on the Anchor accessibility service. Tap \"Open settings\", select \"Anchor\" and turn on \"Use Anchor.\"</string>
+    <string name="generic_a11y_disclaimer">Anchor uses Accessibility\'s `performGlobalAction` method to perform this action. This is a sensitive permission that allows monitoring other apps. However, Anchor is not configured for that functionality and receives no events.</string>
     <!--
 
     Bug reporting
 
     -->
-    <string name="lawnchair_bug_report">Lawnchair-hibajelentés</string>
+    <string name="lawnchair_bug_report">Anchor-hibajelentés</string>
     <string name="crash_report_notif_title">A(z) %1$s összeomlott</string>
     <string name="action_upload_crash_report">Összeomlási napló feltöltése</string>
     <string name="action_upload_error">Feltöltési hiba</string>
@@ -573,7 +573,7 @@
     <!-- Search providers -->
     <string name="search_provider_app_search">Alkalmazáskereső</string>
     <string name="search_provider_custom">Egyéni</string>
-    <string name="search_provider_sponsored_description">%1$s és a Lawnchair bevételmegosztási megállapodást kötött.\n\nHa %1$s végzi a keresést, azzal segít a Lawnchair-nek is.</string>
+    <string name="search_provider_sponsored_description">%1$s és a Anchor bevételmegosztási megállapodást kötött.\n\nHa %1$s végzi a keresést, azzal segít a Anchor-nek is.</string>
     <string name="app_label">Alkalmazás</string>
     <string name="website_label">Weboldal</string>
     <string name="qsb_search_provider_app_required">Ehhez kell egy alkalmazás</string>
@@ -609,7 +609,7 @@
     <string name="max_folder_columns">A mappaoszlopok maximuma</string>
     <string name="max_folder_rows">A mappasorok maximuma</string>
     <!-- Quickstep settings -->
-    <string name="quickswitch_ignored_warning">These settings will be ignored as Lawnchair isn\'t set as the Recents screen provider</string>
+    <string name="quickswitch_ignored_warning">These settings will be ignored as Anchor isn\'t set as the Recents screen provider</string>
     <string name="quickstep_incompatible">Nem kompatibilis rendszer-integráció</string>
     <string name="quickstep_incompatible_description">Készüléke úgy van konfigurálva, hogy a(z) %1$s által biztosított rendszermozdulatokat (az úgynevezett Quickstep-et) tartalmazza, de a %1$s-verzió nem kompatibilis az Android-verzióval. A készülék további használatához, kérjük távolítsa el az utolsó %1$s-frissítést vagy állítsa be úgy készülékét hogy nem a(z) %1$s a rendszer mozdulatvezérlője.</string>
     <string name="translucent_background">Átlátszó háttér</string>

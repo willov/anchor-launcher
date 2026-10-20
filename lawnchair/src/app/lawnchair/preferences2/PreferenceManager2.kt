@@ -49,7 +49,6 @@ import app.lawnchair.theme.color.ColorStyle
 import app.lawnchair.ui.popup.LauncherOptionsPopup
 import app.lawnchair.ui.popup.toOptionOrderString
 import app.lawnchair.ui.preferences.components.HiddenAppsInSearch
-import app.lawnchair.ui.preferences.data.liveinfo.LiveInformationManager
 import app.lawnchair.util.kotlinxJson
 import app.lawnchair.views.overlay.FullScreenOverlayMode
 import com.android.launcher3.BuildConfig
@@ -88,8 +87,6 @@ class PreferenceManager2 @Inject constructor(
 
     private val scope = MainScope()
     private val resourceProvider = DynamicResource.provider(context)
-    private var liveInformationManager: LiveInformationManager =
-        LiveInformationManager.getInstance(context)
 
     private fun idpPreference(
         key: Preferences.Key<Int>,
@@ -850,16 +847,10 @@ class PreferenceManager2 @Inject constructor(
     override fun close() {
     }
 
-    private fun getRemoteDefault(key: String): String? = liveInformationManager.liveInformation
-        .firstBlocking()
-        .features[key]
-        .also { value ->
-            if (value == null) {
-                Log.d(TAG, "getRemoteDefault: $key -> no remote default")
-            } else {
-                Log.d(TAG, "getRemoteDefault: $key -> $value")
-            }
-        }
+    // Anchor: never take defaults from Lawnchair's live-information feed (lawnchair.app). Existing
+    // installs may still have a cached copy from before the feed was turned off, so ignore it here.
+    @Suppress("UNUSED_PARAMETER")
+    private fun getRemoteDefault(key: String): String? = null
 
     companion object {
         private val Context.preferencesDataStore by preferencesDataStore(

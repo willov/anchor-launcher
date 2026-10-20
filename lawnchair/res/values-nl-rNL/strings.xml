@@ -61,7 +61,7 @@
     <string name="time_weeks_ago">%dw</string>
     <string name="time_months_ago">%dmo</string>
     <string name="time_years_ago">%dy</string>
-    <string name="managed_by_lawnchair">Beheerd door Lawnchair</string>
+    <string name="managed_by_lawnchair">Beheerd door Anchor</string>
     <!-- When mentioning settings UI -->
     <string name="smartspace_preferences">Voorkeuren</string>
     <string name="settings_button_text">Instellingen voor startscherm</string>
@@ -117,7 +117,7 @@
     <string name="folders_filter_duplicates">Alleen unieke apps tonen</string>
     <string name="my_folder_label">Mijn map</string>
     <!-- A11y description -->
-    <string name="accessibility_service_description">Om bepaalde acties uit te voeren (zoals het vergrendelen van je telefoon) bij het uitvoeren van een gebaar, heeft Lawnchair toegang tot toegankelijkheid nodig.\n\nLawnchair observeert echter geen gebruikersacties, hoewel de bevoegdheid om dat te doen vereist is voor alle toegankelijkheidsdiensten. Lawnchair negeert elke gebeurtenis die door het systeem wordt gemeld.\n\nOm je telefoon te vergrendelen of om het recente scherm te openen, maakt Lawnchair gebruik van de toegankelijkheidsdienst performGlobalAction.</string>
+    <string name="accessibility_service_description">Om bepaalde acties uit te voeren (zoals het vergrendelen van je telefoon) bij het uitvoeren van een gebaar, heeft Anchor toegang tot toegankelijkheid nodig.\n\nAnchor observeert echter geen gebruikersacties, hoewel de bevoegdheid om dat te doen vereist is voor alle toegankelijkheidsdiensten. Anchor negeert elke gebeurtenis die door het systeem wordt gemeld.\n\nOm je telefoon te vergrendelen of om het recente scherm te openen, maakt Anchor gebruik van de toegankelijkheidsdienst performGlobalAction.</string>
     <string name="x_with_y_count">%1$s (%2$d)</string>
     <string name="x_by_y">%1$d x %2$d</string>
     <string name="x_and_y">%1$s &amp; %2$s</string>
@@ -154,7 +154,7 @@
     <string name="backup_and_restore_description">Save current setup, restore backups</string>
     <string name="about_label">Over</string>
     <string name="app_info_drop_target_label">App-informatie</string>
-    <string name="debug_restart_launcher">Lawnchair opnieuw starten</string>
+    <string name="debug_restart_launcher">Anchor opnieuw starten</string>
     <string name="experimental_features_label">Experimentele functies</string>
     <!-- Experimental features -->
     <string name="workspace_label">Werkruimte</string>
@@ -195,7 +195,7 @@
     Notifications
 
     -->
-    <string name="set_default_launcher_tip">Stel Lawnchair in als standaard launcher voor toegang tot snelkoppelingen en extra functies</string>
+    <string name="set_default_launcher_tip">Stel Anchor in als standaard launcher voor toegang tot snelkoppelingen en extra functies</string>
     <string name="notification_dots">Meldingsstippen</string>
     <string name="show_notification_count">Aantal meldingen weergeven</string>
     <string name="notification_dots_color">Meldingsstip-kleur</string>
@@ -370,11 +370,11 @@
     <string name="smartspace_now_playing">Wordt nu afgespeeld</string>
     <string name="smartspace_onboarding">Onboarding</string>
     <!-- Onboarding strings -->
-    <string name="onboarding_open_settings_title">Configureer je Lawnchair</string>
+    <string name="onboarding_open_settings_title">Configureer je Anchor</string>
     <string name="onboarding_open_settings_subtitle">Druk lang op het startscherm om de instellingen te openen</string>
-    <string name="onboarding_major_upgrade_title">Welkom bij Lawnchair <xliff:g example="16" id="next_major_version">%1$d</xliff:g>!</string>
+    <string name="onboarding_major_upgrade_title">Welkom bij Anchor <xliff:g example="16" id="next_major_version">%1$d</xliff:g>!</string>
     <string name="onboarding_major_upgrade_subtitle">Bekijk wat er nieuw is!</string>
-    <string name="onboarding_welcome">Welkom bij Lawnchair!</string>
+    <string name="onboarding_welcome">Welkom bij Anchor!</string>
     <string name="onboarding_swipe_up">Veeg omhoog om de app-lade te openen</string>
     <!-- Smartspacer strings -->
     <string name="maximum_number_of_targets">Maximum aantal doelen</string>
@@ -385,7 +385,7 @@
     <string name="event_provider_missing_notification_dots">Schakel meldingsstippen in om <xliff:g example="My Provider" id="providerName">%1$s</xliff:g>te gebruiken.</string>
     <!-- Toggle button for enabling Smartspace -->
     <string name="smartspace_widget_toggle_label">Weergeven op startscherm</string>
-    <string name="smartspace_widget_toggle_description">At a Glance kan handmatig aan het startscherm worden toegevoegd door de “Lawnchair ” widget te plaatsen</string>
+    <string name="smartspace_widget_toggle_description">At a Glance kan handmatig aan het startscherm worden toegevoegd door de “Anchor ” widget te plaatsen</string>
     <!-- List of available providers -->
     <string name="smartspace_mode_label">At a Glance provider</string>
     <string name="smartspace_mode_google">Google</string>
@@ -417,7 +417,7 @@
     <string name="contributor_status_active">Actief</string>
     <string name="update_check_failed">Controleren op updates is mislukt</string>
     <string name="major_update_label">Breaking change!</string>
-    <string name="major_update_description">You are about to update from Lawnchair <xliff:g example="15" id="current_major_version">%1$s</xliff:g> to Lawnchair <xliff:g example="16" id="next_major_version">%2$s</xliff:g>, please consider carefully as newer major version may be unstable than current version.</string>
+    <string name="major_update_description">You are about to update from Anchor <xliff:g example="15" id="current_major_version">%1$s</xliff:g> to Anchor <xliff:g example="16" id="next_major_version">%2$s</xliff:g>, please consider carefully as newer major version may be unstable than current version.</string>
     <string name="pro_disabled_by_unknown">Cannot update!</string>
     <string name="pro_disabled_by_major_is_newer">Cannot update, This build is way too new!</string>
     <string name="updater">Actualiseren</string>
@@ -464,21 +464,21 @@
     <string name="gesture_handler_open_assistant">Assistent openen</string>
     <string name="pick_app_for_gesture">App kiezen</string>
     <string name="dt2s_admin_hint_title">Beheerdersrechten vereist</string>
-    <string name="dt2s_admin_hint">Om Lawnchair toe te staan dat het het apparaat in slaapstand brengt, dient u deze in te stellen als app voor apparaatbeheer. Tik op \"Instellingen openen\" en tik vervolgens op \"Apparaatbeheer instellen voor deze app.\"</string>
+    <string name="dt2s_admin_hint">Om Anchor toe te staan dat het het apparaat in slaapstand brengt, dient u deze in te stellen als app voor apparaatbeheer. Tik op \"Instellingen openen\" en tik vervolgens op \"Apparaatbeheer instellen voor deze app.\"</string>
     <string name="dt2s_admin_warning">Gebaren om het apparaat in slaapstand te zetten worden uitgeschakeld.</string>
     <string name="d2ts_recents_a11y_hint_title">Toegankelijkheidsservice inschakelen</string>
     <string name="sleep_a11y_hint">het apparaat in slaapstand te zetten</string>
     <string name="notifications_fallback_a11y_hint">het meldingspaneel te openen</string>
     <string name="quick_settings_a11y_hint">het paneel Snelle instellingen te openen</string>
     <string name="recents_screen_a11y_hint">de lijst recente apps te openen</string>
-    <string name="generic_a11y_hint">Om %1$s, schakel de Lawnchair dienst voor toegankelijkheid in. Tik op \"Instellingen openen\", selecteer \"Lawnchair\" en schakel \"Lawnchair gebruiken\" in.</string>
-    <string name="generic_a11y_disclaimer">Lawnchair gebruikt Toegankelijkheidsmethode `performGlobalAction` om deze actie uit te voeren. Dit is een gevoelige permissie waarmee je andere apps kunt volgen. Lawnchair is echter niet geconfigureerd voor die functionaliteit en volgt geen gebeurtenissen.</string>
+    <string name="generic_a11y_hint">Om %1$s, schakel de Anchor dienst voor toegankelijkheid in. Tik op \"Instellingen openen\", selecteer \"Anchor\" en schakel \"Anchor gebruiken\" in.</string>
+    <string name="generic_a11y_disclaimer">Anchor gebruikt Toegankelijkheidsmethode `performGlobalAction` om deze actie uit te voeren. Dit is een gevoelige permissie waarmee je andere apps kunt volgen. Anchor is echter niet geconfigureerd voor die functionaliteit en volgt geen gebeurtenissen.</string>
     <!--
 
     Bug reporting
 
     -->
-    <string name="lawnchair_bug_report">Lawnchair foutrapportage</string>
+    <string name="lawnchair_bug_report">Anchor foutrapportage</string>
     <string name="crash_report_notif_title">%1$s is gecrasht</string>
     <string name="action_upload_crash_report">Crash-logboek uploaden</string>
     <string name="action_upload_error">Uploaden mislukt</string>
@@ -573,7 +573,7 @@
     <!-- Search providers -->
     <string name="search_provider_app_search">App zoeken</string>
     <string name="search_provider_custom">Aangepast</string>
-    <string name="search_provider_sponsored_description">%1$s en Lawnchair hebben een overeenkomst a.g. het delen van inkomsten.\n\nZoeken met %1$s helpt Lawnchair te ondersteunen.</string>
+    <string name="search_provider_sponsored_description">%1$s en Anchor hebben een overeenkomst a.g. het delen van inkomsten.\n\nZoeken met %1$s helpt Anchor te ondersteunen.</string>
     <string name="app_label">App</string>
     <string name="website_label">Website</string>
     <string name="qsb_search_provider_app_required">App vereist</string>
@@ -609,7 +609,7 @@
     <string name="max_folder_columns">Maximum aantal mapkolommen</string>
     <string name="max_folder_rows">Maximum aantal maprijen</string>
     <!-- Quickstep settings -->
-    <string name="quickswitch_ignored_warning">Deze instellingen worden genegeerd omdat Lawnchair niet is ingesteld als de leverancier voor het scherm Recente apps</string>
+    <string name="quickswitch_ignored_warning">Deze instellingen worden genegeerd omdat Anchor niet is ingesteld als de leverancier voor het scherm Recente apps</string>
     <string name="quickstep_incompatible">Incompatibele systeemintegratie</string>
     <string name="quickstep_incompatible_description">Je toestel is geconfigureerd voor systeemgebaren (bekend als Quickstep) geleverd door %1$s, maar deze versie van %1$s is niet compatibel met deze Android-versie. Om het toestel te blijven gebruiken, dien je %1$s updates te verwijderen of %1$s uit te schakelen als een provider van systeemgebaren.</string>
     <string name="translucent_background">Doorschijnende achtergrond</string>

@@ -61,7 +61,7 @@
     <string name="time_weeks_ago">%dhft</string>
     <string name="time_months_ago">%day</string>
     <string name="time_years_ago">%dyıl</string>
-    <string name="managed_by_lawnchair">Lawnchair tarafından yönetilmektedir</string>
+    <string name="managed_by_lawnchair">Anchor tarafından yönetilmektedir</string>
     <!-- When mentioning settings UI -->
     <string name="smartspace_preferences">Tercihler</string>
     <string name="settings_button_text">Ana ekran ayarları</string>
@@ -117,7 +117,7 @@
     <string name="folders_filter_duplicates">Sadece farklı uygulamaları göster</string>
     <string name="my_folder_label">Benim klasörüm</string>
     <!-- A11y description -->
-    <string name="accessibility_service_description">Belirli eylemleri (örneğin telefonunuzu kilitlemek) bir hareketle gerçekleştirebilmek için, Lawnchair erişilebilirlik iznine ihtiyaç duyar.\n\nLawnchair hiçbir kullanıcı etkinliğini izlemez; ancak tüm erişilebilirlik servislerinde bu ayrıcalık gereklidir. Lawnchair, sistem tarafından gönderilen tüm olayları yok sayar.\n\nTelefonunuzu kilitlemek veya Son uygulamalar ekranını açmak için Lawnchair, performGlobalAction Erişilebilirlik servisini kullanır.</string>
+    <string name="accessibility_service_description">Belirli eylemleri (örneğin telefonunuzu kilitlemek) bir hareketle gerçekleştirebilmek için, Anchor erişilebilirlik iznine ihtiyaç duyar.\n\nAnchor hiçbir kullanıcı etkinliğini izlemez; ancak tüm erişilebilirlik servislerinde bu ayrıcalık gereklidir. Anchor, sistem tarafından gönderilen tüm olayları yok sayar.\n\nTelefonunuzu kilitlemek veya Son uygulamalar ekranını açmak için Anchor, performGlobalAction Erişilebilirlik servisini kullanır.</string>
     <string name="x_with_y_count">%1$s (%2$d)</string>
     <string name="x_by_y">%1$d x %2$d</string>
     <string name="x_and_y">%1$s &amp; %2$s</string>
@@ -154,7 +154,7 @@
     <string name="backup_and_restore_description">Mevcut kurulumu kaydet, yedekleri geri yükle</string>
     <string name="about_label">Hakkında</string>
     <string name="app_info_drop_target_label">Uygulama Hakkında</string>
-    <string name="debug_restart_launcher">Lawnchair\'i Yeniden Başlat</string>
+    <string name="debug_restart_launcher">Anchor\'i Yeniden Başlat</string>
     <string name="experimental_features_label">Deneyimsel özellikler</string>
     <!-- Experimental features -->
     <string name="workspace_label">Çalışma Alanı</string>
@@ -195,7 +195,7 @@
     Notifications
 
     -->
-    <string name="set_default_launcher_tip">Kısayollar ve ek özellikler için Lawnchair\'ı varsayılan başlatıcınız yapın</string>
+    <string name="set_default_launcher_tip">Kısayollar ve ek özellikler için Anchor\'ı varsayılan başlatıcınız yapın</string>
     <string name="notification_dots">Bildirim rozetleri</string>
     <string name="show_notification_count">Bildirim sayımı göster</string>
     <string name="notification_dots_color">Bildirim noktası rengi</string>
@@ -370,11 +370,11 @@
     <string name="smartspace_now_playing">Şimdi Oynatılıyor</string>
     <string name="smartspace_onboarding">Başlangıç</string>
     <!-- Onboarding strings -->
-    <string name="onboarding_open_settings_title">Lawnchair\'inizi yapılandırın</string>
+    <string name="onboarding_open_settings_title">Anchor\'inizi yapılandırın</string>
     <string name="onboarding_open_settings_subtitle">Ayarları açmak için Ana Ekrana uzun basın</string>
-    <string name="onboarding_major_upgrade_title">Lawnchair <xliff:g example="16" id="next_major_version">%1$d</xliff:g> sürümüne hoş geldiniz!</string>
+    <string name="onboarding_major_upgrade_title">Anchor <xliff:g example="16" id="next_major_version">%1$d</xliff:g> sürümüne hoş geldiniz!</string>
     <string name="onboarding_major_upgrade_subtitle">Yeni neler olduğuna bir bakın!</string>
-    <string name="onboarding_welcome">Lawnchair\'e Hoş Geldiniz!</string>
+    <string name="onboarding_welcome">Anchor\'e Hoş Geldiniz!</string>
     <string name="onboarding_swipe_up">Uygulama Çekmecesini açmak için yukarı kaydırın</string>
     <!-- Smartspacer strings -->
     <string name="maximum_number_of_targets">Maksimum hedef sayısı</string>
@@ -385,7 +385,7 @@
     <string name="event_provider_missing_notification_dots"><xliff:g example="My Provider" id="providerName">%1$s</xliff:g> kullanmak için, bildirim noktalarını aç.</string>
     <!-- Toggle button for enabling Smartspace -->
     <string name="smartspace_widget_toggle_label">Ana ekranda göster</string>
-    <string name="smartspace_widget_toggle_description">Bir Bakışta widget\'i ana ekrana manuel olarak Lawnchair widget\'i kullanılarak eklenebilir</string>
+    <string name="smartspace_widget_toggle_description">Bir Bakışta widget\'i ana ekrana manuel olarak Anchor widget\'i kullanılarak eklenebilir</string>
     <!-- List of available providers -->
     <string name="smartspace_mode_label">Bir Bakışta sağlayıcı</string>
     <string name="smartspace_mode_google">Google</string>
@@ -417,7 +417,7 @@
     <string name="contributor_status_active">Aktif</string>
     <string name="update_check_failed">Güncellemeler denetlenirken bir hata oluştu</string>
     <string name="major_update_label">Büyük güncelleme!</string>
-    <string name="major_update_description">Lawnchair <xliff:g example="15" id="current_major_version">%1$s</xliff:g> sürümünden Lawnchair <xliff:g example="16" id="next_major_version">%2$s</xliff:g> sürümüne geçmek üzeresiniz. Lütfen dikkatlice düşünün çünkü daha yeni ana sürüm mevcut sürüme göre daha kararsız olabilir.</string>
+    <string name="major_update_description">Anchor <xliff:g example="15" id="current_major_version">%1$s</xliff:g> sürümünden Anchor <xliff:g example="16" id="next_major_version">%2$s</xliff:g> sürümüne geçmek üzeresiniz. Lütfen dikkatlice düşünün çünkü daha yeni ana sürüm mevcut sürüme göre daha kararsız olabilir.</string>
     <string name="pro_disabled_by_unknown">Güncellenemedi!</string>
     <string name="pro_disabled_by_major_is_newer">Güncellenemedi, bu sürüm fazla yeni!</string>
     <string name="updater">Güncelleyici</string>
@@ -464,21 +464,21 @@
     <string name="gesture_handler_open_assistant">Asistanı aç</string>
     <string name="pick_app_for_gesture">Uygulama seç</string>
     <string name="dt2s_admin_hint_title">Yönetici izinleri gerekli</string>
-    <string name="dt2s_admin_hint">Cihazı uyku moduna geçirmek için Lawnchair\'i cihaz yönetici uygulaması olarak ayarlayın. \"Ayarları aç\" seçeneğine ardından \"Bu cihaz yönetici uygulamasını etkinleştir\" seçeneğine dokunun.</string>
+    <string name="dt2s_admin_hint">Cihazı uyku moduna geçirmek için Anchor\'i cihaz yönetici uygulaması olarak ayarlayın. \"Ayarları aç\" seçeneğine ardından \"Bu cihaz yönetici uygulamasını etkinleştir\" seçeneğine dokunun.</string>
     <string name="dt2s_admin_warning">Cihazı uykuya alma hareketleri devre dışı bırakılacaktır.</string>
     <string name="d2ts_recents_a11y_hint_title">Erişilebilirlik hizmetini açın</string>
     <string name="sleep_a11y_hint">cihazı uykuya al</string>
     <string name="notifications_fallback_a11y_hint">bildirim panelini aç</string>
     <string name="quick_settings_a11y_hint">Hızlı Ayarlar panelini aç</string>
     <string name="recents_screen_a11y_hint">Son kullanılanlar ekranını aç</string>
-    <string name="generic_a11y_hint">%1$s için Lawnchair erişilebilirlik hizmetini etkinleştirin. \"Ayarları aç\" seçeneğine dokunun, \"Lawnchair\"i seçin ve \"Lawnchair\'i kullan\"ı etkinleştirin.</string>
-    <string name="generic_a11y_disclaimer">Lawnchair bu işlemi gerçekleştirmek için Erişilebilirliğin `performGlobalAction` yöntemini kullanır. Bu, diğer uygulamaları izlemeye olanak tanıyan hassas bir izindir. Ancak Lawnchair bu işlev için yapılandırılmamıştır ve hiçbir olayı izlemez.</string>
+    <string name="generic_a11y_hint">%1$s için Anchor erişilebilirlik hizmetini etkinleştirin. \"Ayarları aç\" seçeneğine dokunun, \"Anchor\"i seçin ve \"Anchor\'i kullan\"ı etkinleştirin.</string>
+    <string name="generic_a11y_disclaimer">Anchor bu işlemi gerçekleştirmek için Erişilebilirliğin `performGlobalAction` yöntemini kullanır. Bu, diğer uygulamaları izlemeye olanak tanıyan hassas bir izindir. Ancak Anchor bu işlev için yapılandırılmamıştır ve hiçbir olayı izlemez.</string>
     <!--
 
     Bug reporting
 
     -->
-    <string name="lawnchair_bug_report">Lawnchair Hata Bildirme</string>
+    <string name="lawnchair_bug_report">Anchor Hata Bildirme</string>
     <string name="crash_report_notif_title">%1$s çalışmayı Durdurdu</string>
     <string name="action_upload_crash_report">Çökme günlüğünü yükle</string>
     <string name="action_upload_error">Yükleme Başarısız</string>
@@ -573,7 +573,7 @@
     <!-- Search providers -->
     <string name="search_provider_app_search">Uygulama araması</string>
     <string name="search_provider_custom">Özel</string>
-    <string name="search_provider_sponsored_description">Lawnchar\'ın %1$s ile sponsorluk anlaşması vardır\n\n %1$s ile arama yaparak Lawnchair\'a katkı sağlayabilirsiniz.</string>
+    <string name="search_provider_sponsored_description">Lawnchar\'ın %1$s ile sponsorluk anlaşması vardır\n\n %1$s ile arama yaparak Anchor\'a katkı sağlayabilirsiniz.</string>
     <string name="app_label">Uygulama</string>
     <string name="website_label">Web sitesi</string>
     <string name="qsb_search_provider_app_required">Uygulama gerekli</string>
@@ -609,7 +609,7 @@
     <string name="max_folder_columns">Maksimum klasör sütunları</string>
     <string name="max_folder_rows">Maksimum klasör satırı</string>
     <!-- Quickstep settings -->
-    <string name="quickswitch_ignored_warning">Bu ayarlar Lawnchair Son Kullanılanlar sağlayıcısı olmadığı sürece yok sayılacak</string>
+    <string name="quickswitch_ignored_warning">Bu ayarlar Anchor Son Kullanılanlar sağlayıcısı olmadığı sürece yok sayılacak</string>
     <string name="quickstep_incompatible">Uyumsuz sistem entegrasyonu</string>
     <string name="quickstep_incompatible_description">Cihazınız %1$s tarafından sağlanan sistem hareketlerine (Quickstep olarak bilinir) sahip olacak şekilde yapılandırılmıştır, ancak %1$s\'nin bu sürümü Android sürümünüzle uyumlu değildir. Cihazınızı kullanmaya devam etmek için lütfen %1$s güncellemelerini kaldırın veya sistem hareketi sağlayıcısı olarak %1$s\'ı devre dışı bırakın.</string>
     <string name="translucent_background">Yarı saydam arka plan</string>

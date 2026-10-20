@@ -218,8 +218,6 @@ object StartPageWebSearchProvider : WebSearchProvider {
         @GET("suggestions")
         suspend fun getSuggestions(
             @Query("q") query: String,
-            @Query("segment") segment: String = "startpage.lawnchair", // Identify our app
-            @Query("partner") partner: String = "lawnchair",
             @Query("format") format: String = "opensearch",
         ): Response<String>
     }

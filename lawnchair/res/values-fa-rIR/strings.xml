@@ -61,7 +61,7 @@
     <string name="time_weeks_ago">%dه</string>
     <string name="time_months_ago">%dماه</string>
     <string name="time_years_ago">%dسال</string>
-    <string name="managed_by_lawnchair">مدیریت شده توسط Lawnchair</string>
+    <string name="managed_by_lawnchair">مدیریت شده توسط Anchor</string>
     <!-- When mentioning settings UI -->
     <string name="smartspace_preferences">ترجیحات</string>
     <string name="settings_button_text">تنظیمات خانه</string>
@@ -117,7 +117,7 @@
     <string name="folders_filter_duplicates">فقط برنامه های ویژه را نشان بده</string>
     <string name="my_folder_label">پوشه من</string>
     <!-- A11y description -->
-    <string name="accessibility_service_description">برای انجام برخی اقدامات (مانند قفل کردن تلفن شما) هنگام انجام یک حرکت، Lawnchair نیاز به دسترسی به قابلیت دسترسی دارد.\n\nLawnchair هیچ اقدام کاربر را زیر نظر نمی‌گیرد، اگرچه امتیاز انجام این کار برای همه سرویس‌های دسترسی لازم است. Lawnchair هر رویدادی را که توسط سیستم ارسال شود، نادیده می‌گیرد.\n\nبرای قفل کردن تلفن شما یا باز کردن صفحه اخیراً، Lawnchair از سرویس دسترسی اقدام جهانی استفاده می‌کند.</string>
+    <string name="accessibility_service_description">برای انجام برخی اقدامات (مانند قفل کردن تلفن شما) هنگام انجام یک حرکت، Anchor نیاز به دسترسی به قابلیت دسترسی دارد.\n\nAnchor هیچ اقدام کاربر را زیر نظر نمی‌گیرد، اگرچه امتیاز انجام این کار برای همه سرویس‌های دسترسی لازم است. Anchor هر رویدادی را که توسط سیستم ارسال شود، نادیده می‌گیرد.\n\nبرای قفل کردن تلفن شما یا باز کردن صفحه اخیراً، Anchor از سرویس دسترسی اقدام جهانی استفاده می‌کند.</string>
     <string name="x_with_y_count">%1$s (%2$d)</string>
     <string name="x_by_y">%1$d x %2$d</string>
     <string name="x_and_y">%1$s &amp; %2$s</string>
@@ -154,7 +154,7 @@
     <string name="backup_and_restore_description">Save current setup, restore backups</string>
     <string name="about_label">درباره</string>
     <string name="app_info_drop_target_label">اطلاعات برنامه</string>
-    <string name="debug_restart_launcher">راه‌اندازی مجدد Lawnchair</string>
+    <string name="debug_restart_launcher">راه‌اندازی مجدد Anchor</string>
     <string name="experimental_features_label">قابلیت‌های آزمایشی</string>
     <!-- Experimental features -->
     <string name="workspace_label">Workspace</string>
@@ -195,7 +195,7 @@
     Notifications
 
     -->
-    <string name="set_default_launcher_tip">برای دسترسی به میانبرها و ویژگی‌های اضافی، Lawnchair را به عنوان راه‌انداز پیش‌فرض خود تنظیم کنید</string>
+    <string name="set_default_launcher_tip">برای دسترسی به میانبرها و ویژگی‌های اضافی، Anchor را به عنوان راه‌انداز پیش‌فرض خود تنظیم کنید</string>
     <string name="notification_dots">نشان اعلان‌ها</string>
     <string name="show_notification_count">نشان‌دادن تعداد اعلان‌ها</string>
     <string name="notification_dots_color">رنگ نشان اعلان‌ها</string>
@@ -370,11 +370,11 @@
     <string name="smartspace_now_playing">درحال پخش</string>
     <string name="smartspace_onboarding">Onboarding</string>
     <!-- Onboarding strings -->
-    <string name="onboarding_open_settings_title">Configure your Lawnchair</string>
+    <string name="onboarding_open_settings_title">Configure your Anchor</string>
     <string name="onboarding_open_settings_subtitle">Long-press on the Home Screen to open Settings</string>
-    <string name="onboarding_major_upgrade_title">Welcome to Lawnchair <xliff:g example="16" id="next_major_version">%1$d</xliff:g>!</string>
+    <string name="onboarding_major_upgrade_title">Welcome to Anchor <xliff:g example="16" id="next_major_version">%1$d</xliff:g>!</string>
     <string name="onboarding_major_upgrade_subtitle">See what\'s new!</string>
-    <string name="onboarding_welcome">Welcome to Lawnchair!</string>
+    <string name="onboarding_welcome">Welcome to Anchor!</string>
     <string name="onboarding_swipe_up">Swipe up to open the App Drawer</string>
     <!-- Smartspacer strings -->
     <string name="maximum_number_of_targets">حداکثر تعداد اهداف</string>
@@ -385,7 +385,7 @@
     <string name="event_provider_missing_notification_dots">برای استفاده از <xliff:g example="My Provider" id="providerName">%1$s</xliff:g>، نقاط اعلان را روشن کنید.</string>
     <!-- Toggle button for enabling Smartspace -->
     <string name="smartspace_widget_toggle_label">نشان دادن در صفحه ‌اصلی</string>
-    <string name="smartspace_widget_toggle_description">در یک نگاه را می‌توان به‌طور دستی با قرار دادن ابزارک Lawnchair به صفحه اصلی اضافه کرد</string>
+    <string name="smartspace_widget_toggle_description">در یک نگاه را می‌توان به‌طور دستی با قرار دادن ابزارک Anchor به صفحه اصلی اضافه کرد</string>
     <!-- List of available providers -->
     <string name="smartspace_mode_label">ارائه دهنده در یک نگاه</string>
     <string name="smartspace_mode_google">گوگل</string>
@@ -417,7 +417,7 @@
     <string name="contributor_status_active">فعال</string>
     <string name="update_check_failed">بررسی به‌روزرسانی‌ها ناموفق بود</string>
     <string name="major_update_label">Breaking change!</string>
-    <string name="major_update_description">You are about to update from Lawnchair <xliff:g example="15" id="current_major_version">%1$s</xliff:g> to Lawnchair <xliff:g example="16" id="next_major_version">%2$s</xliff:g>, please consider carefully as newer major version may be unstable than current version.</string>
+    <string name="major_update_description">You are about to update from Anchor <xliff:g example="15" id="current_major_version">%1$s</xliff:g> to Anchor <xliff:g example="16" id="next_major_version">%2$s</xliff:g>, please consider carefully as newer major version may be unstable than current version.</string>
     <string name="pro_disabled_by_unknown">Cannot update!</string>
     <string name="pro_disabled_by_major_is_newer">Cannot update, This build is way too new!</string>
     <string name="updater">Updater</string>
@@ -464,21 +464,21 @@
     <string name="gesture_handler_open_assistant">بازکردن دستیار</string>
     <string name="pick_app_for_gesture">انتخاب برنامه</string>
     <string name="dt2s_admin_hint_title">دسترسی ادمین نیاز است</string>
-    <string name="dt2s_admin_hint">To put the device to sleep, set Lawnchair as a device admin app. Tap \"Open settings\", then tap \"Activate this device admin app.\"</string>
+    <string name="dt2s_admin_hint">To put the device to sleep, set Anchor as a device admin app. Tap \"Open settings\", then tap \"Activate this device admin app.\"</string>
     <string name="dt2s_admin_warning">Gestures to put the device to sleep will be turned off.</string>
     <string name="d2ts_recents_a11y_hint_title">فعال‌سازی سرویس دسترس‌پذیری</string>
     <string name="sleep_a11y_hint">put the device to sleep</string>
     <string name="notifications_fallback_a11y_hint">open the notification panel</string>
     <string name="quick_settings_a11y_hint">open the Quick Settings panel</string>
     <string name="recents_screen_a11y_hint">open the Recents screen</string>
-    <string name="generic_a11y_hint">To %1$s, turn on the Lawnchair accessibility service. Tap \"Open settings\", select \"Lawnchair\" and turn on \"Use Lawnchair.\"</string>
-    <string name="generic_a11y_disclaimer">Lawnchair uses Accessibility\'s `performGlobalAction` method to perform this action. This is a sensitive permission that allows monitoring other apps. However, Lawnchair is not configured for that functionality and receives no events.</string>
+    <string name="generic_a11y_hint">To %1$s, turn on the Anchor accessibility service. Tap \"Open settings\", select \"Anchor\" and turn on \"Use Anchor.\"</string>
+    <string name="generic_a11y_disclaimer">Anchor uses Accessibility\'s `performGlobalAction` method to perform this action. This is a sensitive permission that allows monitoring other apps. However, Anchor is not configured for that functionality and receives no events.</string>
     <!--
 
     Bug reporting
 
     -->
-    <string name="lawnchair_bug_report">گزارش مشکلات Lawnchair</string>
+    <string name="lawnchair_bug_report">گزارش مشکلات Anchor</string>
     <string name="crash_report_notif_title">%1$s خطا داد</string>
     <string name="action_upload_crash_report">ارسال گزارش خطا</string>
     <string name="action_upload_error">آپلود با خطا مواجه شد</string>
@@ -573,7 +573,7 @@
     <!-- Search providers -->
     <string name="search_provider_app_search">جستجو برنامه</string>
     <string name="search_provider_custom">شخصی</string>
-    <string name="search_provider_sponsored_description">%1$s و Lawnchair یک قرارداد سهم درآمد دارند.\n\nجستجو با %1$s به پشتیبانی از Lawnchair کمک می‌کند.</string>
+    <string name="search_provider_sponsored_description">%1$s و Anchor یک قرارداد سهم درآمد دارند.\n\nجستجو با %1$s به پشتیبانی از Anchor کمک می‌کند.</string>
     <string name="app_label">برنامه</string>
     <string name="website_label">وب‌سایت</string>
     <string name="qsb_search_provider_app_required">برنامه نیاز است</string>
@@ -609,7 +609,7 @@
     <string name="max_folder_columns">حداکثر ستون‌های پوشه‌</string>
     <string name="max_folder_rows">حداکثر ردیف پوشه</string>
     <!-- Quickstep settings -->
-    <string name="quickswitch_ignored_warning">این تنظیمات نادیده گرفته می‌شوند زیرا Lawnchair به عنوان ارائه دهنده صفحه اخیراً تنظیم نشده</string>
+    <string name="quickswitch_ignored_warning">این تنظیمات نادیده گرفته می‌شوند زیرا Anchor به عنوان ارائه دهنده صفحه اخیراً تنظیم نشده</string>
     <string name="quickstep_incompatible">یکپارچه سازی سیستم ناسازگار</string>
     <string name="quickstep_incompatible_description">دستگاه شما به گونه‌ای پیکربندی شده که ژست‌های حرکتی سیستم (معروف به Quickstep) توسط %1$s ارائه شده سازگار باشد، ولی این نسخه %1$s با اندروید شما سازگار نیست. برای ادامه استفاده از دستگاهتان، لطفاً به‌روزرسانی‌ %1$s را حذف نصب کنید یا %1$s را به‌عنوان ارائه‌دهنده اشاره سیستم غیرفعال کنید.</string>
     <string name="translucent_background">پس‌زمینه نیمه شفاف</string>

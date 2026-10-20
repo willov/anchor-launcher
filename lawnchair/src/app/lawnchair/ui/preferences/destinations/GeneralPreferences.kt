@@ -50,7 +50,6 @@ import app.lawnchair.ui.preferences.components.notificationDotsEnabled
 import app.lawnchair.ui.preferences.components.notificationServiceEnabled
 import app.lawnchair.ui.preferences.navigation.GeneralIconPack
 import app.lawnchair.ui.preferences.navigation.GeneralIconShape
-import com.android.launcher3.BuildConfig
 import com.android.launcher3.R
 import com.android.launcher3.Utilities
 import com.patrykmichalik.opto.core.firstBlocking
@@ -97,17 +96,6 @@ fun GeneralPreferences() {
                     label = stringResource(id = R.string.home_screen_rotation_label),
                     description = stringResource(id = R.string.home_screen_rotation_description),
                 )
-            }
-        }
-        if (BuildConfig.APPLICATION_ID.contains("nightly")) {
-            PreferenceGroup(heading = stringResource(id = R.string.updater)) {
-                Item {
-                    SwitchPreference(
-                        adapter = prefs2.autoUpdaterNightly.getAdapter(),
-                        label = stringResource(id = R.string.auto_updater_label),
-                        description = stringResource(id = R.string.auto_updater_description),
-                    )
-                }
             }
         }
         ExpandAndShrink(visible = prefs2.enableFontSelection.asState().value) {

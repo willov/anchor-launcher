@@ -163,6 +163,8 @@ class LawnchairApp : LauncherApplication() {
 
     private fun applyAnchorDefaults() {
         val migrations = getSharedPreferences("anchor_migrations", Context.MODE_PRIVATE)
+        // Every install since v1 has this flag, so its absence means this is the very first launch.
+        val isFreshInstall = !migrations.contains("v1_hotseat_disabled")
         if (!migrations.getBoolean("v1_hotseat_disabled", false)) {
             val pm2 = PreferenceManager2.getInstance(this)
             pm2.hotseatMode.setBlocking(DisabledHotseat)
@@ -204,6 +206,15 @@ class LawnchairApp : LauncherApplication() {
                 }
             }
             migrations.edit().putBoolean("v2_row_screens_init", true).apply()
+        }
+        // Lawnchair sends app-drawer search text to Google for web suggestions by default. New
+        // installs start with that off; the setup wizard asks which engine (if any) to use. Existing
+        // installs keep what they had.
+        if (!migrations.getBoolean("v3_web_suggestions_opt_in", false)) {
+            if (isFreshInstall) {
+                PreferenceManager.getInstance(this).searchResultStartPageSuggestion.set(false)
+            }
+            migrations.edit().putBoolean("v3_web_suggestions_opt_in", true).apply()
         }
     }
 

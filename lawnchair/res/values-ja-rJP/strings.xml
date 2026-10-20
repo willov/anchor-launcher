@@ -61,7 +61,7 @@
     <string name="time_weeks_ago">%d週間</string>
     <string name="time_months_ago">%d月</string>
     <string name="time_years_ago">%d年</string>
-    <string name="managed_by_lawnchair">Lawnchair に管理されています</string>
+    <string name="managed_by_lawnchair">Anchor に管理されています</string>
     <!-- When mentioning settings UI -->
     <string name="smartspace_preferences">設定</string>
     <string name="settings_button_text">ホーム設定</string>
@@ -117,7 +117,7 @@
     <string name="folders_filter_duplicates">固有のアプリのみ表示</string>
     <string name="my_folder_label">自分のフォルダー</string>
     <!-- A11y description -->
-    <string name="accessibility_service_description">ジェスチャー操作時に特定の操作（スマートフォンのロックなど）を実行するには、Lawnchair にユーザー補助機能へのアクセスが必要です。\n\nLawnchair はユーザーの操作を監視しませんが、すべてのユーザー補助サービスにはユーザー補助機能へのアクセス権限が必要です。Lawnchair はシステムから送信されたイベントをすべて破棄します。\n\nLawnchair はスマートフォンをロックしたり、「最近」画面を開いたりするために、performGlobalAction ユーザー補助機能サービスを使用します。</string>
+    <string name="accessibility_service_description">ジェスチャー操作時に特定の操作（スマートフォンのロックなど）を実行するには、Anchor にユーザー補助機能へのアクセスが必要です。\n\nAnchor はユーザーの操作を監視しませんが、すべてのユーザー補助サービスにはユーザー補助機能へのアクセス権限が必要です。Anchor はシステムから送信されたイベントをすべて破棄します。\n\nAnchor はスマートフォンをロックしたり、「最近」画面を開いたりするために、performGlobalAction ユーザー補助機能サービスを使用します。</string>
     <string name="x_with_y_count">%1$s (%2$d)</string>
     <string name="x_by_y">%1$d × %2$d</string>
     <string name="x_and_y">%1$s &amp; %2$s</string>
@@ -154,7 +154,7 @@
     <string name="backup_and_restore_description">Save current setup, restore backups</string>
     <string name="about_label">このアプリについて</string>
     <string name="app_info_drop_target_label">アプリ情報</string>
-    <string name="debug_restart_launcher">Lawnchair を再起動</string>
+    <string name="debug_restart_launcher">Anchor を再起動</string>
     <string name="experimental_features_label">実験的機能</string>
     <!-- Experimental features -->
     <string name="workspace_label">ワークスペース</string>
@@ -197,7 +197,7 @@
     Notifications
 
     -->
-    <string name="set_default_launcher_tip">ショートカットと追加機能にアクセスするには、Lawnchair をデフォルトのランチャーとして設定してください。</string>
+    <string name="set_default_launcher_tip">ショートカットと追加機能にアクセスするには、Anchor をデフォルトのランチャーとして設定してください。</string>
     <string name="notification_dots">通知ドット</string>
     <string name="show_notification_count">通知の数を表示</string>
     <string name="notification_dots_color">通知ドットの色</string>
@@ -372,11 +372,11 @@
     <string name="smartspace_now_playing">再生中</string>
     <string name="smartspace_onboarding">初期画面</string>
     <!-- Onboarding strings -->
-    <string name="onboarding_open_settings_title">Lawnchair の設定</string>
+    <string name="onboarding_open_settings_title">Anchor の設定</string>
     <string name="onboarding_open_settings_subtitle">ホーム画面長押しして設定を開く</string>
-    <string name="onboarding_major_upgrade_title">Lawnchair <xliff:g example="16" id="next_major_version">%1$d</xliff:g> へようこそ！</string>
+    <string name="onboarding_major_upgrade_title">Anchor <xliff:g example="16" id="next_major_version">%1$d</xliff:g> へようこそ！</string>
     <string name="onboarding_major_upgrade_subtitle">新着情報をご覧ください！</string>
-    <string name="onboarding_welcome">Lawnchair へようこそ！</string>
+    <string name="onboarding_welcome">Anchor へようこそ！</string>
     <string name="onboarding_swipe_up">上にスワイプしてアプリドロワーを開く</string>
     <!-- Smartspacer strings -->
     <string name="maximum_number_of_targets">ターゲットの最大数</string>
@@ -387,7 +387,7 @@
     <string name="event_provider_missing_notification_dots"><xliff:g example="My Provider" id="providerName">%1$s</xliff:g>を使用するには、通知ドットをオンにします。</string>
     <!-- Toggle button for enabling Smartspace -->
     <string name="smartspace_widget_toggle_label">ホーム画面に表示します</string>
-    <string name="smartspace_widget_toggle_description">スナップショットは、Lawnchair ウィジェットを配置することでホーム画面に手動で追加できます</string>
+    <string name="smartspace_widget_toggle_description">スナップショットは、Anchor ウィジェットを配置することでホーム画面に手動で追加できます</string>
     <!-- List of available providers -->
     <string name="smartspace_mode_label">At a Glance のプロバイダー</string>
     <string name="smartspace_mode_google">Google</string>
@@ -419,7 +419,7 @@
     <string name="contributor_status_active">アクティブ</string>
     <string name="update_check_failed">アップデートの確認に失敗しました</string>
     <string name="major_update_label">壊れた変更！</string>
-    <string name="major_update_description">Lawnchair <xliff:g example="15" id="current_major_version">%1$s</xliff:g> から Lawnchair <xliff:g example="16" id="next_major_version">%2$s</xliff:g> にアップデートしようとしています。新しいメジャーバージョンは、現在のバージョンより不安定な場合があります。内容をよくご確認のうえで続行してください。</string>
+    <string name="major_update_description">Anchor <xliff:g example="15" id="current_major_version">%1$s</xliff:g> から Anchor <xliff:g example="16" id="next_major_version">%2$s</xliff:g> にアップデートしようとしています。新しいメジャーバージョンは、現在のバージョンより不安定な場合があります。内容をよくご確認のうえで続行してください。</string>
     <string name="pro_disabled_by_unknown">更新できません！</string>
     <string name="pro_disabled_by_major_is_newer">アップデートできません。このアプリは最新です！</string>
     <string name="updater">アップデート</string>
@@ -466,21 +466,21 @@
     <string name="gesture_handler_open_assistant">アシスタントを起動する</string>
     <string name="pick_app_for_gesture">アプリを選択</string>
     <string name="dt2s_admin_hint_title">管理者権限が必要です</string>
-    <string name="dt2s_admin_hint">端末をスリープ状態にするには、Lawnchair をデバイス管理アプリに設定する必要があります。「設定を開く」をタップし、「このデバイス管理アプリを有効にする」をタップしてください。</string>
+    <string name="dt2s_admin_hint">端末をスリープ状態にするには、Anchor をデバイス管理アプリに設定する必要があります。「設定を開く」をタップし、「このデバイス管理アプリを有効にする」をタップしてください。</string>
     <string name="dt2s_admin_warning">端末をスリープ状態にするジェスチャーが無効になります。</string>
     <string name="d2ts_recents_a11y_hint_title">ユーザー補助サービスを有効にする</string>
     <string name="sleep_a11y_hint">デバイスを置いてスリープ</string>
     <string name="notifications_fallback_a11y_hint">通知パネルを開く</string>
     <string name="quick_settings_a11y_hint">クイック設定パネルを開く</string>
     <string name="recents_screen_a11y_hint">タスク管理画面を開く</string>
-    <string name="generic_a11y_hint">%1$s を行うには、Lawnchair のユーザー補助サービスを有効にしてください。「設定を開く」をタップし、「Lawnchair」を選択して「Lawnchair の使用」をオンにしてください。</string>
-    <string name="generic_a11y_disclaimer">Lawnchair はこの操作を実行するために、ユーザー補助の performGlobalAction メソッドを使用します。これは他のアプリの監視を許可する機密性の高い権限ですが、Lawnchair にはその機能は実装されておらず、いかなるイベントも受信しません。</string>
+    <string name="generic_a11y_hint">%1$s を行うには、Anchor のユーザー補助サービスを有効にしてください。「設定を開く」をタップし、「Anchor」を選択して「Anchor の使用」をオンにしてください。</string>
+    <string name="generic_a11y_disclaimer">Anchor はこの操作を実行するために、ユーザー補助の performGlobalAction メソッドを使用します。これは他のアプリの監視を許可する機密性の高い権限ですが、Anchor にはその機能は実装されておらず、いかなるイベントも受信しません。</string>
     <!--
 
     Bug reporting
 
     -->
-    <string name="lawnchair_bug_report">Lawnchair のバグレポート</string>
+    <string name="lawnchair_bug_report">Anchor のバグレポート</string>
     <string name="crash_report_notif_title">%1$s がクラッシュしました</string>
     <string name="action_upload_crash_report">クラッシュログをアップロード</string>
     <string name="action_upload_error">アップロードに失敗しました</string>
@@ -575,7 +575,7 @@
     <!-- Search providers -->
     <string name="search_provider_app_search">アプリ検索</string>
     <string name="search_provider_custom">カスタム</string>
-    <string name="search_provider_sponsored_description">%1$s と Lawnchair は収益分配契約を持っています。\n\n %1$s で検索するとLawnchair をサポートすることができます。</string>
+    <string name="search_provider_sponsored_description">%1$s と Anchor は収益分配契約を持っています。\n\n %1$s で検索するとAnchor をサポートすることができます。</string>
     <string name="app_label">アプリ</string>
     <string name="website_label">ウェブサイト</string>
     <string name="qsb_search_provider_app_required">アプリが必要</string>
@@ -610,7 +610,7 @@
     <string name="max_folder_columns">最大のフォルダー列数</string>
     <string name="max_folder_rows">フォルダーの行の最大値</string>
     <!-- Quickstep settings -->
-    <string name="quickswitch_ignored_warning">Lawnchair がアプリ履歴画面のプロバイダーとして設定されていないため、これらの設定は無視されます</string>
+    <string name="quickswitch_ignored_warning">Anchor がアプリ履歴画面のプロバイダーとして設定されていないため、これらの設定は無視されます</string>
     <string name="quickstep_incompatible">互換性のないシステム統合</string>
     <string name="quickstep_incompatible_description">お使いのデバイスは %1$s が提供するシステムジェスチャー ( Quickstep として知られています) が設定されていますが %1$s のこのバージョンはお使いの Android のバージョンと互換性がありません。デバイスを引き続き使用するには、%1$s の更新をアンインストールするか、システムジェスチャープロバイダとして %1$s を無効にしてください。</string>
     <string name="translucent_background">半透明の背景</string>

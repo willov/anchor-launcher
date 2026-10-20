@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -24,6 +26,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,6 +46,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -55,6 +59,11 @@ import app.anchor.grid.GridSizeCaps
 import app.lawnchair.preferences.getAdapter
 import app.lawnchair.preferences.preferenceManager
 import app.lawnchair.preferences2.preferenceManager2
+import app.lawnchair.search.algorithms.engine.provider.web.DuckDuckGoWebSearchProvider
+import app.lawnchair.search.algorithms.engine.provider.web.GoogleWebSearchProvider
+import app.lawnchair.search.algorithms.engine.provider.web.KagiWebSearchProvider
+import app.lawnchair.search.algorithms.engine.provider.web.StartPageWebSearchProvider
+import app.lawnchair.search.algorithms.engine.provider.web.WebSearchProvider
 import app.lawnchair.ui.preferences.LocalNavController
 import app.lawnchair.ui.preferences.components.GridOverridesPreview
 import app.lawnchair.ui.preferences.components.layout.PreferenceScaffold
@@ -67,10 +76,11 @@ import com.patrykmichalik.opto.core.setBlocking
 /**
  * Anchor first-launch / on-demand grid & icon setup wizard.
  *
- * Steps (top to bottom, with a live populated preview that reacts as you go):
- *   1. Labels on/off
- *   2. Icon size — a Small↔Large slider (no numbers), backed by [homeIconSizeFactor]
- *   3. Density (Spacious / Balanced / Dense)
+ * Steps (one page each, driven by Back/Next):
+ *   1. Wallpaper
+ *   2. Web suggestions in the app drawer search — off, or which engine
+ *   3. Labels on/off + icon size — a Small↔Large slider (no numbers), backed by [homeIconSizeFactor]
+ *   4. Density (Spacious / Balanced / Dense) with the live grid preview
  *
  * The preview is the same [GridOverridesPreview] + populate-grid pipeline used by the grid settings
  * screen, so it shows real app icons at real size for the chosen icon size and labels. Because the
@@ -97,6 +107,13 @@ fun GridWizardScreen(
     // Density is wizard-local; the resulting grid is applied on Finish.
     var density by remember { mutableStateOf(GridSizeCaps.Density.BALANCED) }
 
+    // Web suggestions: null = off. Written live like labels/icon size; nothing to apply on Finish.
+    var webSuggestions by remember {
+        mutableStateOf(
+            if (prefs.searchResultStartPageSuggestion.get()) prefs2.webSuggestionProvider.firstBlocking() else null,
+        )
+    }
+
     // The wizard turns the preview's populate mode on; restore it off on leave so it can't leak.
     DisposableEffect(Unit) {
         AnchorPreviewPopulator.setEnabled(true)
@@ -118,7 +135,7 @@ fun GridWizardScreen(
     // Paged wizard: each step owns the full screen. Crucially the FULL grid preview only appears on
     // the last (Grid) page — the launcher preview renders at full screen size, so giving it its own
     // page avoids it bleeding behind the other controls (the bug with stacking it above a column).
-    val pagerState = rememberPagerState(pageCount = { 3 })
+    val pagerState = rememberPagerState(pageCount = { 4 })
     val scope = rememberCoroutineScope()
 
     PreferenceScaffold(
@@ -134,7 +151,15 @@ fun GridWizardScreen(
             ) { page ->
                 when (page) {
                     0 -> WallpaperStep(context)
-                    1 -> CellStep(
+                    1 -> SearchStep(
+                        selected = webSuggestions,
+                        onSelect = { provider ->
+                            webSuggestions = provider
+                            prefs.searchResultStartPageSuggestion.set(provider != null)
+                            if (provider != null) prefs2.webSuggestionProvider.setBlocking(provider)
+                        },
+                    )
+                    2 -> CellStep(
                         showLabels = showLabels,
                         onLabels = { showLabels = it; prefs2.showIconLabelsOnHomeScreen.setBlocking(it) },
                         iconFactor = iconFactor,
@@ -164,7 +189,7 @@ fun GridWizardScreen(
                         modifier = Modifier.weight(1f),
                     ) { Text(stringResource(id = R.string.anchor_grid_wizard_back)) }
                 }
-                val isLast = pagerState.currentPage == 2
+                val isLast = pagerState.currentPage == pagerState.pageCount - 1
                 Button(
                     onClick = {
                         if (isLast) {
@@ -225,7 +250,61 @@ private fun WallpaperStep(context: Context) {
     }
 }
 
-/** Step 2 — one cell: labels + icon size + a real-size example cell. */
+/** Step 2 — web suggestions in the app drawer search: off, or which engine. */
+@Composable
+private fun SearchStep(
+    selected: WebSearchProvider?,
+    onSelect: (WebSearchProvider?) -> Unit,
+) {
+    val options = listOf(
+        null,
+        GoogleWebSearchProvider,
+        DuckDuckGoWebSearchProvider,
+        StartPageWebSearchProvider,
+        KagiWebSearchProvider,
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(
+            text = stringResource(id = R.string.anchor_grid_wizard_search_heading),
+            style = MaterialTheme.typography.titleLarge,
+        )
+        Text(text = stringResource(id = R.string.anchor_grid_wizard_search_desc))
+        Column(modifier = Modifier.selectableGroup()) {
+            options.forEach { provider ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .selectable(
+                            selected = provider?.id == selected?.id,
+                            onClick = { onSelect(provider) },
+                            role = Role.RadioButton,
+                        )
+                        .padding(vertical = 4.dp),
+                ) {
+                    RadioButton(selected = provider?.id == selected?.id, onClick = null)
+                    Text(
+                        text = if (provider == null) {
+                            stringResource(id = R.string.anchor_grid_wizard_search_off)
+                        } else {
+                            stringResource(id = provider.label)
+                        },
+                        modifier = Modifier.padding(start = 12.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Step 3 — one cell: labels + icon size + a real-size example cell. */
 @Composable
 private fun CellStep(
     showLabels: Boolean,
@@ -265,7 +344,7 @@ private fun CellStep(
     }
 }
 
-/** Step 3 — grid density with the full populated preview (owns the whole page). */
+/** Step 4 — grid density with the full populated preview (owns the whole page). */
 @Composable
 private fun GridStep(
     density: GridSizeCaps.Density,

@@ -117,7 +117,7 @@
     <string name="folders_filter_duplicates">صرف منفرد ایپس دکھائیں۔</string>
     <string name="my_folder_label">میرا فولڈر</string>
     <!-- A11y description -->
-    <string name="accessibility_service_description">To perform certain actions (such as locking your phone) when performing a gesture, Lawnchair requires accessibility access.\n\nLawnchair doesn\'t watch any user action, though the privilege to do so is required for all accessibility services. Lawnchair discards any event sent by the system.\n\nIn order to lock your phone, or to open the Recents screen, Lawnchair uses the performGlobalAction Accessibility service.</string>
+    <string name="accessibility_service_description">To perform certain actions (such as locking your phone) when performing a gesture, Anchor requires accessibility access.\n\nAnchor doesn\'t watch any user action, though the privilege to do so is required for all accessibility services. Anchor discards any event sent by the system.\n\nIn order to lock your phone, or to open the Recents screen, Anchor uses the performGlobalAction Accessibility service.</string>
     <string name="x_with_y_count">%1$s (%2$d)</string>
     <string name="x_by_y">%1$d x %2$d</string>
     <string name="x_and_y">%1$s &amp; %2$s</string>
@@ -370,11 +370,11 @@
     <string name="smartspace_now_playing">اب چل رہا ہے۔</string>
     <string name="smartspace_onboarding">Onboarding</string>
     <!-- Onboarding strings -->
-    <string name="onboarding_open_settings_title">Configure your Lawnchair</string>
+    <string name="onboarding_open_settings_title">Configure your Anchor</string>
     <string name="onboarding_open_settings_subtitle">Long-press on the Home Screen to open Settings</string>
-    <string name="onboarding_major_upgrade_title">Welcome to Lawnchair <xliff:g example="16" id="next_major_version">%1$d</xliff:g>!</string>
+    <string name="onboarding_major_upgrade_title">Welcome to Anchor <xliff:g example="16" id="next_major_version">%1$d</xliff:g>!</string>
     <string name="onboarding_major_upgrade_subtitle">See what\'s new!</string>
-    <string name="onboarding_welcome">Welcome to Lawnchair!</string>
+    <string name="onboarding_welcome">Welcome to Anchor!</string>
     <string name="onboarding_swipe_up">Swipe up to open the App Drawer</string>
     <!-- Smartspacer strings -->
     <string name="maximum_number_of_targets">اہداف کی زیادہ سے زیادہ تعداد</string>
@@ -417,7 +417,7 @@
     <string name="contributor_status_active">Active</string>
     <string name="update_check_failed">Failed to check for updates</string>
     <string name="major_update_label">Breaking change!</string>
-    <string name="major_update_description">You are about to update from Lawnchair <xliff:g example="15" id="current_major_version">%1$s</xliff:g> to Lawnchair <xliff:g example="16" id="next_major_version">%2$s</xliff:g>, please consider carefully as newer major version may be unstable than current version.</string>
+    <string name="major_update_description">You are about to update from Anchor <xliff:g example="15" id="current_major_version">%1$s</xliff:g> to Anchor <xliff:g example="16" id="next_major_version">%2$s</xliff:g>, please consider carefully as newer major version may be unstable than current version.</string>
     <string name="pro_disabled_by_unknown">Cannot update!</string>
     <string name="pro_disabled_by_major_is_newer">Cannot update, This build is way too new!</string>
     <string name="updater">Updater</string>
@@ -464,15 +464,15 @@
     <string name="gesture_handler_open_assistant">اسسٹنٹ کھولیں۔</string>
     <string name="pick_app_for_gesture">ایپ چنیں۔</string>
     <string name="dt2s_admin_hint_title">ایڈمن کی اجازت درکار ہے۔</string>
-    <string name="dt2s_admin_hint">To put the device to sleep, set Lawnchair as a device admin app. Tap \"Open settings\", then tap \"Activate this device admin app.\"</string>
+    <string name="dt2s_admin_hint">To put the device to sleep, set Anchor as a device admin app. Tap \"Open settings\", then tap \"Activate this device admin app.\"</string>
     <string name="dt2s_admin_warning">Gestures to put the device to sleep will be turned off.</string>
     <string name="d2ts_recents_a11y_hint_title">ایکسیسبیلٹی سروس کو آن کریں۔</string>
     <string name="sleep_a11y_hint">put the device to sleep</string>
     <string name="notifications_fallback_a11y_hint">open the notification panel</string>
     <string name="quick_settings_a11y_hint">open the Quick Settings panel</string>
     <string name="recents_screen_a11y_hint">open the Recents screen</string>
-    <string name="generic_a11y_hint">To %1$s, turn on the Lawnchair accessibility service. Tap \"Open settings\", select \"Lawnchair\" and turn on \"Use Lawnchair.\"</string>
-    <string name="generic_a11y_disclaimer">Lawnchair uses Accessibility\'s `performGlobalAction` method to perform this action. This is a sensitive permission that allows monitoring other apps. However, Lawnchair is not configured for that functionality and receives no events.</string>
+    <string name="generic_a11y_hint">To %1$s, turn on the Anchor accessibility service. Tap \"Open settings\", select \"Anchor\" and turn on \"Use Anchor.\"</string>
+    <string name="generic_a11y_disclaimer">Anchor uses Accessibility\'s `performGlobalAction` method to perform this action. This is a sensitive permission that allows monitoring other apps. However, Anchor is not configured for that functionality and receives no events.</string>
     <!--
 
     Bug reporting
@@ -573,7 +573,7 @@
     <!-- Search providers -->
     <string name="search_provider_app_search">ایپ کی تلاش</string>
     <string name="search_provider_custom">حسب ضرورت</string>
-    <string name="search_provider_sponsored_description">%1$s اور Lawnchair کا ریونیو شیئر کا معاہدہ ہے۔\n\n%1$s کے ساتھ تلاش کرنے سے Lawnchair کو سپورٹ کرنے میں مدد ملتی ہے۔</string>
+    <string name="search_provider_sponsored_description">%1$s اور Anchor کا ریونیو شیئر کا معاہدہ ہے۔\n\n%1$s کے ساتھ تلاش کرنے سے Anchor کو سپورٹ کرنے میں مدد ملتی ہے۔</string>
     <string name="app_label">ایپ</string>
     <string name="website_label">ویب سائٹ</string>
     <string name="qsb_search_provider_app_required">ایپ درکار ہے۔</string>
@@ -609,7 +609,7 @@
     <string name="max_folder_columns">زیادہ سے زیادہ فولڈر کالم</string>
     <string name="max_folder_rows">فولڈر کی زیادہ سے زیادہ قطاریں۔</string>
     <!-- Quickstep settings -->
-    <string name="quickswitch_ignored_warning">These settings will be ignored as Lawnchair isn\'t set as the Recents screen provider</string>
+    <string name="quickswitch_ignored_warning">These settings will be ignored as Anchor isn\'t set as the Recents screen provider</string>
     <string name="quickstep_incompatible">غیر مطابقت پذیر نظام کا انضمام</string>
     <string name="quickstep_incompatible_description">آپ کے آلے کو %1$s کے ذریعہ فراہم کردہ سسٹم اشاروں (جسے Quickstep کہا جاتا ہے) کے لیے ترتیب دیا گیا ہے، لیکن %1$s کا یہ ورژن آپ کے Android ورژن کے ساتھ مطابقت نہیں رکھتا ہے۔ اپنے آلے کا استعمال جاری رکھنے کے لیے، براہ کرم %1$s اپ ڈیٹس کو اَن انسٹال کریں یا %1$s کو سسٹم اشارہ فراہم کنندہ کے طور پر غیر فعال کریں۔</string>
     <string name="translucent_background">شفاف پس منظر</string>

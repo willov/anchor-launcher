@@ -50,6 +50,7 @@ fun LawnchairLink(
     label: String,
     url: String,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
 
@@ -60,6 +61,7 @@ fun LawnchairLink(
             .height(64.dp)
             .clip(MaterialTheme.shapes.medium)
             .clickable {
+                if (onClick != null) return@clickable onClick()
                 val webpage = url.toUri()
                 val intent = Intent(Intent.ACTION_VIEW, webpage)
                 if (intent.resolveActivity(context.packageManager) != null) {

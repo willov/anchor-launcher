@@ -61,7 +61,7 @@
     <string name="time_weeks_ago">%d周</string>
     <string name="time_months_ago">%d月</string>
     <string name="time_years_ago">%d年</string>
-    <string name="managed_by_lawnchair">由 Lawnchair 管理</string>
+    <string name="managed_by_lawnchair">由 Anchor 管理</string>
     <!-- When mentioning settings UI -->
     <string name="smartspace_preferences">偏好設定</string>
     <string name="settings_button_text">主畫面設定</string>
@@ -117,7 +117,7 @@
     <string name="folders_filter_duplicates">僅顯示單一應用程式</string>
     <string name="my_folder_label">我的資料夾</string>
     <!-- A11y description -->
-    <string name="accessibility_service_description">Lawnchair 需要存取無障礙服務，才能透過手勢執行特定動作 (例如鎖定您的裝置)。\n\n存取所有無障礙服務都需要這項權限，但 Lawnchair 不會監視任何使用者操作，並會捨棄任何系統發送的事件。\n\nLawnchair 使用 performGlobalAction (執行全域動作)無障礙服務以鎖定您的裝置或開啟最近使用畫面。</string>
+    <string name="accessibility_service_description">Anchor 需要存取無障礙服務，才能透過手勢執行特定動作 (例如鎖定您的裝置)。\n\n存取所有無障礙服務都需要這項權限，但 Anchor 不會監視任何使用者操作，並會捨棄任何系統發送的事件。\n\nAnchor 使用 performGlobalAction (執行全域動作)無障礙服務以鎖定您的裝置或開啟最近使用畫面。</string>
     <string name="x_with_y_count">%1$s (%2$d)</string>
     <string name="x_by_y">%1$d × %2$d</string>
     <string name="x_and_y">%1$s &amp; %2$s</string>
@@ -154,7 +154,7 @@
     <string name="backup_and_restore_description">Save current setup, restore backups</string>
     <string name="about_label">關於</string>
     <string name="app_info_drop_target_label">應用程式資訊</string>
-    <string name="debug_restart_launcher">重啟 Lawnchair</string>
+    <string name="debug_restart_launcher">重啟 Anchor</string>
     <string name="experimental_features_label">實驗性功能</string>
     <!-- Experimental features -->
     <string name="workspace_label">工作空間</string>
@@ -195,7 +195,7 @@
     Notifications
 
     -->
-    <string name="set_default_launcher_tip">將 Lawnchair 設為預設啟動器來存取捷徑和更多功能</string>
+    <string name="set_default_launcher_tip">將 Anchor 設為預設啟動器來存取捷徑和更多功能</string>
     <string name="notification_dots">通知圓點</string>
     <string name="show_notification_count">顯示通知圖示數字</string>
     <string name="notification_dots_color">通知圓點顏色</string>
@@ -370,11 +370,11 @@
     <string name="smartspace_now_playing">聽聲辨曲</string>
     <string name="smartspace_onboarding">Onboarding</string>
     <!-- Onboarding strings -->
-    <string name="onboarding_open_settings_title">Configure your Lawnchair</string>
+    <string name="onboarding_open_settings_title">Configure your Anchor</string>
     <string name="onboarding_open_settings_subtitle">Long-press on the Home Screen to open Settings</string>
-    <string name="onboarding_major_upgrade_title">Welcome to Lawnchair <xliff:g example="16" id="next_major_version">%1$d</xliff:g>!</string>
+    <string name="onboarding_major_upgrade_title">Welcome to Anchor <xliff:g example="16" id="next_major_version">%1$d</xliff:g>!</string>
     <string name="onboarding_major_upgrade_subtitle">See what\'s new!</string>
-    <string name="onboarding_welcome">Welcome to Lawnchair!</string>
+    <string name="onboarding_welcome">Welcome to Anchor!</string>
     <string name="onboarding_swipe_up">Swipe up to open the App Drawer</string>
     <!-- Smartspacer strings -->
     <string name="maximum_number_of_targets">目標數量上限</string>
@@ -385,7 +385,7 @@
     <string name="event_provider_missing_notification_dots">使用 <xliff:g example="My Provider" id="providerName">%1$s</xliff:g>，開啟通知圓點。</string>
     <!-- Toggle button for enabling Smartspace -->
     <string name="smartspace_widget_toggle_label">在主畫面顯示</string>
-    <string name="smartspace_widget_toggle_description">放置 Lawnchair 小工具即可手動將資訊一覽新增至主畫面</string>
+    <string name="smartspace_widget_toggle_description">放置 Anchor 小工具即可手動將資訊一覽新增至主畫面</string>
     <!-- List of available providers -->
     <string name="smartspace_mode_label">資訊一覽提供者</string>
     <string name="smartspace_mode_google">Google</string>
@@ -417,7 +417,7 @@
     <string name="contributor_status_active">Active</string>
     <string name="update_check_failed">檢查更新失敗</string>
     <string name="major_update_label">Breaking change!</string>
-    <string name="major_update_description">You are about to update from Lawnchair <xliff:g example="15" id="current_major_version">%1$s</xliff:g> to Lawnchair <xliff:g example="16" id="next_major_version">%2$s</xliff:g>, please consider carefully as newer major version may be unstable than current version.</string>
+    <string name="major_update_description">You are about to update from Anchor <xliff:g example="15" id="current_major_version">%1$s</xliff:g> to Anchor <xliff:g example="16" id="next_major_version">%2$s</xliff:g>, please consider carefully as newer major version may be unstable than current version.</string>
     <string name="pro_disabled_by_unknown">Cannot update!</string>
     <string name="pro_disabled_by_major_is_newer">Cannot update, This build is way too new!</string>
     <string name="updater">Updater</string>
@@ -464,21 +464,21 @@
     <string name="gesture_handler_open_assistant">開啟助理</string>
     <string name="pick_app_for_gesture">選擇應用程式</string>
     <string name="dt2s_admin_hint_title">需要管理員權限</string>
-    <string name="dt2s_admin_hint">To put the device to sleep, set Lawnchair as a device admin app. Tap \"Open settings\", then tap \"Activate this device admin app.\"</string>
+    <string name="dt2s_admin_hint">To put the device to sleep, set Anchor as a device admin app. Tap \"Open settings\", then tap \"Activate this device admin app.\"</string>
     <string name="dt2s_admin_warning">Gestures to put the device to sleep will be turned off.</string>
     <string name="d2ts_recents_a11y_hint_title">啟用無障礙服務</string>
     <string name="sleep_a11y_hint">put the device to sleep</string>
     <string name="notifications_fallback_a11y_hint">open the notification panel</string>
     <string name="quick_settings_a11y_hint">open the Quick Settings panel</string>
     <string name="recents_screen_a11y_hint">open the Recents screen</string>
-    <string name="generic_a11y_hint">To %1$s, turn on the Lawnchair accessibility service. Tap \"Open settings\", select \"Lawnchair\" and turn on \"Use Lawnchair.\"</string>
-    <string name="generic_a11y_disclaimer">Lawnchair uses Accessibility\'s `performGlobalAction` method to perform this action. This is a sensitive permission that allows monitoring other apps. However, Lawnchair is not configured for that functionality and receives no events.</string>
+    <string name="generic_a11y_hint">To %1$s, turn on the Anchor accessibility service. Tap \"Open settings\", select \"Anchor\" and turn on \"Use Anchor.\"</string>
+    <string name="generic_a11y_disclaimer">Anchor uses Accessibility\'s `performGlobalAction` method to perform this action. This is a sensitive permission that allows monitoring other apps. However, Anchor is not configured for that functionality and receives no events.</string>
     <!--
 
     Bug reporting
 
     -->
-    <string name="lawnchair_bug_report">回報 Lawnchair 問題</string>
+    <string name="lawnchair_bug_report">回報 Anchor 問題</string>
     <string name="crash_report_notif_title">%1$s 已崩潰</string>
     <string name="action_upload_crash_report">上傳錯誤報告</string>
     <string name="action_upload_error">上傳失敗</string>
@@ -573,7 +573,7 @@
     <!-- Search providers -->
     <string name="search_provider_app_search">應用程式搜尋</string>
     <string name="search_provider_custom">自訂</string>
-    <string name="search_provider_sponsored_description">%1$s 和 Lawnchair 擁有共享收入協議。\n\n使用 %1$s 搜尋將可幫助 Lawnchair。</string>
+    <string name="search_provider_sponsored_description">%1$s 和 Anchor 擁有共享收入協議。\n\n使用 %1$s 搜尋將可幫助 Anchor。</string>
     <string name="app_label">應用程式</string>
     <string name="website_label">網站</string>
     <string name="qsb_search_provider_app_required">需要應用程式</string>
@@ -608,7 +608,7 @@
     <string name="max_folder_columns">最大資料夾列數</string>
     <string name="max_folder_rows">最大資料夾列數</string>
     <!-- Quickstep settings -->
-    <string name="quickswitch_ignored_warning">Lawnchair 未設為最近使用畫面提供者時將會略過這些設定</string>
+    <string name="quickswitch_ignored_warning">Anchor 未設為最近使用畫面提供者時將會略過這些設定</string>
     <string name="quickstep_incompatible">系統整合不相容</string>
     <string name="quickstep_incompatible_description">您的裝置已設定使用 %1$s 提供的手勢系統 (稱為 Quickstep)，但這個版本的 %1$s 與您的 Android 不相容。如要繼續使用您的裝置，請解除安裝 %1$s 更新或停用手勢系統提供者 %1$s。</string>
     <string name="translucent_background">半透明背景</string>

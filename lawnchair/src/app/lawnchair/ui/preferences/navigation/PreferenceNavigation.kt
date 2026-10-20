@@ -144,6 +144,9 @@ fun PreferenceNavigation(
         composable<AnchorWallpaperCredits>(
             deepLinks = getDeepLink(AnchorWallpaperCredits),
         ) { app.lawnchair.ui.preferences.destinations.AnchorWallpaperCreditsScreen() }
+        composable<AnchorDonate>(
+            deepLinks = getDeepLink(AnchorDonate),
+        ) { app.lawnchair.ui.preferences.destinations.AnchorDonateScreen() }
 
         composable<Dock>(
             deepLinks = getDeepLink(Dock),

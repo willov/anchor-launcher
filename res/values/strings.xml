@@ -66,6 +66,12 @@
     <string name="anchor_wallpaper_credits_gnome_thanks">Thank you to the GNOME community. Consider supporting them:</string>
     <string name="anchor_wallpaper_credits_gnome_donate">Donate to GNOME</string>
     <string name="anchor_wallpaper_credits_disclaimer">Anchor Launcher is not affiliated with or endorsed by the GNOME Foundation. Background artwork is licensed under Creative Commons Attribution-ShareAlike; the app itself is licensed separately.</string>
+    <!-- About screen: donate page -->
+    <string name="anchor_donate_intro">Donations to Anchor Launcher have not been set up yet. In the meantime, please consider supporting the projects Anchor is built on.</string>
+    <string name="anchor_donate_lawnchair_desc">The open-source launcher Anchor is built on.</string>
+    <string name="anchor_donate_lawnchair_action">Donate to Lawnchair</string>
+    <string name="anchor_donate_gnome_desc">The GNOME community made many of Anchor’s built-in wallpapers.</string>
+    <string name="anchor_donate_disclaimer">Anchor Launcher is an independent project. It is not affiliated with or endorsed by Lawnchair, the GNOME Foundation, Google or the Android Open Source Project. Donations made through these links go directly to those projects, not to Anchor Launcher.</string>
     <string name="anchor_rotation_transition_label">Rotation animation</string>
     <string name="anchor_rotation_transition_description">How the screen transitions while the grid re-anchors on rotation.</string>
     <string name="anchor_rotation_transition_traditional">Traditional (system default)</string>
@@ -124,6 +130,9 @@
     <string name="anchor_grid_wizard_wallpaper_heading">Wallpaper</string>
     <string name="anchor_grid_wizard_wallpaper_pick">Choose an image</string>
     <string name="anchor_grid_wizard_wallpaper_desc">Anchor keeps your wallpaper in place when you rotate, with parallax. Pick an image to enable it, or skip to keep the system wallpaper.</string>
+    <string name="anchor_grid_wizard_search_heading">Web suggestions</string>
+    <string name="anchor_grid_wizard_search_desc">When you search in the app drawer, Anchor can also show suggestions from a search engine. Everything you type there is then sent to that search engine. You can change this later in Settings.</string>
+    <string name="anchor_grid_wizard_search_off">Off — only search my apps</string>
     <string name="anchor_grid_wizard_labels_heading">Labels</string>
     <string name="anchor_grid_wizard_icon_heading">Icon size</string>
     <string name="anchor_grid_wizard_icon_size">Icon size</string>
