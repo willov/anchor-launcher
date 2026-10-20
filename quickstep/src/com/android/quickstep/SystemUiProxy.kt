@@ -1109,7 +1109,7 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
     private fun shouldEnableRunningTasksForDesktopMode(): Boolean =
         DesktopModeStatus.canEnterDesktopMode(context) &&
             if (ATLEAST_BAKLAVA) {
-                ENABLE_DESKTOP_WINDOWING_TASKBAR_RUNNING_APPS.isTrue
+                false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_WINDOWING_TASKBAR_RUNNING_APPS */
             } else {
                 false
             }

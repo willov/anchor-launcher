@@ -4,6 +4,11 @@ All notable changes to Anchor Launcher will be documented here.
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-10-20
+
+### Fixed
+- **Anchor crashed on start after updating to Android 17.** Android 17 removed a set of internal desktop-windowing settings that the launcher still checked, so opening the home screen crashed straight away and kept crashing. Anchor no longer depends on those settings; nothing changes on phones, where desktop windowing isn't used.
+
 ## [0.5.5] - 2026-09-05
 
 ### Added

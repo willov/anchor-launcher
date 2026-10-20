@@ -53,7 +53,7 @@ class DesktopModeCompatPolicy(private val context: Context) {
         val packageName = task.baseActivity?.packageName ?: return false
 
         return when {
-            !DesktopModeFlags.ENABLE_DESKTOP_WINDOWING_MODALS_POLICY.isTrue -> false
+            !false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_WINDOWING_MODALS_POLICY */ -> false
             // If activity is not being displayed, window mode change has no visual affect so leave
             // unchanged.
             task.isTopActivityNoDisplay -> false
@@ -116,7 +116,7 @@ class DesktopModeCompatPolicy(private val context: Context) {
 
     // Checks if the app for the given package has the SYSTEM_ALERT_WINDOW permission.
     private fun hasFullscreenTransparentPermission(packageName: String, userId: Int): Boolean {
-        if (DesktopModeFlags.ENABLE_MODALS_FULLSCREEN_WITH_PERMISSIONS.isTrue) {
+        if (false /* LC-Ignored: removed in Android 17 - ENABLE_MODALS_FULLSCREEN_WITH_PERMISSIONS */) {
             return packageInfoCache.getOrPut("$userId@$packageName") {
                 try {
                     val packageInfo = pkgManager.getPackageInfoAsUser(
@@ -132,17 +132,17 @@ class DesktopModeCompatPolicy(private val context: Context) {
         }
         // If the ENABLE_MODALS_FULLSCREEN_WITH_PERMISSIONS flag is disabled, make neutral condition
         // dependant on the ENABLE_MODALS_FULLSCREEN_WITH_PLATFORM_SIGNATURE flag.
-        return !DesktopExperienceFlags.ENABLE_MODALS_FULLSCREEN_WITH_PLATFORM_SIGNATURE.isTrue
+        return !false /* LC-Ignored: removed in Android 17 - ENABLE_MODALS_FULLSCREEN_WITH_PLATFORM_SIGNATURE */
     }
 
     // Checks if the app is signed with the platform signature.
     private fun hasPlatformSignature(task: TaskInfo): Boolean {
-        if (DesktopExperienceFlags.ENABLE_MODALS_FULLSCREEN_WITH_PLATFORM_SIGNATURE.isTrue) {
+        if (false /* LC-Ignored: removed in Android 17 - ENABLE_MODALS_FULLSCREEN_WITH_PLATFORM_SIGNATURE */) {
             return task.topActivityInfo?.applicationInfo?.isSignedWithPlatformKey ?: false
         }
         // If the ENABLE_MODALS_FULLSCREEN_WITH_PLATFORM_SIGNATURE flag is disabled, make neutral
         // condition dependant on the ENABLE_MODALS_FULLSCREEN_WITH_PERMISSIONS flag.
-        return !DesktopModeFlags.ENABLE_MODALS_FULLSCREEN_WITH_PERMISSIONS.isTrue
+        return !false /* LC-Ignored: removed in Android 17 - ENABLE_MODALS_FULLSCREEN_WITH_PERMISSIONS */
     }
 
     /**

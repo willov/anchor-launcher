@@ -1330,8 +1330,8 @@ public abstract class AbsSwipeUpHandler<
                 ? mRecentsView.getCurrentPageTaskView() : null;
 
         if (DesktopModeStatus.canEnterDesktopMode(mContext)
-                && !(DesktopModeFlags.ENABLE_DESKTOP_WINDOWING_WALLPAPER_ACTIVITY.isTrue()
-                && DesktopModeFlags.ENABLE_DESKTOP_WINDOWING_QUICK_SWITCH.isTrue())) {
+                && !(false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_WINDOWING_WALLPAPER_ACTIVITY */
+                && false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_WINDOWING_QUICK_SWITCH */)) {
             if ((nextPageTaskView instanceof DesktopTaskView
                     || currentPageTaskView instanceof DesktopTaskView)
                     && endTarget == NEW_TASK) {
@@ -1506,8 +1506,8 @@ public abstract class AbsSwipeUpHandler<
         };
 
         if (DesktopModeStatus.canEnterDesktopMode(mContext)
-                && !(DesktopModeFlags.ENABLE_DESKTOP_WINDOWING_WALLPAPER_ACTIVITY.isTrue()
-                && DesktopModeFlags.ENABLE_DESKTOP_WINDOWING_QUICK_SWITCH.isTrue())) {
+                && !(false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_WINDOWING_WALLPAPER_ACTIVITY */
+                && false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_WINDOWING_QUICK_SWITCH */)) {
             if (mRecentsView != null && (mRecentsView.getCurrentPageTaskView() != null
                     && !(mRecentsView.getCurrentPageTaskView() instanceof DesktopTaskView))) {
                 ActiveGestureLog.INSTANCE.trackEvent(ActiveGestureErrorDetector.GestureEvent
@@ -1562,7 +1562,7 @@ public abstract class AbsSwipeUpHandler<
                 events.add(mLogDirectionUpOrLeft ? LAUNCHER_QUICKSWITCH_LEFT
                         : LAUNCHER_QUICKSWITCH_RIGHT);
                 if (targetTaskView != null && DesktopModeStatus.canEnterDesktopMode(mContext)
-                        && DesktopModeFlags.ENABLE_DESKTOP_WINDOWING_QUICK_SWITCH.isTrue()) {
+                        && false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_WINDOWING_QUICK_SWITCH */) {
                     if (targetTaskView.getType() == TaskViewType.DESKTOP) {
                         events.add(LAUNCHER_QUICKSWITCH_ENTER_DESKTOP_MODE);
                     } else if (mPreviousTaskViewType == TaskViewType.DESKTOP) {
@@ -1688,7 +1688,7 @@ public abstract class AbsSwipeUpHandler<
                     && runningTaskTarget.leash != null
                     && runningTaskTarget.leash.isValid();
             final boolean swipeUpInDesktopWindowing =
-                    DesktopExperienceFlags.ENABLE_DESKTOP_WINDOWING_PIP.isTrue()
+                    false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_WINDOWING_PIP */
                             && runningTaskTarget != null
                             && runningTaskTarget.taskInfo.getWindowingMode()
                             == WINDOWING_MODE_FREEFORM;
@@ -2427,8 +2427,8 @@ public abstract class AbsSwipeUpHandler<
         });
 
         if (DesktopModeStatus.canEnterDesktopMode(mContext)
-                && !(DesktopModeFlags.ENABLE_DESKTOP_WINDOWING_WALLPAPER_ACTIVITY.isTrue()
-                        && DesktopModeFlags.ENABLE_DESKTOP_WINDOWING_QUICK_SWITCH.isTrue())) {
+                && !(false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_WINDOWING_WALLPAPER_ACTIVITY */
+                        && false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_WINDOWING_QUICK_SWITCH */)) {
             if (mRecentsView.getNextPageTaskView() instanceof DesktopTaskView
                     || mRecentsView.getCurrentPageTaskView() instanceof DesktopTaskView) {
                 mRecentsViewScrollLinked = false;

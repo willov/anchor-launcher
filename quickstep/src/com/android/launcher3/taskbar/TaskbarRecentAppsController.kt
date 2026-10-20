@@ -52,7 +52,7 @@ class TaskbarRecentAppsController(
     var canShowRunningApps =
         DesktopModeStatus.canEnterDesktopMode(context) &&
             if (Utilities.ATLEAST_BAKLAVA_1) {
-                DesktopModeFlags.ENABLE_DESKTOP_WINDOWING_TASKBAR_RUNNING_APPS.isTrue
+                false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_WINDOWING_TASKBAR_RUNNING_APPS */
             } else {
                 false
             }
@@ -66,7 +66,7 @@ class TaskbarRecentAppsController(
 
     val enableRecentTasksThrottle =
         if (Utilities.ATLEAST_BAKLAVA_1) {
-            DesktopExperienceFlags.ENABLE_TASKBAR_RECENT_TASKS_THROTTLE_BUGFIX.isTrue
+            false /* LC-Ignored: removed in Android 17 - ENABLE_TASKBAR_RECENT_TASKS_THROTTLE_BUGFIX */
         } else {
             false
         }

@@ -1,0 +1,3 @@
+Android 17 fix.
+
+• Fixed: Anchor crashed on start after updating to Android 17.

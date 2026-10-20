@@ -37,7 +37,7 @@ class DesktopConfigImpl(
 
     override val shouldMaximizeWhenDragToTopEdge: Boolean
         get() {
-            if (!DesktopExperienceFlags.ENABLE_DRAG_TO_MAXIMIZE.isTrue) return false
+            if (!false /* LC-Ignored: removed in Android 17 - ENABLE_DRAG_TO_MAXIMIZE */) return false
             return SystemProperties.getBoolean(
                 ENABLE_DRAG_TO_MAXIMIZE_SYS_PROP,
                 context.getResources().getBoolean(R.bool.config_dragToMaximizeInDesktopMode),
@@ -57,7 +57,7 @@ class DesktopConfigImpl(
 
     override val windowDecorScvhPoolSize: Int
         get() {
-            if (!DesktopModeFlags.ENABLE_DESKTOP_WINDOWING_SCVH_CACHE.isTrue) return 0
+            if (!false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_WINDOWING_SCVH_CACHE */) return 0
 
             if (maxTaskLimit > 0) return maxTaskLimit
 
@@ -84,7 +84,7 @@ class DesktopConfigImpl(
     override fun shouldSetBackground(taskInfo: TaskInfo): Boolean =
         taskInfo.isFreeform &&
             (!isVeiledResizeEnabled ||
-                DesktopModeFlags.ENABLE_OPAQUE_BACKGROUND_FOR_TRANSPARENT_WINDOWS.isTrue)
+                false /* LC-Ignored: removed in Android 17 - ENABLE_OPAQUE_BACKGROUND_FOR_TRANSPARENT_WINDOWS */)
 
     override val maxTaskLimit: Int =
         SystemProperties.getInt(

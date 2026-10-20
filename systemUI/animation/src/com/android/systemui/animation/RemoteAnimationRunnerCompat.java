@@ -165,7 +165,7 @@ public abstract class RemoteAnimationRunnerCompat extends IRemoteAnimationRunner
                         t.show(wallpapers[i].leash);
                         t.setAlpha(wallpapers[i].leash, 1.f);
                     }
-                    if (ENABLE_DESKTOP_WINDOWING_EXIT_TRANSITIONS_BUGFIX.isTrue()) {
+                    if (false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_WINDOWING_EXIT_TRANSITIONS_BUGFIX */) {
                         resetLauncherAlphaOnDesktopExit(info, launcherTask, leashMap, t);
                     }
                 } else {
@@ -274,7 +274,7 @@ public abstract class RemoteAnimationRunnerCompat extends IRemoteAnimationRunner
     ) {
         checkArgument(isOpeningMode(launcherChange.getMode()));
         if (!isClosingType(info.getType())
-                && !ENABLE_DESKTOP_WINDOWING_EXIT_BY_MINIMIZE_TRANSITION_BUGFIX.isTrue()) {
+                && !false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_WINDOWING_EXIT_BY_MINIMIZE_TRANSITION_BUGFIX */) {
             return;
         }
         for (int i = info.getChanges().size() - 1; i >= 0; --i) {

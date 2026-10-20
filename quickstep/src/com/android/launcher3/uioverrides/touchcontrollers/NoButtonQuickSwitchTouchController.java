@@ -189,7 +189,7 @@ public class NoButtonQuickSwitchTouchController implements TouchController,
         }
         if (DesktopModeStatus.canEnterDesktopMode(mLauncher)
                 //TODO(b/345296916): replace with dev option once in teamfood
-                && DesktopModeFlags.ENABLE_QUICKSWITCH_DESKTOP_SPLIT_BUGFIX.isTrue()
+                && false /* LC-Ignored: removed in Android 17 - ENABLE_QUICKSWITCH_DESKTOP_SPLIT_BUGFIX */
                 && mRecentsView.getNonDesktopTaskViewCount() < 1) {
             return false;
         }

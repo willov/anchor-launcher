@@ -75,7 +75,7 @@ class DesktopAppLaunchTransitionManager(
 
     private fun shouldRegisterTransitions(): Boolean =
         DesktopModeStatus.canEnterDesktopMode(context) &&
-            DesktopModeFlags.ENABLE_DESKTOP_APP_LAUNCH_TRANSITIONS_BUGFIX.isTrue
+            false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_APP_LAUNCH_TRANSITIONS_BUGFIX */
 
     companion object {
         private fun buildAppLaunchFilter(): TransitionFilter {
@@ -85,7 +85,7 @@ class DesktopAppLaunchTransitionManager(
                     mWindowingMode = WINDOWING_MODE_FREEFORM
                     mModes = DesktopAppLaunchTransition.LAUNCH_CHANGE_MODES
                     mMustBeTask = true
-                    if (!DesktopExperienceFlags.ENABLE_DESKTOP_APP_LAUNCH_BUGFIX.isTrue) {
+                    if (!false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_APP_LAUNCH_BUGFIX */) {
                         mOrder = CONTAINER_ORDER_TOP
                     }
                 }

@@ -119,7 +119,7 @@ class DesktopStateImpl(context: Context) : DesktopState {
         if (false) {
             // LC-Ignored: Intentional, all Android desktop flags are disabled
             DesktopExperienceFlags.ENABLE_DESKTOP_FIRST_BASED_DEFAULT_TO_DESKTOP_BUGFIX.isTrue ||
-            DesktopExperienceFlags.ENTER_DESKTOP_BY_DEFAULT_ON_FREEFORM_DISPLAYS.isTrue &&
+            false /* LC-Ignored: removed in Android 17 - ENTER_DESKTOP_BY_DEFAULT_ON_FREEFORM_DISPLAYS */ &&
                 SystemProperties.getBoolean(
                     ENTER_DESKTOP_BY_DEFAULT_ON_FREEFORM_DISPLAY_SYS_PROP,
                     context
@@ -146,7 +146,7 @@ class DesktopStateImpl(context: Context) : DesktopState {
     override val enableMultipleDesktops: Boolean =
         if (false) {
             // LC-Ignored: Intentional, all Android desktop flags are disabled
-            DesktopExperienceFlags.ENABLE_MULTIPLE_DESKTOPS_BACKEND.isTrue
+            false /* LC-Ignored: removed in Android 17 - ENABLE_MULTIPLE_DESKTOPS_BACKEND */
                     && DesktopExperienceFlags.ENABLE_MULTIPLE_DESKTOPS_FRONTEND.isTrue
         } else {
             false
@@ -156,7 +156,7 @@ class DesktopStateImpl(context: Context) : DesktopState {
         if (false) {
             // LC-Ignored: Intentional, all Android desktop flags are disabled
             DesktopExperienceFlags.ENABLE_MULTIPLE_DESKTOPS_FRONTEND.isTrue
-                    && DesktopExperienceFlags.ENABLE_MULTIPLE_DESKTOPS_BACKEND.isTrue
+                    && false /* LC-Ignored: removed in Android 17 - ENABLE_MULTIPLE_DESKTOPS_BACKEND */
         } else {
             false
         } && isDesktopModeSupportedOnDisplay(display)

@@ -725,9 +725,9 @@ public class TaskbarView extends FrameLayout implements FolderIcon.FolderIconPar
             overflowSize = mIdealNumIcons - mMaxNumIcons;
             hasOverflow = overflowSize > 0;
 
-            if (!ENABLE_TASKBAR_RECENTS_LAYOUT_TRANSITION.isTrue() && hasOverflow) {
+            if (!false /* LC-Ignored: removed in Android 17 - ENABLE_TASKBAR_RECENTS_LAYOUT_TRANSITION */ && hasOverflow) {
                 addView(mTaskbarOverflowView, mNextViewIndex++);
-            } else if (ENABLE_TASKBAR_RECENTS_LAYOUT_TRANSITION.isTrue()) {
+            } else if (false /* LC-Ignored: removed in Android 17 - ENABLE_TASKBAR_RECENTS_LAYOUT_TRANSITION */) {
                 // RTL case is handled after we add the recent icons, because the button needs to
                 // then be to the right of them.
                 if (hasOverflow && !mIsRtl) {
@@ -784,7 +784,7 @@ public class TaskbarView extends FrameLayout implements FolderIcon.FolderIconPar
 
             View recentIcon = null;
             // If a task is new, we should not reuse a view so that it animates in when it is added.
-            final boolean canReuseView = !ENABLE_TASKBAR_RECENTS_LAYOUT_TRANSITION.isTrue()
+            final boolean canReuseView = !false /* LC-Ignored: removed in Android 17 - ENABLE_TASKBAR_RECENTS_LAYOUT_TRANSITION */
                     || (mPrevRecentTasks.contains(task) && !mPrevOverflowTasks.contains(task));
             while (canReuseView && isNextViewInSection(GroupTask.class)) {
                 recentIcon = getChildAt(mNextViewIndex);
@@ -794,7 +794,7 @@ public class TaskbarView extends FrameLayout implements FolderIcon.FolderIconPar
                 if ((recentIcon.getSourceLayoutResId() != expectedLayoutResId)
                         || (isCollection && tag != task)
                         // Remove view corresponding to removed task so that it animates out.
-                        || (ENABLE_TASKBAR_RECENTS_LAYOUT_TRANSITION.isTrue()
+                        || (false /* LC-Ignored: removed in Android 17 - ENABLE_TASKBAR_RECENTS_LAYOUT_TRANSITION */
                                 && (!recentTasksSet.contains(tag)
                                         || overflownRecentsSet.contains(tag)))) {
                     removeAndRecycle(recentIcon);

@@ -4401,8 +4401,7 @@ public abstract class RecentsView<
                                     SystemUiProxy.INSTANCE
                                             .get(getContext())
                                             .removeDesk(desktopTask.getDeskId());
-                                } else if (DesktopModeFlags
-                                        .ENABLE_DESKTOP_WINDOWING_BACK_NAVIGATION.isTrue()) {
+                                } else if (false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_WINDOWING_BACK_NAVIGATION */) {
                                     SystemUiProxy.INSTANCE
                                             .get(getContext())
                                             .removeDefaultDeskInDisplay(

@@ -1292,7 +1292,7 @@ public class TaskbarViewController implements TaskbarControllers.LoggableTaskbar
     /** Called when there's a change in running apps to update the UI. */
     public void commitRunningAppsToUI() {
         mModelCallbacks.commitRunningAppsToUI();
-        if (ENABLE_TASKBAR_RECENTS_LAYOUT_TRANSITION.isTrue()
+        if (false /* LC-Ignored: removed in Android 17 - ENABLE_TASKBAR_RECENTS_LAYOUT_TRANSITION */
                 && !mActivity.isTransientTaskbar()
                 && mTaskbarView.getLayoutTransition() == null) {
             // Set up after the first commit so that the initial recents do not animate (janky).

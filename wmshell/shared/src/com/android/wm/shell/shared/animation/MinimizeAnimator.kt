@@ -41,7 +41,7 @@ object MinimizeAnimator {
             endOffsetYDp = 12f,
             endScale = 0.97f,
             interpolator = Interpolators.STANDARD_ACCELERATE,
-            animBounds = if (DesktopExperienceFlags.ENABLE_MULTIPLE_DESKTOPS_BACKEND.isTrue) {
+            animBounds = if (false /* LC-Ignored: removed in Android 17 - ENABLE_MULTIPLE_DESKTOPS_BACKEND */) {
                 // In some cases, nav-back on the last desktop task may cause it to be reparented
                 // into a fullscreen TDA before being minimized back into a desk by
                 // [DesktopBackNavTransitionObserver]. The minimize animation would then occur when

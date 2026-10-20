@@ -105,7 +105,7 @@ class PinToTaskbarShortcut<T>(
 
     companion object {
         fun isPinningAppWithContextMenuEnabled(context: TaskbarActivityContext): Boolean =
-            DesktopExperienceFlags.ENABLE_PINNING_APP_WITH_CONTEXT_MENU.isTrue &&
+            false /* LC-Ignored: removed in Android 17 - ENABLE_PINNING_APP_WITH_CONTEXT_MENU */ &&
                 context.isTaskbarShowingDesktopTasks
     }
 }

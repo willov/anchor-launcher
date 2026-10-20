@@ -112,7 +112,7 @@ class DesktopAppLaunchAnimatorHelper(
     private fun getTrampolineCloseChange(info: TransitionInfo): Change? {
         if (
             info.changes.size < 2 ||
-            !DesktopModeFlags.ENABLE_DESKTOP_TRAMPOLINE_CLOSE_ANIMATION_BUGFIX.isTrue
+            !false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_TRAMPOLINE_CLOSE_ANIMATION_BUGFIX */
         ) {
             return null
         }

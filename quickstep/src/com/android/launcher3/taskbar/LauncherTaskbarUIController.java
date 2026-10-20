@@ -272,7 +272,7 @@ public class LauncherTaskbarUIController extends TaskbarUIController {
             return null;
         }
 
-        if (!ENABLE_DESKTOP_WINDOWING_WALLPAPER_ACTIVITY.isTrue()
+        if (!false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_WINDOWING_WALLPAPER_ACTIVITY */
                 && mControllers.taskbarDesktopModeController.isInDesktopModeAndNotInOverview(
                 mControllers.taskbarActivityContext.getDisplayId())) {
             // TODO: b/333533253 - Remove after flag rollout

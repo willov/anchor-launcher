@@ -1707,7 +1707,7 @@ public class TaskbarActivityContext extends BaseTaskbarContext {
                 mControllers.taskbarRecentAppsController.getRunningAppState(taskId);
         Log.d(TAG, "Task id=" + taskId + ", Running app state=" + runningAppState);
         return runningAppState == RunningAppState.MINIMIZED
-                && DesktopModeFlags.ENABLE_DESKTOP_APP_LAUNCH_ALTTAB_TRANSITIONS_BUGFIX.isTrue();
+                && false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_APP_LAUNCH_ALTTAB_TRANSITIONS_BUGFIX */;
     }
 
     private RemoteTransition createDesktopAppLaunchRemoteTransition(
@@ -1859,17 +1859,17 @@ public class TaskbarActivityContext extends BaseTaskbarContext {
     }
 
     private boolean shouldLaunchInDesktop(int displayId, ItemInfo info) {
-        if (!DesktopModeFlags.ENABLE_DESKTOP_APP_LAUNCH_TRANSITIONS_BUGFIX.isTrue()) {
+        if (!false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_APP_LAUNCH_TRANSITIONS_BUGFIX */) {
             return false;
         }
-        if (DesktopExperienceFlags.ENABLE_DESKTOP_FIRST_FULLSCREEN_REFOCUS_BUGFIX.isTrue()
+        if (false /* LC-Ignored: removed in Android 17 - ENABLE_DESKTOP_FIRST_FULLSCREEN_REFOCUS_BUGFIX */
                 && DisplayController.isInDesktopFirstMode(this)
                 && mControllers.taskbarRecentAppsController.hasSingleTask(info)) {
             // Keep the fullscreen mode in desktop-first mode.
             return false;
         }
         // Always launch in freeform if in external display.
-        return (DesktopExperienceFlags.ENABLE_FREEFORM_DISPLAY_LAUNCH_PARAMS.isTrue()
+        return (false /* LC-Ignored: removed in Android 17 - ENABLE_FREEFORM_DISPLAY_LAUNCH_PARAMS */
                 && isExternalDisplay(displayId)) || isTaskbarShowingDesktopTasks();
     }
 
@@ -1891,7 +1891,7 @@ public class TaskbarActivityContext extends BaseTaskbarContext {
         }
         // There is no task associated with this launch - launch a new task through an intent
         ActivityOptionsWrapper opts = getActivityLaunchDesktopOptions();
-        if (DesktopModeFlags.ENABLE_START_LAUNCH_TRANSITION_FROM_TASKBAR_BUGFIX.isTrue()) {
+        if (false /* LC-Ignored: removed in Android 17 - ENABLE_START_LAUNCH_TRANSITION_FROM_TASKBAR_BUGFIX */) {
             mSysUiProxy.startLaunchIntentTransition(intent, opts.options.toBundle(), displayId);
         } else {
             startActivity(intent, opts.options.toBundle());
