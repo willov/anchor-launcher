@@ -1,112 +1,51 @@
-# Lawnchair 16
+# Anchor Launcher
 
-[![Build debug APK](https://github.com/LawnchairLauncher/lawnchair/actions/workflows/ci.yml/badge.svg)](https://github.com/LawnchairLauncher/lawnchair/actions/workflows/ci.yml)
-[![Build release APK](https://github.com/LawnchairLauncher/lawnchair/actions/workflows/release_update.yml/badge.svg)](https://github.com/LawnchairLauncher/lawnchair/actions/workflows/release_update.yml)
-[![Crowdin](https://badges.crowdin.net/e/188ba69d884418987f0b7f1dd55e3a4e/localized.svg)](https://lawnchair.crowdin.com/lawnchair)
-[![OpenCollective](https://img.shields.io/opencollective/all/lawnchair?label=financial%20contributors&logo=open-collective)](https://opencollective.com/lawnchair)
-[![Telegram](https://img.shields.io/endpoint?url=https%3A%2F%2Ftg.sumanjay.workers.dev%2Flccommunity)](https://t.me/lccommunity)
-[![Discord](https://img.shields.io/discord/803299970169700402?label=server&logo=discord)](https://discord.gg/3x8qNWxgGZ)
-[![GitHub Downloads](https://img.shields.io/github/downloads/LawnchairLauncher/lawnchair/total.svg?label=GitHub%20Downloads&logo=github)](https://github.com/LawnchairLauncher/lawnchair/releases)
-[![Play Store Installs](https://img.shields.io/endpoint?color=green&logo=googleplay&logoColor=green&url=https%3A%2F%2Fplay.cuzi.workers.dev%2Fplay%3Fi%3Dapp.lawnchair.play%26l%3DPlay%2520Store%2520Installs%26m%3D%24shortinstalls)](https://play.google.com/store/apps/details?id=app.lawnchair.play)
+**Tired of your icons jumping around when you rotate your phone? Anchor keeps every icon exactly where you put it.**
 
-> [!WARNING]
-> This branch contains major changes from the rebase of Launcher3, including changes that can cause
-> Lawnchair to crash or break.
->
-> For regular users, we recommend staying on **Lawnchair 15 Beta 2.1**.
-
-<picture>
-    <!-- Avoid image being clickable with slight workaround -->
-    <!-- ❤️ Credit to simonppt for the current mockup on Unsplash 
-            https://unsplash.com/photos/a-white-flower-with-green-leaves-on-a-white-background-ojBNiaeykwc
-    -->
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/device-frame.webp" width="250px">
-    <img alt="A device running Lawnchair Launcher with green flower wallpaper" src="docs/assets/device-frame.webp" width="250px">
-</picture>
-
-Lawnchair is a free, open-source home app for Android. Taking Launcher3—Android’s default home app—as a starting point, it ports Pixel Launcher features and introduces rich customization options.
-
-This branch houses the codebase of Lawnchair 16, which is currently in development and is based on Launcher3 from Android 16. For Lawnchair 9 to 15, see the branches with the `9-` to `15-` prefixes, respectively.
+Anchor is an Android home screen app built on [Lawnchair](https://github.com/LawnchairLauncher/lawnchair). When you turn your phone, the system turns everything upright as usual, but each icon stays at the same physical spot on the glass. An icon under your thumb in portrait is still under your thumb in landscape.
 
 ## Features
 
-- Material 3 Expressive theming that follows your wallpaper and system colors.
-- At a Glance widget support, with integration
-  for [Smartspacer](https://github.com/KieronQuinn/Smartspacer).
-- QuickSwitch support for Android Recents integration on Android 10-15 (root required).
-- Global search for apps, contacts, and web results from the home screen.
-- Customization options for icon packs, fonts, and color settings.
+- **Icons that stay put on rotation.** The grid turns with the phone (4×9 in portrait becomes 9×4 in landscape), so nothing reflows or jumps.
+- **Home screens in rows as well as pages.** Swipe left and right between pages, and down and up between rows. Each row remembers which page you were on. What goes in each row is up to you.
+- **A steady background.** The wallpaper stays fixed when you rotate and moves with you as you scroll between pages and rows.
+- **Built-in wallpapers**, including vector art drawn for Anchor that stays sharp at any screen size.
+- **An app drawer with A–Z sections** and a letter scroller for jumping straight to a letter.
+- **Everything else from Lawnchair:** icon packs, fonts, theming that follows your wallpaper, and search.
 
 ## Download
 
-<p align="left">
-  <a href="https://play.google.com/store/apps/details?id=app.lawnchair.play">
-    <picture>
-      <!-- Avoid image being clickable with slight workaround -->
-      <source media="(prefers-color-scheme: dark)" srcset="docs/assets/badge-google-play.webp" height="60">
-      <img alt="Get it on Google Play" src="docs/assets/badge-google-play.webp" height="60">
-    </picture>
-  </a>
-  <a href="https://apt.izzysoft.de/fdroid/index/apk/app.lawnchair">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="docs/assets/badge-izzyondroid.webp" height="60">
-      <img alt="Get it on IzzyOnDroid" src="docs/assets/badge-izzyondroid.webp" height="60">
-    </picture>
-  </a>
-  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/LawnchairLauncher/lawnchair/">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="docs/assets/badge-obtainium.webp" height="60">
-      <img alt="Get it on Obtainium" src="docs/assets/badge-obtainium.webp" height="60">
-    </picture>
-  </a>
-    <a href="https://github.com/LawnchairLauncher/lawnchair/releases">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="docs/assets/badge-github.webp" height="60">
-      <img alt="Get it on GitHub" src="docs/assets/badge-github.webp" height="60">
-    </picture>
-  </a>
-</p>
+Anchor is not publicly released yet. A Google Play release is on the way.
 
-Lawnchair on Play Store will install as a different app from other sources. Features may be restricted to comply with Google Play's publishing rules.
+## Building
 
-You can also [verify your installation](VERIFICATION.md) to see if you have installed an official build.
+```bash
+git clone --recurse-submodules https://github.com/willov/anchor-launcher
+cd anchor-launcher
+./gradlew assembleLawnWithQuickstepPlayDebug
+```
 
-### Development builds
+The debug build installs as **Anchor Launcher (Debug)** (`se.willovapps.anchor.debug`), next to any release install.
 
-Interested in keeping yourself up-to-date with every Lawnchair development? Try our development builds!
+Run the unit tests with:
 
-These builds offer the latest features and bug fixes at a cost of performance and additional issues.
-Make backups before installing.
+```bash
+./gradlew testLawnWithQuickstepPlayDebugUnitTest
+```
 
-**Download:** [Obtainium][Obtainium link] • [GitHub][GitHub link] • [nightly.link][Nightly link]
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each version and [ROADMAP.md](ROADMAP.md) for what's planned.
 
-## Contributing
+## Donating
 
-Visit the [Lawnchair contributing guidelines](CONTRIBUTING.md) for information and tips on contributing to Lawnchair.
+Donations to Anchor Launcher have not been set up yet. In the meantime, please consider supporting the projects Anchor is built on:
 
-## Supporting Lawnchair
+- **[Lawnchair](https://opencollective.com/lawnchair):** the open-source launcher Anchor is built on.
+- **[GNOME](https://www.gnome.org/donate/):** the GNOME community made many of Anchor's built-in wallpapers.
 
-If you love what we do, consider [supporting us on Open Collective](https://opencollective.com/lawnchair)! Your contributions help keep Lawnchair independent and enable us to develop faster.
+Anchor Launcher is an independent project. It is not affiliated with or endorsed by Lawnchair, the GNOME Foundation, Google or the Android Open Source Project. Donations made through these links go directly to those projects, not to Anchor Launcher.
 
-A huge thank you to our **Core Backers ($5+)**:
-*(These backers directly fund our Project Velocity Fund)*
+## Credits and license
 
-[![Core Backers](https://opencollective.com/lawnchair/tiers/backer.svg?avatarHeight=64&width=890&button=false)](https://opencollective.com/lawnchair)
+Anchor is a fork of [Lawnchair](https://github.com/LawnchairLauncher/lawnchair), which is based on Launcher3 from the [Android Open Source Project](https://source.android.com/). Thank you to everyone who has worked on both.
 
-[Become a supporter](https://opencollective.com/lawnchair) to help us cover our operational costs, or become a Core Backer to be featured here!
-
-## Quick links
-
--   [Website](https://lawnchair.app)
--   [Support](https://lawnchair.app/support)
--   [News on Telegram](https://t.me/lawnchairci)
--   [Discord](https://discord.com/invite/3x8qNWxgGZ)
--   [X (formerly Twitter)](https://x.com/lawnchairapp)
--   [_XDA_ thread](https://xdaforums.com/t/lawnchair-customizable-pixel-launcher.3627137/)
-
-View all our links in the [Lawnchair Wiki](https://github.com/LawnchairLauncher/lawnchair/wiki).
-
-<!-- Download link -->
-[Nightly link]: https://nightly.link/LawnchairLauncher/lawnchair/workflows/ci/15-dev
-[Obtainium link]: https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22app.lawnchair.nightly%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Flawnchairlauncher%2Flawnchair%22%2C%22author%22%3A%22Lawnchair%20Launcher%22%2C%22name%22%3A%22Lawnchair%20(Debug)%22%2C%22preferredApkIndex%22%3A0%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Atrue%2C%5C%22fallbackToOlderReleases%5C%22%3Afalse%2C%5C%22filterReleaseTitlesByRegEx%5C%22%3A%5C%22Lawnchair%20Nightly%5C%22%2C%5C%22filterReleaseNotesByRegEx%5C%22%3A%5C%22%5C%22%2C%5C%22verifyLatestTag%5C%22%3Afalse%2C%5C%22dontSortReleasesList%5C%22%3Afalse%2C%5C%22useLatestAssetDateAsReleaseDate%5C%22%3Afalse%2C%5C%22trackOnly%5C%22%3Afalse%2C%5C%22versionExtractionRegEx%5C%22%3A%5C%22%5C%22%2C%5C%22matchGroupToUse%5C%22%3A%5C%22%5C%22%2C%5C%22versionDetection%5C%22%3Afalse%2C%5C%22releaseDateAsVersion%5C%22%3Atrue%2C%5C%22useVersionCodeAsOSVersion%5C%22%3Afalse%2C%5C%22apkFilterRegEx%5C%22%3A%5C%22%5C%22%2C%5C%22invertAPKFilter%5C%22%3Afalse%2C%5C%22autoApkFilterByArch%5C%22%3Atrue%2C%5C%22appName%5C%22%3A%5C%22%5C%22%2C%5C%22shizukuPretendToBeGooglePlay%5C%22%3Afalse%2C%5C%22exemptFromBackgroundUpdates%5C%22%3Afalse%2C%5C%22skipUpdateNotifications%5C%22%3Afalse%2C%5C%22about%5C%22%3A%5C%22Lawnchair%20is%20a%20free%2C%20open-source%20home%20app%20for%20Android.%20(NOTE%3A%20This%20is%20the%20debug%20version%20of%20Lawnchair%2C%20for%20the%20beta%2Fstable%20versions%20see%20%5C%5C%5C%22Lawnchair%5C%5C%5C%22)%5C%22%7D%22%7D
-[GitHub link]: https://github.com/LawnchairLauncher/lawnchair/releases/tag/nightly
+Anchor is licensed under the [Apache License 2.0](LICENSE.txt), the same as Lawnchair and Launcher3. Their original copyright notices are kept in their files.
