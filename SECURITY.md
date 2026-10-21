@@ -1,32 +1,14 @@
-# Security Policy
+# Security policy
 
-## Supported Versions
+## Supported versions
 
-> [!WARNING]
-> [Lawnchair Legacy](https://play.google.com/store/apps/details?id=ch.deletescape.lawnchair.plah) is **unsupported**. Use the newer versions instead.
-> See [this FAQ page](https://lawnchair.app/faq/#what-happened-to-lawnchair-legacy) for additional information.
+Only the latest version of Anchor Launcher on Google Play is supported. Please update before reporting an issue.
 
-The latest version of Lawnchair is the only supported version.
+## Reporting a vulnerability
 
-| Version        | Supported          |
-|----------------|--------------------|
-| Nightly build  | :white_check_mark: |
-| 16             | :white_check_mark: |
-| 15             | :x:                |
-| 14             | :x:                |
-| 13             | :x:                |
-| 12.1           | :x:                |
-| 12             | :x:                |
-| 11             | :x:                |
-| Older (Legacy) | :x:                |
+Please report security issues privately by opening a
+[security advisory](https://github.com/willov/anchor-launcher/security/advisories/new). Don't open a public issue for a vulnerability.
 
-## Reporting Security issues
+Include the Anchor version (Settings → About), your device and Android version, and the steps to reproduce the issue. You'll get a reply as soon as possible, and you'll be kept updated until it's fixed.
 
-We appreciate your efforts to responsibly disclose your findings and will make every effort to
-acknowledge your contributions.
-
-To report an issue, please file a [security advisory](https://github.com/LawnchairLauncher/lawnchair/security/advisories/new)
-or contact a developer (can be found in the about page of the app) in [Telegram](https://t.me/lccommunity) or [Discord](https://discord.com/invite/3x8qNWxgGZ) and
-state your security vulnerability starting with the words "**SECURITY**"
-
-We'll endeavor to respond quickly, and will keep you updated throughout the process.
+If the issue is in code Anchor shares with [Lawnchair](https://github.com/LawnchairLauncher/lawnchair), please consider reporting it to them as well, so their users get the fix too.
