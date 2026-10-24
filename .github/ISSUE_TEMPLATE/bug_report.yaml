@@ -1,25 +1,19 @@
 name: Bug report
-description: Create a report to help us address issues you are facing with the app.
-labels: [bug, 'status: needs triage']
-type: Bug
+description: Report something in Anchor Launcher that isn't working as it should.
+labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        > [!IMPORTANT]
-        > Lawnchair's issue tracker is maintained on a best-effort basis.
-        > Due to limited resources, we do not guarantee that all issues will be triaged or checked by the developers.
-
-        Thanks for taking the time to file this issue! Here are a few things to do before submitting:
-        1. Use the [**latest nightly version**](https://github.com/LawnchairLauncher/lawnchair#development-builds) when reporting bugs.
-        2. [**Read the FAQ**](https://lawnchair.app/faq/#common-issues) for common issues; if it is, please don't create an issue about it.
-        3. Search **both [open and closed issues](https://github.com/LawnchairLauncher/lawnchair/issues?q=is%3Aissue+sort%3Aupdated-desc+)** for your bug.
+        Thanks for taking the time to report this. Before you submit:
+        1. Update to the latest version of Anchor Launcher on Google Play.
+        2. Search the [open and closed issues](https://github.com/willov/anchor-launcher/issues?q=is%3Aissue) to see if it's already been reported.
 
   - type: textarea
     id: bug-description
     attributes:
-      label: Describe the bug
-      description: A clear and concise description of what the bug is.
+      label: What happened?
+      description: A clear description of the bug.
     validations:
       required: true
 
@@ -27,64 +21,53 @@ body:
     id: steps-to-reproduce
     attributes:
       label: Steps to reproduce
-      description: Steps to reproduce the bug. **Be specific** on what steps you need to do to encounter this bug.
+      description: What do you need to do to make the bug happen? Mention which way the phone was turned if it matters.
       placeholder: |
-        1. Go to '...'
-        2. Click on '....'
-        3. Scroll down to '...'
-        4. See error
+        1. Open the app drawer
+        2. Turn the phone to landscape
+        3. ...
     validations:
       required: true
 
   - type: textarea
     id: expected-behavior
     attributes:
-      label: Expected behavior
-      description: A clear and concise description of what you expected to happen.
+      label: What did you expect to happen?
     validations:
       required: true
 
   - type: textarea
     id: screenshots
     attributes:
-      label: Screenshots
-      description: If applicable, add screenshots to help explain your problem.
+      label: Screenshots or screen recording
+      description: For anything to do with rotation or moving between screens, a short screen recording helps a lot.
     validations:
       required: false
-
-  - type: textarea
-    id: device-info
-    attributes:
-      label: Device information
-      description: Provide details about your device, OS, app version, etc.
-      placeholder: |
-        - Device: Google Pixel 9
-        - OS: stock Android 12.0
-    validations:
-      required: true
 
   - type: input
     id: app-version
     attributes:
-      label: App version
-      description: |
-        Open Lawnchair settings > About to view the app version.
+      label: Anchor version
+      description: Open Anchor's settings and look at the About entry.
+      placeholder: 0.5.6
+    validations:
+      required: true
 
-        On nightly builds, **long-press** the version name and paste the GitHub link here.
+  - type: textarea
+    id: device-info
+    attributes:
+      label: Device
+      description: Your phone or tablet and Android version.
       placeholder: |
-        15 Beta 1
+        - Device: Google Pixel 9
+        - Android version: 16
     validations:
       required: true
 
   - type: textarea
     id: additional-context
     attributes:
-      label: Additional context
-      description: |
-        Add any other context about the problem here.
-
-        If this is a crash report, paste or link the crash message here.
-      placeholder: |
-        Crash log: https://katb.in/examplelink
+      label: Anything else?
+      description: If Anchor crashed, use Share or Copy on the crash notification and paste the report here.
     validations:
       required: false

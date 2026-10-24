@@ -283,8 +283,8 @@ Explicitly applies to BOTH bundled art and user photos — the fix is about what
 ### Polish
 
 - **Notification badge dots** — regression in Lawnchair 16; being fixed upstream. Track the upstream fix and pull it in.
-- **About page cleanup** — remove Lawnchair developer credits and Lawnchair-specific information; replace with Anchor Launcher identity. Keep attribution to Lawnchair and AOSP Launcher3 as required by Apache 2.0.
-- **Remaining Lawnchair string references** — audit all user-visible strings, notification text, and dialog copy for leftover "Lawnchair" mentions; replace with "Anchor" where appropriate. (Preserve "Lawnchair" only in the About screen attribution.)
+- ~~**About page cleanup**~~ ✅ DONE 2026-10-20 (0.5.6) — remove Lawnchair developer credits and Lawnchair-specific information; replace with Anchor Launcher identity. Keep attribution to Lawnchair and AOSP Launcher3 as required by Apache 2.0.
+- ~~**Remaining Lawnchair string references**~~ ✅ DONE 2026-10-20 (0.5.6; translations via `scripts/rebrand-translations.py`, re-run after upstream merges) — audit all user-visible strings, notification text, and dialog copy for leftover "Lawnchair" mentions; replace with "Anchor" where appropriate. (Preserve "Lawnchair" only in the About screen attribution.)
 
 ---
 

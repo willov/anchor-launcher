@@ -21,12 +21,8 @@ No other Android launcher does this. It's been requested on XDA and GitHub for o
 
 — 2D navigation matrix: organise your home screens into rows. Swipe left/right between pages in a row; swipe down/up to move between rows. Each row remembers its own scroll position independently.
 — Alphabetical app drawer with A–Z letter index strip for fast one-tap access to any section
-— Built on Lawnchair 15 — all the polish of a mature launcher with Anchor's spatial layer on top
+— Built on Lawnchair 16 — all the polish of a mature launcher with Anchor's spatial layer on top
 — Clean, uncluttered home screen by default
 — No ads. Ever.
-
-<b>A note on support</b>
-
-After 30 days, Anchor will ask once if you'd like to support development. You can say yes or no — the app works exactly the same either way.
 
 Built on Lawnchair (https://github.com/LawnchairLauncher/lawnchair), based on AOSP Launcher3. Apache 2.0.

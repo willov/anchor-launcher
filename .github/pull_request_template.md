@@ -39,3 +39,12 @@ Fixes #(issue) <!-- optional -->
 :x: **Style** (Code style changes)
 :x: **Docs** (Changes to documentation)
 :x: **Chore** (Changes to the build process or other tooling)
+
+### Checklist
+
+<!-- See CONTRIBUTING.md. Replace [ ] with [x] for each item that applies. -->
+
+- [ ] Unit tests pass (`./gradlew testLawnWithQuickstepPlayDebugUnitTest`)
+- [ ] Tested on a device in portrait and landscape (say which devices under Testing)
+- [ ] Changes to Lawnchair and Launcher3 files are kept small and marked with `// Anchor:` comments
+- [ ] Added a CHANGELOG.md entry under `[Unreleased]` for changes users will notice

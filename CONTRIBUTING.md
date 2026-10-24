@@ -18,7 +18,7 @@ Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
    ```
    If you already cloned it without them, run `git submodule update --init --recursive`.
 2. Open the project in Android Studio and select the `lawnWithQuickstepPlayDebug` build variant.
-3. Branch from `dev`, and open your pull request against `dev`.
+3. Branch from `dev`, and open your pull request against `dev`. `main` holds the version that is on Google Play.
 
 Before opening a pull request, run the unit tests (CI runs them too):
 
